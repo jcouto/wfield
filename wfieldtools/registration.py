@@ -12,14 +12,15 @@ def motion_correct(dat,chunksize=500, mask_edge = 100, apply_shifts=True):
     nchunks = np.float32(len(chunks))
     xshifts = []
     yshifts = []
-    # reference is from the first chunk 
+    # reference is from the middle of the file
     # (chunksize frames and for each channel independently)
-    chunk = np.mean(dat[chunks[0][0]:chunks[0][-1]],axis=0)
+    ichunk = int(len(chunks)/2) 
+    chunk = dat[chunks[ichunk][0]]
     maskmul = [0 for i in range(nchan)]
     maskoffset = [0 for i in range(nchan)]
     ref_phase = [0 for i in range(nchan)]
-    (maskmul[0],maskoffset[0],ref_phase[0]) = phasecorr_reference(chunk[0]
-                                                                  ,mask_edge = mask_edge)
+    (maskmul[0],maskoffset[0],ref_phase[0]) = phasecorr_reference(
+        chunk[1], mask_edge = mask_edge)
     chunk = np.array(dat[chunks[0][0]:chunks[0][-1]])
     # align to the ref of channel 1
     for ichan in range(nchan): 
@@ -27,7 +28,7 @@ def motion_correct(dat,chunksize=500, mask_edge = 100, apply_shifts=True):
         shift_data(chunk[:,ichan],y,x)
         (maskmul[ichan],maskoffset[ichan],
          ref_phase[ichan]) = phasecorr_reference(np.mean(chunk[:,ichan],axis=0),
-                                                 mask_edge = 100)
+                                                 mask_edge = mask_edge)
     for c in tqdm(chunks,desc='Motion correction'):
         # this is the reg bit
         chunkdat = dat[c[0]:c[-1]]

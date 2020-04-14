@@ -25,6 +25,36 @@ def imshow_noborder(img,figsize = [7,7],**kwargs):
     plt.imshow(img,**kwargs)
     return fig,ax
 
+################################################################
+##################### PYQTGRAPH WRAPPERS #######################
+################################################################
+
+def qtgraph_show_svd(stack):
+    from .widgets import SVDViewer
+    return SVDViewer(stack)
+
+################################################################
+##################### HOLOVIEWS WRAPPERS #######################
+################################################################
+
+def hv_imshow_stack(X,cmap = 'gray',scale=.8,title='dataset',timelabel = 'frame'):
+    import holoviews as hv
+    hv.extension('bokeh')
+    d = X.shape
+    if len(d) == 4:
+        ds = hv.Dataset((np.arange(d[3]), np.arange(d[2]), np.arange(d[1]),np.arange(d[0]),
+                         X),
+                        ['h','w', 'ch', timelabel], title)
+    elif len(d) == 3:
+        ds = hv.Dataset((np.arange(d[2]), np.arange(d[1]),np.arange(d[0]),
+                         X),
+                        ['h','w', timelabel], title)
+    else:
+        print('imshow_stack only works for 3d and 4d stacks.')
+        return None
+    im = ds.to(hv.Image, ['h', 'w'],dynamic=True)
+    im.opts(cmap=cmap,width=int(d[-1]*scale),height=int(d[-2]*scale))
+    return im
 
 ################################################################
 #######################  NAPARI WRAPPERS #######################

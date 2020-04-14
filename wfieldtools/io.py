@@ -44,6 +44,29 @@ def load_binary_block(block, #(filename,onset,offset)
                                order='C')
     return buf
 
+def compute_trial_baseline_from_binary(trial_onset,
+                                       filename,
+                                       shape,
+                                       nbaseline_frames,
+                                       dtype='uint16'):
+    dd = load_binary_block((filename,trial_onset,nbaseline_frames),shape=shape,dtype=dtype)
+    return dd.mean(axis=0)
+
+def frames_average_for_trials(dat,onsets,nbaseline_frames):
+    if hasattr(dat,'filename'):
+        dims = dims = dat.shape[1:]
+        dat_path = dat.filename
+        frames_average = runpar(compute_trial_baseline_from_binary,onsets,
+                                filename = dat_path,
+                                shape=dims,
+                                nbaseline_frames=nbaseline_frames,
+                                dtype = dat.dtype)
+    else:
+        frame_averages = []
+        for on in tqdm(onsets):
+            frame_averages.append(dat[on:on+nbaseline_frames].mean(axis=0))
+    return np.stack(frames_average)
+
 #######################################################################
 ################        PARSE WIDEFIELDIMAGER       ###################
 #######################################################################
@@ -163,7 +186,7 @@ def parse_imager_mj2_folder(folder, destination,
     # Save trial onset frames
     trialonsets = np.rec.array(frametrial,
                               dtype=([('itrial','i4'),('iframe','i4')]))
-    np.save(pjoin(destination,'trial_onsets.npy'),trialonsets)
+    np.save(pjoin(destination,'trial_onsets.npy'),trialonsets[:-1])
     # Save trial information
     trialinfo = pd.DataFrame(framesinfo)
     trialinfo.to_csv(pjoin(fastdisk,'trial_info.csv'))

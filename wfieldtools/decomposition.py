@@ -1,4 +1,5 @@
 from .utils import *
+from .io import load_binary_block
 from sklearn.utils.extmath import randomized_svd
 from numpy.linalg import svd
 from sklearn.preprocessing import normalize
@@ -6,7 +7,9 @@ from sklearn.preprocessing import normalize
 def reconstruct(u,svt,dims):
     return np.dot(u,svt).reshape((*dims,-1)).transpose(-1,0,1)
 
-def approximate_svd(dat, frames_average, k=200, 
+def approximate_svd(dat, frames_average,
+                    onsets = None,
+                    k=200, 
                     nframes_per_bin = 30,
                     nbinned_frames = 5000,
                     nframes_per_chunk = 500):
@@ -27,16 +30,19 @@ def approximate_svd(dat, frames_average, k=200,
     nbinned_frames = np.min([nbinned_frames,
                              int(np.floor(len(dat)/nframes_per_bin))])
 
-    binned = np.zeros([nbinned_frames-1,*dat.shape[1:]],dtype = 'float32')
-    idx = np.arange(0,nbinned_frames*nframes_per_bin,nframes_per_bin,dtype='int')
+    idx = np.arange(0,nbinned_frames*nframes_per_bin,nframes_per_bin,
+                    dtype='int')
+    if not idx[-1] == len(dat):
+        idx = np.hstack([idx,len(dat)-1])
+    binned = np.zeros([len(idx)-1,*dat.shape[1:]],dtype = 'float32')
     for i in tqdm(range(len(idx)-1),desc='Binning raw data'):
         if dat_path is None:
             blk = dat[idx[i]:idx[i+1]] # work when data are loaded to memory
         else:
             blk = load_binary_block((dat_path,idx[i],nframes_per_bin),
                                     shape=dims)
-        binned[i] = np.mean(blk,axis=0)
-    binned -= frames_average
+        avg = get_trial_baseline(idx[i],frames_average,onsets)
+        binned[i] = (np.mean(blk,axis=0)-avg)/avg
     binned = binned.reshape((-1,np.multiply(*dims[-2:])))
 
     # Get U from the single value decomposition 
@@ -45,17 +51,26 @@ def approximate_svd(dat, frames_average, k=200,
     
     u,s,v = svd(cov)
     U = normalize(np.dot(u[:,:k].T, binned),norm='l2',axis=1)
-    idx = np.arange(0,len(dat),nframes_per_chunk,dtype='int')
+
+    # if trials are defined, then use them to chunck data so that the baseline is correct
+    if onsets is None:
+        idx = np.arange(0,len(dat),nframes_per_chunk,dtype='int')
+    else:
+        idx = onsets
+    if not idx[-1] == len(dat):
+        idx = np.hstack([idx,len(dat)-1])
     V = np.zeros((k,*dat.shape[:2]),dtype='float32')
     # Compute SVT
     for i in tqdm(range(len(idx)-1),desc='Computing SVT from the raw data'):
         if dat_path is None:
             blk = dat[idx[i]:idx[i+1]] # work when data are loaded to memory
         else:
-            blk = load_binary_block((dat_path,idx[i],nframes_per_chunk),
+            blk = load_binary_block((dat_path,idx[i],idx[i+1]-idx[i]),
                                 shape=dims).astype('float32')
-        blk -= frames_average
-        V[:,idx[i]:idx[i]+nframes_per_chunk,:] = np.dot(
+        avg = get_trial_baseline(idx[i],frames_average,onsets)
+        blk -= avg
+        blk /= avg
+        V[:,idx[i]:idx[i+1],:] = np.dot(
             U,blk.reshape([-1,np.multiply(*dims[1:])]).T).reshape((k,-1,2))   
 
     SVT = V.reshape((k,-1))

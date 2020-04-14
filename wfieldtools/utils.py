@@ -9,6 +9,7 @@ from os.path import join as pjoin
 from scipy.signal import medfilt
 from multiprocessing import Pool,cpu_count
 from functools import partial
+from .decomposition import reconstruct
 
 def analog_ttl_to_onsets(dat,time=None, mfilt=3):
     if time is None:
@@ -31,6 +32,39 @@ def make_overlapping_blocks(dims,blocksize=128,overlap=16):
         for j,b in enumerate(range(0,h,blocksize-overlap)):
             blocks.append([(a,np.clip(a+blocksize,0,w)),(b,np.clip(b+blocksize,0,h))])
     return blocks
+
+
+class SVDStack(object):
+    def __init__(self,U,SVT,dims,dtype = 'float32'):
+        self.U = U.astype('float32')
+        self.SVT = SVT.astype('float32')
+        self.shape = [SVT.shape[1],*dims]
+        self.dtype = dtype
+    def __len__(self):
+        return self.SVT.shape[1]
+    def __getitem__(self,*args):
+        ndims  = len(args)
+        if type(args[0]) is slice:
+            idxz = range(*args[0].indices(self.shape[0]))
+        else:
+            idxz = args[0]        
+        return reconstruct(self.U,self.SVT[:,idxz],self.shape[1:]).squeeze()
+    def get_timecourse(xy):
+        # TODO: this needs a better interface
+        x = int(np.clip(xy[0],0,self.shape[1]))
+        y = int(np.clip(yy[1],0,self.shape[2]))
+        idx = np.ravel_multi_index((x,y),self.shape[1:])
+        t = np.dot(self.U[idx,:],self.SVT)
+        return t
+
+def get_trial_baseline(idx,frames_average,onsets):
+    if len(frames_average.shape) <= 3:
+        return frames_average
+    else:
+        if onsets is None:
+            print(' Trial onsets not defined, using the first trial')
+            return frames_average[0]
+        return frames_average[np.where(onsets<=idx)[0][-1]]
 
 def parinit():
     import os
