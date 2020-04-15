@@ -109,16 +109,16 @@ The commands are:
 
         '''.format(remotepath,localdisk))
         tfetch = time.time()
-        #dat,frames_avg, trialonsets,trialinfo = parse_imager_mj2_folder(remotepath, localdisk)
-        #del dat
-        #del frames_avg
-        #del trialonsets
-        #del trialinfo
+        dat,frames_avg, trialonsets,trialinfo = parse_imager_mj2_folder(remotepath, localdisk)
+        del dat
+        del frames_avg
+        del trialonsets
+        del trialinfo
         tfetch = (time.time() - tfetch)/60.
 
         tproc = time.time()
         # MOTION CORRECTION
-        #_motion(localdisk,args.mask_edge)
+        _motion(localdisk,args.mask_edge)
         # COMPUTE AVERAGE FOR BASELINE
         _baseline(localdisk,args.nbaseline_frames)
         # DATA REDUCTION
