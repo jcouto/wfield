@@ -40,7 +40,7 @@ def approximate_svd(dat, frames_average,
             blk = load_binary_block((dat_path,idx[i],nframes_per_bin),
                                     shape=dims)
         avg = get_trial_baseline(idx[i],frames_average,onsets)
-        binned[i] = (np.mean(blk,axis=0)-avg)/avg
+        binned[i] = np.mean((blk-avg)/avg, axis=0)
     binned = binned.reshape((-1,np.multiply(*dims[-2:])))
 
     # Get U from the single value decomposition 
@@ -65,19 +65,14 @@ def approximate_svd(dat, frames_average,
         else:
             blk = load_binary_block((dat_path,idx[i],idx[i+1]-idx[i]),
                                 shape=dims).astype('float32')
-        avg = get_trial_baseline(idx[i],frames_average,onsets)
-        blk -= avg
-        blk /= avg
+        avg = get_trial_baseline(idx[i],frames_average,onsets).astype('float32')
+        blk = (blk-avg)/avg
         V[:,idx[i]:idx[i+1],:] = np.dot(
             U,blk.reshape([-1,np.multiply(*dims[1:])]).T).reshape((k,-1,2))   
 
     SVT = V.reshape((k,-1))
     U = U.T
     return U,SVT
-
-
-
-
 
 
 def svd_blockwise(dat,frames_average,
