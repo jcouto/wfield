@@ -38,15 +38,27 @@ The commands are:
     
     def open(self):
         parser = argparse.ArgumentParser(
-            description='Open the GUI to look at preprocessed data')
+            description='Open the GUI to look at preprocessed data',
+            usage = '''
+
+            Press control while moving the mouse around to look at the timecourse at different points.
+
+            Right click and drag mouse on the trace plot to zoom.
+''')
         parser.add_argument('foldername', action='store',default=None,type=str)
+        parser.add_argument('--before-corr', action='store_true',
+                            default=False,
+                            help= 'Load SVT before hemodynamics correction.')
         args = parser.parse_args(sys.argv[2:])
         localdisk = args.foldername
         from .io import mmap_dat
         fname = pjoin(localdisk,'Ua.npy')
         if os.path.isfile(fname):
             U = np.load(fname)
-            SVT = np.load(pjoin(localdisk,'SVTa.npy'))
+            if not args.before_corr:
+                SVT = np.load(pjoin(localdisk,'SVTcorr.npy'))
+            else:
+                SVT = np.load(pjoin(localdisk,'SVTa.npy'))
         else:
             print('Could not find: {0} '.format(fname))
         dat_path = glob(pjoin(localdisk,'*.dat'))[0]
