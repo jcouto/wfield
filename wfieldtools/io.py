@@ -53,6 +53,7 @@ def compute_trial_baseline_from_binary(trial_onset,
     return dd.mean(axis=0)
 
 def frames_average_for_trials(dat,onsets,nbaseline_frames):
+    from .utils import runpar
     if hasattr(dat,'filename'):
         dims = dims = dat.shape[1:]
         dat_path = dat.filename
@@ -95,7 +96,7 @@ def read_imager_analog(fname):
 
 def split_imager_channels(fname_mj2):
     ''' splits channels from the imager '''
-    
+    from .utils import analog_ttl_to_onsets
     fname_analog = fname_mj2.replace('Frames_','Analog_').replace('.mj2','.dat')
     stack = read_mj2_frames(fname_mj2)
     dat,header = read_imager_analog(fname_analog)
@@ -156,7 +157,7 @@ def parse_imager_mj2_folder(folder, destination,
 
     if not os.path.isdir(destination):
         print('Creating output directory {0}'.format(destination))
-        os.makedirs(fastdisk)
+        os.makedirs(destination)
 
     tstart = time.time()
     frametrial = [(0,0)]
@@ -189,6 +190,6 @@ def parse_imager_mj2_folder(folder, destination,
     np.save(pjoin(destination,'trial_onsets.npy'),trialonsets[:-1])
     # Save trial information
     trialinfo = pd.DataFrame(framesinfo)
-    trialinfo.to_csv(pjoin(fastdisk,'trial_info.csv'))
+    trialinfo.to_csv(pjoin(destination,'trial_info.csv'))
     return mmap_dat(dat_path), frames_avg, trialonsets,trialinfo
 

@@ -9,7 +9,8 @@ from os.path import join as pjoin
 from scipy.signal import medfilt
 from multiprocessing import Pool,cpu_count
 from functools import partial
-from .decomposition import reconstruct
+
+print = partial(print, flush=True)
 
 def analog_ttl_to_onsets(dat,time=None, mfilt=3):
     if time is None:
@@ -32,6 +33,9 @@ def make_overlapping_blocks(dims,blocksize=128,overlap=16):
         for j,b in enumerate(range(0,h,blocksize-overlap)):
             blocks.append([(a,np.clip(a+blocksize,0,w)),(b,np.clip(b+blocksize,0,h))])
     return blocks
+
+def reconstruct(u,svt,dims):
+    return np.dot(u,svt).reshape((*dims,-1)).transpose(-1,0,1)
 
 
 class SVDStack(object):

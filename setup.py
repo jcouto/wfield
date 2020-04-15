@@ -17,9 +17,9 @@ setup(
     long_description = longdescription,
     license = 'GPL',
     packages = ['wfieldtools'],
-    #entry_points = {
-    #    'console_scripts': [
-    #        'wfieldtools = wfieldtools.gui.gui:main',
-    #    ]
-    #},
+    entry_points = {
+        'console_scripts': [
+            'wfieldtools = wfieldtools.cli:main',
+        ]
+    },
 )

@@ -4,8 +4,6 @@ from sklearn.utils.extmath import randomized_svd
 from numpy.linalg import svd
 from sklearn.preprocessing import normalize
 
-def reconstruct(u,svt,dims):
-    return np.dot(u,svt).reshape((*dims,-1)).transpose(-1,0,1)
 
 def approximate_svd(dat, frames_average,
                     onsets = None,

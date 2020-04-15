@@ -13,7 +13,6 @@ def hemodynamic_correction(U, SVT, fs=30., highpass = True, nchunks = 1000, run_
     SVTb = SVT[:,1::2]
 
     # Highpass filter
-    fs = 30.
     if highpass:
         b, a = butter(2,0.1/fs, btype='highpass');
         SVTa = filtfilt(b, a, SVTa, padlen=50)
@@ -31,6 +30,7 @@ def hemodynamic_correction(U, SVT, fs=30., highpass = True, nchunks = 1000, run_
                          [U[ind,:] for ind in idx],
                          SVTa=SVTa,
                          SVTb=SVTb)
+        rcoeffs = np.hstack(rcoeffs)
     else:                # run in series
         rcoeffs = np.zeros((npix))
         for i,ind in tqdm(enumerate(idx)):
@@ -38,7 +38,12 @@ def hemodynamic_correction(U, SVT, fs=30., highpass = True, nchunks = 1000, run_
             a = np.dot(U[ind,:],SVTa)
             b = np.dot(U[ind,:],SVTb)
             rcoeffs[ind] = np.sum(a*b,axis = 1)/np.sum(b*b,axis = 1)#regression_coeffs(a,b)
-    rcoeffs = np.hstack(rcoeffs)
+
+    rcoeffs[np.isnan(rcoeffs)] = 1.
+    
     T = np.dot(np.linalg.pinv(U),(U.T*rcoeffs).T)
 
-    return rcoeffs,T
+    SVTcorr = SVTa - np.dot(T.T,SVTb)
+
+    
+    return SVTcorr, rcoeffs, T
