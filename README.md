@@ -16,19 +16,19 @@ The command line interface can be used for pre-processing and data visualization
 
 To get a list of commands available do:
 
-`wfieldtools -h`
+- `wfieldtools -h`
 
 To preprocess WidefieldImager data do:
 
-`wfieldtools imager <DATAFOLDER> -o <LOCAL/DESTINATION FOLDER>`
+- `wfieldtools imager <DATAFOLDER> -o <LOCAL/DESTINATION FOLDER>`
 
 to list other options do:
 
-`wfieldtools imager -h`
+- `wfieldtools imager -h`
 
 To launch the GUI to explore processed data do:
 
-`wfieldtools open <FOLDER>`
+- `wfieldtools open <FOLDER>`
 
 ### Example datasets
 
@@ -46,6 +46,7 @@ If you are using Windows, get a terminal like [git bash](https://git-scm.com/dow
 
 - Install `wfieldtools` in develop mode so that local changes to the code take effect (you can not move the folder after this): `python setup.py develop`
 
+- If you install following these instructions you need to run `conda activate wfield` to activate the environment before running the software.
 
 ### Tutorial
 
