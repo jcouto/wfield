@@ -38,12 +38,7 @@ def hemodynamic_correction(U, SVT, fs=30., highpass = True, nchunks = 1000, run_
             a = np.dot(U[ind,:],SVTa)
             b = np.dot(U[ind,:],SVTb)
             rcoeffs[ind] = np.sum(a*b,axis = 1)/np.sum(b*b,axis = 1)#regression_coeffs(a,b)
-
     rcoeffs[np.isnan(rcoeffs)] = 1.
-    
     T = np.dot(np.linalg.pinv(U),(U.T*rcoeffs).T)
-
     SVTcorr = SVTa - np.dot(T.T,SVTb)
-
-    
     return SVTcorr, rcoeffs, T

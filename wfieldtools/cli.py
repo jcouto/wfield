@@ -184,10 +184,12 @@ def _baseline(localdisk,nbaseline_frames):
     dat = mmap_dat(dat_path)
     trial_onsets = np.load(pjoin(localdisk,'trial_onsets.npy'))
     
-    frames_average = frames_average_for_trials(dat,
-                                               trial_onsets['iframe'],
-                                               nbaseline_frames)
-    np.save(pjoin(localdisk,'frames_average.npy'),frames_average)
+    frames_average_trials = frames_average_for_trials(dat,
+                                                      trial_onsets['iframe'],
+                                                      nbaseline_frames)
+    
+    np.save(pjoin(localdisk,'frames_average.npy'),
+            frames_average_trials.mean(axis=0))
     del dat
     del frames_average
 

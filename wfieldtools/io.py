@@ -103,7 +103,8 @@ def split_imager_channels(fname_mj2):
     info = dict(baseline = header['baseline'],
                 onset = header['onset'],
                 ch2 = analog_ttl_to_onsets(dat[-1,:],time=None),
-                ch1 = analog_ttl_to_onsets(dat[-2,:],time=None))
+                ch1 = analog_ttl_to_onsets(dat[-2,:],time=None),
+                stim_onset = analog_ttl_to_onsets(dat[-4,:],time=None))
     nframes = stack.shape[0]
     avgnorm = stack.reshape((nframes,-1))
     avgnorm = avgnorm.mean(axis=1)
