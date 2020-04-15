@@ -109,16 +109,16 @@ The commands are:
 
         '''.format(remotepath,localdisk))
         tfetch = time.time()
-        dat,frames_avg, trialonsets,trialinfo = parse_imager_mj2_folder(remotepath, localdisk)
-        del dat
-        del frames_avg
-        del trialonsets
-        del trialinfo
+        #dat,frames_avg, trialonsets,trialinfo = parse_imager_mj2_folder(remotepath, localdisk)
+        #del dat
+        #del frames_avg
+        #del trialonsets
+        #del trialinfo
         tfetch = (time.time() - tfetch)/60.
 
         tproc = time.time()
         # MOTION CORRECTION
-        _motion(localdisk,args.mask_edge)
+        #_motion(localdisk,args.mask_edge)
         # COMPUTE AVERAGE FOR BASELINE
         _baseline(localdisk,args.nbaseline_frames)
         # DATA REDUCTION
@@ -191,7 +191,7 @@ def _baseline(localdisk,nbaseline_frames):
     np.save(pjoin(localdisk,'frames_average.npy'),
             frames_average_trials.mean(axis=0))
     del dat
-    del frames_average
+    del frames_average_trials
 
 def _decompose(localdisk, k):
     dat_path = glob(pjoin(localdisk,'*.dat'))[0]
