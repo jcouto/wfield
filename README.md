@@ -21,6 +21,8 @@ To get a list of commands available do:
 To preprocess WidefieldImager data do:
 
 - `wfieldtools imager <DATAFOLDER> -o <LOCAL/DESTINATION FOLDER>`
+- Complete example `wfieldtools imager \\\\grid-hs.cshl.edu\\churchland_nlsas_data\\data\\BpodImager\\Animals\\CSP23\\SpatialDisc\\12-Mar-2020 -o /c/data/CSP23/SpatialDisc/12-Mar-2020`
+
 
 to list other options do:
 
@@ -38,15 +40,15 @@ Example datasets are here.
 
 To install start by getting [Anaconda](https://www.anaconda.com/distribution/#download-section) or [Miniconda](https://docs.conda.io/en/latest/miniconda.html). Install for all users and set as system python (this is not essential if you know what you are doing).
 
-If you are using Windows, get a terminal like [git bash](https://git-scm.com/downloads).
+If you are using Windows, get a terminal like [git bash](https://git-scm.com/downloads) [optional]
 
 - Go to the folder where you want to install and clone the repository: `git clone https://github.com/jcouto/wfield.git`. This create a directory; go inside the directory.
 
 - Use anaconda to install all dependencies: `conda env create -f env.yml` the file env.yml is inside the wfield directory.
 
-- Install `wfieldtools` in develop mode so that local changes to the code take effect (you can not move the folder after this): `python setup.py develop`
+- Enter the environment `conda activate wfield` and onstall `wfieldtools` in develop mode so that local changes to the code take effect: `python setup.py develop` (you can not move the folder after this)
 
-- If you install following these instructions you need to run `conda activate wfield` to activate the environment before running the software.
+- You will need to run `conda activate wfield` to activate the environment before running the software.
 
 ### Tutorial
 
