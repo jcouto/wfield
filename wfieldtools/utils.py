@@ -9,8 +9,18 @@ from os.path import join as pjoin
 from scipy.signal import medfilt
 from multiprocessing import Pool,cpu_count
 from functools import partial
+from scipy.signal import butter,filtfilt
 
 print = partial(print, flush=True)
+
+def lowpass(X, w = 7.5, fs = 30.):
+    b, a = butter(2,w/(fs/2.), btype='lowpass');
+    return filtfilt(b, a, X, padlen=50)
+
+def highpass(X, w = 3., fs = 30.):
+    b, a = butter(2,w/(fs/2.), btype='highpass');
+    return filtfilt(b, a, X, padlen=50)
+
 
 def analog_ttl_to_onsets(dat,time=None, mfilt=3):
     if time is None:

@@ -4,7 +4,6 @@ from sklearn.utils.extmath import randomized_svd
 from numpy.linalg import svd
 from sklearn.preprocessing import normalize
 
-
 def approximate_svd(dat, frames_average,
                     onsets = None,
                     k=200, 
