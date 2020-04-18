@@ -175,7 +175,7 @@ The commands are:
         # HEMODYNAMIC CORRECTION
         _hemocorrect(localdisk,fs=args.fs)
         tproc = (time.time() - tproc)/60.
-        print('Done  pre-processing ({1} min)'.format(tproc))
+        print('Done  pre-processing ({0} min)'.format(tproc))
         exit(0)
         
     def motion(self):
@@ -231,8 +231,12 @@ def _motion(localdisk,mask_edge):
 def _baseline(localdisk,nbaseline_frames):
     dat_path = glob(pjoin(localdisk,'*.dat'))[0]
     dat = mmap_dat(dat_path)
-    trial_onsets = np.load(pjoin(localdisk,'trial_onsets.npy'))
-    
+    try:
+        trial_onsets = np.load(pjoin(localdisk,'trial_onsets.npy'))
+    except FileNotFoundError:
+        print('Skipping trial frame average because there was no trial_onsets.npy in the folder.')
+        del dat
+        return
     frames_average_trials = frames_average_for_trials(dat,
                                                       trial_onsets['iframe'],
                                                       nbaseline_frames)
@@ -247,10 +251,11 @@ def _decompose(localdisk, k):
     frames_average = np.load(pjoin(localdisk,'frames_average.npy'))
     if len(frames_average)>3:
         trial_onsets = np.load(pjoin(localdisk,'trial_onsets.npy'))
+        onsets = trial_onsets['iframe']
+
     else:
-        trial_onsets = None
+        onsets = None
     dat = mmap_dat(dat_path) # load to memory if you have enough
-    onsets = trial_onsets['iframe']
     U,SVT = approximate_svd(dat, frames_average,onsets = onsets,k = k)
     np.save(pjoin(localdisk,'Ua.npy'),U)
     np.save(pjoin(localdisk,'SVTa.npy'),SVT)
