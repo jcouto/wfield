@@ -20,10 +20,12 @@ class CLIParser(object):
 
 The commands are:
     open                Opens a gui to look at the preprocessed data        
+    preprocess          Preprocess data in binary fornat
     imager              Preprocesses data recorded with the WidefieldImager
     motion              Registers data from a binary file
     decompose           Performs single value decomposition
     correct             Performs hemodynamic correction on dual channel data
+
 ''')
         parser.add_argument('command', help='type wfieldtools <command> -h for help')
         # parse_args defaults to [1:] for args, but you need to
@@ -129,6 +131,53 @@ The commands are:
         print('Done fetching data ({0} min) and pre-processing ({1} min)'.format(tfetch,tproc))
         exit(0)
 
+    def preprocess(self):
+        parser = argparse.ArgumentParser(
+            description='Performs preprocessing of widefield data recorded from a binary file',
+            usage = '''
+            wfield preprocess FOLDERNAME
+
+     The folder must contain a binary file; the end of the filename must be _NCHANNELS_H_W_DTYPE.dat
+     
+           Example name: frames_2_540_640_uint16.dat
+    '''
+)
+        parser.add_argument('foldername', action='store',
+                            default=None, type=str,
+                            help='Folder that has the binary file (FAST DISK).')
+        parser.add_argument('-k', action='store',default=200,type=int,
+                            help = 'Number of components for SVD')
+        parser.add_argument('--mask-edge', action='store',default=30,type=int,
+                            help = 'Size of the mask used on the edges during motion correction ') 
+        parser.add_argument('--nbaseline-frames', action='store',
+                            default=30, type=int,
+                            help='Number of frames to compute the  baseline')
+        parser.add_argument('--fs', action='store',default=30.,type=np.float32,
+                            help='Sampling frequency of an individual channel')
+        
+        args = parser.parse_args(sys.argv[2:])
+        localdisk = args.foldername # this should be an SSD or a fast drive
+
+        if localdisk is None:
+            print('Specify a fast local disk with the  -o option.')
+            exit(1)
+        if not os.path.isdir(localdisk):
+            os.makedirs(localdisk)
+            print('Created {0}'.format(localdisk))
+
+        tproc = time.time()
+        # MOTION CORRECTION
+        _motion(localdisk,args.mask_edge)
+        # COMPUTE AVERAGE FOR BASELINE
+        _baseline(localdisk,args.nbaseline_frames)
+        # DATA REDUCTION
+        _decompose(localdisk,k=args.k)
+        # HEMODYNAMIC CORRECTION
+        _hemocorrect(localdisk,fs=args.fs)
+        tproc = (time.time() - tproc)/60.
+        print('Done  pre-processing ({1} min)'.format(tproc))
+        exit(0)
+        
     def motion(self):
         parser = argparse.ArgumentParser(
             description='Performs motion correction on widefield data')
@@ -196,8 +245,10 @@ def _baseline(localdisk,nbaseline_frames):
 def _decompose(localdisk, k):
     dat_path = glob(pjoin(localdisk,'*.dat'))[0]
     frames_average = np.load(pjoin(localdisk,'frames_average.npy'))
-    trial_onsets = np.load(pjoin(localdisk,'trial_onsets.npy'))
-        
+    if len(frames_average)>3:
+        trial_onsets = np.load(pjoin(localdisk,'trial_onsets.npy'))
+    else:
+        trial_onsets = None
     dat = mmap_dat(dat_path) # load to memory if you have enough
     onsets = trial_onsets['iframe']
     U,SVT = approximate_svd(dat, frames_average,onsets = onsets,k = k)
