@@ -4,9 +4,10 @@ from numba import int16 as numba_int16
 from skimage import measure
 from skimage.filters import gaussian
 from scipy import ndimage
-
 import json
 # allensdk imports are inside the functions because it needs an old pandas and i dont understand why. To install it do: pip install allensdk
+
+annotation_dir = pjoin(os.path.expanduser('~'),'.wfield')
 
 selection_dorsal_cortex = [
     'MOB',
@@ -52,7 +53,6 @@ selection_vis_som = ['RSPv',
                      'SSp-ll',
                      'SSp-ul',
                      'VISli',
-                     'TEA',
                      'VISpor',
                      'VISp',
                      'VISpm',
@@ -61,8 +61,6 @@ selection_vis_som = ['RSPv',
                      'VISrl',
                      'VISa',
                      'VISam']
-
-annotation_dir = pjoin(os.path.expanduser('~'),'.wfield')
 
 def allen_get_raw_annotation(annotation_dir,
                              version = 'annotation/ccf_2017',
@@ -117,7 +115,8 @@ def allen_volume_from_structures(
         areas[i]['mask_volume_id'] = i+1
     return  mask_volume, areas
     
-def allen_flatten_areas(areas,mask_volume, resolution=10, reference= [540,570]):    
+def allen_flatten_areas(areas,mask_volume,
+                        resolution=10, reference= [540,570]):    
     ''' 
 Creates a top view and extracts contours from each area in an annotation volume 
     proj, ccf_regions = allen_flatten_areas(areas, mask_volume, 
@@ -145,14 +144,20 @@ Creates a top view and extracts contours from each area in an annotation volume
             continue
         ar = np.argmax([r.area for r in rprops])
         c = measure.find_contours(a==rprops[ar].label,.5)[0]
+        left_center = (rprops[ar].centroid-np.array(reference))
         d = c.copy()
         d[:,1] = -1*(c[:,1])+w
+        right_center = (-1*rprops[ar].centroid+w)-np.array(reference)
+
         ccf_regions.append(dict(acronym=areas[i]['acronym'],
                                 name=areas[i]['name'],
                                 reference = reference,
+                                resolution = resolution,
                                 label = v,
-                                id = areas[i]['id'],
+                                allen_id = areas[i]['id'],
                                 allen_rgb = areas[i]['rgb_triplet'],
+                                left_center = left_center[::-1]*res,
+                                rightleft_center = right_center[::-1]*res,
                                 left_x = (c[:,1] - reference[1])*res,
                                 left_y = (c[:,0] - reference[0])*res,
                                 right_x = (d[:,1] - reference[1])*res,
@@ -183,18 +188,19 @@ Get the top projection from a volume.
 '''
     h,d,w = bvol.shape
     proj = np.zeros((h,w),dtype=numba_int16)
+    # this can be done with a np.where but is probably faster like this
     for i in range(h):
-        for j in range(w): 
-            for z in range(d): # this can be done with a np.where but is faster like this
+        for j in range(w):
+            for z in range(d): 
                 if bvol[i,z,j] > 0:
                     proj[i,j] = bvol[i,z,j]
                     break
             
     return proj
 
-#############################################################################################
-#############################################################################################
-#############################################################################################
+########################################################################
+########################################################################
+########################################################################
 
 def allen_proj_extent(proj, ccf_regions, foraxis=False):
     '''
@@ -231,14 +237,31 @@ Example:
 
     '''
     
-    ccf_regions = pd.read_json(pjoin(annotation_dir,'{0}_cff_labels.json'.format(reference_name)))
-    proj = np.load(pjoin(annotation_dir,'{0}_projection.npy'.format(reference_name)))
-    brain_outline = np.load(pjoin(annotation_dir,'{0}_outline.npy'.format(reference_name)))
+    ccf_regions = pd.read_json(pjoin(
+        annotation_dir,'{0}_ccf_labels.json'.format(reference_name)))
+    proj = np.load(pjoin(annotation_dir,
+                         '{0}_projection.npy'.format(reference_name)))
+    brain_outline = np.load(pjoin(annotation_dir,
+                                  '{0}_outline.npy'.format(reference_name)))
     return ccf_regions,proj,brain_outline
 
-def allen_save_reference(ccf_regions,proj,brainoutline,referece_name,annotation_dir=annotation_dir):
-    ccf_regions.to_json(pjoin(annotation_dir,'{0}_cff_labels.json'.format(reference_name)),orient='records')
-    np.save(pjoin(annotation_dir,'{0}_projection.npy'.format(reference_name)),proj)
-    np.save(pjoin(annotation_dir,'{0}_outline.npy'.format(reference_name)),brainc)
+def allen_save_reference(ccf_regions, proj, brainoutline,
+                         reference_name,
+                         annotation_dir=annotation_dir):
+    '''
+    Save Allen references to the default directory
+
+    allen_save_reference(ccf_regions, proj, brainoutline,
+                         referece_name,
+                         annotation_dir=annotation_dir):
+    '''
+    
+    ccf_regions.to_json(pjoin(
+        annotation_dir,'{0}_ccf_labels.json'.format(reference_name)),
+                        orient='records')
+    np.save(pjoin(annotation_dir,
+                  '{0}_projection.npy'.format(reference_name)),proj)
+    np.save(pjoin(annotation_dir,
+                  '{0}_outline.npy'.format(reference_name)),brainoutline)
 
     

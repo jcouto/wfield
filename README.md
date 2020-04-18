@@ -10,7 +10,7 @@ This is a python package for visualizing and analysing data collected with a wid
   - Extract ROIs
   - Visualize raw/reduced data and extracted ROIs
 
-### Command line interface
+### Using from the Command line interface
 
 The command line interface can be used for pre-processing and data visualization.
 
@@ -46,9 +46,13 @@ If you are using Windows, get a terminal like [git bash](https://git-scm.com/dow
 
 - Use anaconda to install all dependencies: `conda env create -f env.yml` the file env.yml is inside the wfield directory.
 
-- Enter the environment `conda activate wfield` and onstall `wfieldtools` in develop mode so that local changes to the code take effect: `python setup.py develop` (you can not move the folder after this)
+- Enter the environment `conda activate wfield` and install wfieldtools `python setup.py install`
 
 - You will need to run `conda activate wfield` to activate the environment before running the software.
+
+*Note:* In some cases you may want to make changes to the software, if you need this run `python setup.py develop` (you can not move the folder after this - the installation will point to that directory).
+
+*Note:* Some reference files used to match to the Allen Common Coordinate Framework are copied from the folder [references](https://github.com/jcouto/wfield/tree/master/references) to `HOME/.wfield` during installation. 
 
 ### Tutorial
 

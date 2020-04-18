@@ -49,8 +49,8 @@ class ImageWidget(QWidget):
         self.pl.getAxis('left').setPen(axiscolor)
         self.layout.addRow(self.win)
 
-    def _add_hist(self,levelMode='mono'):
-        self.hist = pg.HistogramLUTItem(levelMode = levelMode)
+    def _add_hist(self):
+        self.hist = pg.HistogramLUTItem()
         self.hist.setImageItem(self.im)
         self.pl.addItem(self.hist)
 
