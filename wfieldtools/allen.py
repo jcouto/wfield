@@ -52,6 +52,8 @@ selection_vis_som = ['RSPv',
                      'SSp-tr',
                      'SSp-ll',
                      'SSp-ul',
+                     'SSp-un',
+                     'SSp-n',
                      'VISli',
                      'VISpor',
                      'VISp',
@@ -59,6 +61,7 @@ selection_vis_som = ['RSPv',
                      'VISl',
                      'VISal',
                      'VISrl',
+                     'VISpl',
                      'VISa',
                      'VISam']
 
@@ -116,7 +119,7 @@ def allen_volume_from_structures(
     return  mask_volume, areas
     
 def allen_flatten_areas(areas,mask_volume,
-                        resolution=10, reference= [540,570]):    
+                        resolution=10, reference= [540,570],gaussfilt=0):    
     ''' 
 Creates a top view and extracts contours from each area in an annotation volume 
     proj, ccf_regions = allen_flatten_areas(areas, mask_volume, 
@@ -137,6 +140,8 @@ Creates a top view and extracts contours from each area in an annotation volume
     for i,v in enumerate(mask_ids):
         # find the largest region for each brain area
         a = (proja==v)
+        if not gaussfilt==0:
+            a = gaussian(a,sigma=gaussfilt)
         a = measure.label(a)
         rprops = measure.regionprops(a)
         if not len(rprops):
@@ -144,10 +149,11 @@ Creates a top view and extracts contours from each area in an annotation volume
             continue
         ar = np.argmax([r.area for r in rprops])
         c = measure.find_contours(a==rprops[ar].label,.5)[0]
-        left_center = (rprops[ar].centroid-np.array(reference))
+        cm = np.array(rprops[ar].centroid)
+        left_center = cm-np.array(reference)
         d = c.copy()
         d[:,1] = -1*(c[:,1])+w
-        right_center = (-1*rprops[ar].centroid+w)-np.array(reference)
+        right_center = [1,-1]*cm+w-np.array(reference)
 
         ccf_regions.append(dict(acronym=areas[i]['acronym'],
                                 name=areas[i]['name'],
@@ -157,7 +163,7 @@ Creates a top view and extracts contours from each area in an annotation volume
                                 allen_id = areas[i]['id'],
                                 allen_rgb = areas[i]['rgb_triplet'],
                                 left_center = left_center[::-1]*res,
-                                rightleft_center = right_center[::-1]*res,
+                                right_center = right_center[::-1]*res,
                                 left_x = (c[:,1] - reference[1])*res,
                                 left_y = (c[:,0] - reference[0])*res,
                                 right_x = (d[:,1] - reference[1])*res,
