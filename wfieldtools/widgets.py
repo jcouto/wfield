@@ -156,9 +156,7 @@ class LocalCorrelationWidget(ImageWidget):
                                              dims = self.stack.shape[1:],
                                              norm_svt=True)
         self.levels = [0,1.]
-
-        from matplotlib.pyplot import get_cmap
-
+        
         pos = np.array([0, 0.5, 1.])
         color = np.array([[0,0,255,255], [255,255,255,255], [255,0,0,255]], dtype=np.ubyte)
         cmap = pg.ColorMap(pos, color)
@@ -168,12 +166,12 @@ class LocalCorrelationWidget(ImageWidget):
         self.hist.gradient.setColorMap(cmap)
         self.hist.setHistogramRange(*self.levels)
 
-        self.set_image([200,200])
+        self.set_image([0,0])
         self.win.scene().sigMouseMoved.connect(self.mouseMoved)
         
     def set_image(self,xy=[0,0]):
         img = (self.localcorr.get(*xy)+1)/2.
-        self.im.setImage(img)
+        self.im.setImage(img,levels = self.levels)
 
     def mouseMoved(self,pos):
         modifiers = QApplication.keyboardModifiers()
@@ -261,6 +259,8 @@ class ROIPlotWidget(QWidget):
         #                         y = self.get_xy(250,250),color='w')
         #self.plt.addItem(self.roi)
         '''
+        from matplotlib.pyplot import get_cmap
+
         try:
             cmap_plt = get_cmap(cmap)
         except:
