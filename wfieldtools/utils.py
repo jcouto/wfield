@@ -10,8 +10,29 @@ from scipy.signal import medfilt
 from multiprocessing import Pool,cpu_count
 from functools import partial
 from scipy.signal import butter,filtfilt
+from skimage.transform import warp
 
 print = partial(print, flush=True)
+
+def estimate_similarity_transform(ref,points):
+    '''
+    
+    ref = np.vstack([landmarks_im['x'],landmarks_im['y']]).T
+    match = point_stream.data    
+    cor = np.vstack([match['x'],match['y']]).T
+    
+    M = estimate_similarity_transform(ref, cor)
+    '''
+    from skimage.transform import SimilarityTransform
+    M = SimilarityTransform()
+    M.estimate(ref,points)
+    return M 
+
+def im_apply_transform(im,M):
+    return warp(im,M,
+                order = 0,
+                clip=True,
+                preserve_range=True)
 
 def lowpass(X, w = 7.5, fs = 30.):
     b, a = butter(2,w/(fs/2.), btype='lowpass');
@@ -99,3 +120,5 @@ def runpar(f,X,nprocesses = None,**kwargs):
         res = pool.map(partial(f,**kwargs),X)
     pool.join()
     return res
+
+

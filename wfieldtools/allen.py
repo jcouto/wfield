@@ -5,6 +5,7 @@ from skimage import measure
 from skimage.filters import gaussian
 from scipy import ndimage
 import json
+
 # allensdk imports are inside the functions because it needs an old pandas and i dont understand why. To install it do: pip install allensdk
 
 annotation_dir = pjoin(os.path.expanduser('~'),'.wfield')
@@ -211,7 +212,7 @@ Get the top projection from a volume.
 def allen_proj_extent(proj, ccf_regions, foraxis=False):
     '''
 Utility function to return the extent of normalized axis for when plotting 
-allen projections on mm axes.
+allen projections on matplotlib axes.
 
     extent = allen_proj_extent(proj, ccf_regions, foraxis=False)
     
@@ -233,6 +234,49 @@ Example:
         return extent[[0,1,3,2]]
     else:
         return extent
+
+#################################################################################
+#################################################################################
+#################################################################################
+
+
+def apply_affine_to_points(x,y,M):
+    xy = np.vstack([x,y,np.ones_like(y)])
+    res = (M.params @ xy).T
+    return res[:,0],res[:,1]
+
+def allen_transform_regions(M,ccf_regions):
+    nccf = ccf_regions.copy()
+    for i,c in nccf.iterrows():
+        for side in ['left','right']:
+            x,y = apply_affine_to_points(c[side+'_x'], c[side+'_y'],M)
+            nccf.at[i,side+'_x'] = x.tolist()
+            nccf.at[i,side+'_y'] = y.tolist()
+            x,y = apply_affine_to_points(c[side+'_center'][0], c[side+'_center'][1],M)
+            nccf.at[i,side+'_center'] = [x[0],y[0]]
+    return nccf
+
+def allen_transform_from_landmarks(landmarks_im,match):
+    ref = np.vstack([landmarks_im['x'],landmarks_im['y']]).T
+    cor = np.vstack([match['x'],match['y']]).T
+    return estimate_similarity_transform(ref, cor)
+
+def allen_landmarks_to_image_space(landmarks,
+                                   bregma_offset = np.array([0,0]),
+                                   resolution = 0.01):
+    '''
+    Convert landmarks from allen to "image" space.
+    Basically just divides by the resolution and adds the bregma offset
+    '''
+    landmarks.x = landmarks.x/resolution + bregma_offset[0]
+    landmarks.y = landmarks.y/resolution + bregma_offset[1]
+    return landmarks
+
+
+#################################################################################
+#################################################################################
+#################################################################################
+
     
 def allen_load_reference(reference_name,annotation_dir = annotation_dir):
     '''
@@ -271,3 +315,135 @@ def allen_save_reference(ccf_regions, proj, brainoutline,
                   '{0}_outline.npy'.format(reference_name)),brainoutline)
 
     
+
+#################################################################################
+#########################HOLOVIEWS ALLEN FUNCTIONS###############################
+#################################################################################
+
+def hv_plot_allen_regions(ccf_regions,
+                          resolution = 1,
+                          bregma_offset = np.array([0,0]),
+                          side_selection='both'):
+    '''
+    Example: 
+
+import holoviews as hv
+hv.extension('bokeh')
+
+ccf_regions,proj,brain_outline = allen_load_reference('dorsal_cortex')
+hv_plot_allen_regions(ccf_regions).options({'Curve': {'color':'black', 'width': 600}})
+    
+    '''
+    import holoviews as hv
+    regs = []
+    for p in ccf_regions.iterrows():
+        c = p[1]
+        if side_selection in ['right','both']:
+            regs.append(hv.Curve(np.vstack([np.array(c.right_x)/resolution + bregma_offset[0],
+                                            np.array(c.right_y)/resolution + bregma_offset[1]]).T))
+        if side_selection in ['left','both']:
+            regs.append(hv.Curve(np.vstack([np.array(c.left_x)/resolution + bregma_offset[0],
+                                            np.array(c.left_y)/resolution + bregma_offset[1]]).T))
+    # return a plot
+    plot = regs[0]
+    for i in range(1,len(regs)):
+        plot *= regs[i]
+    return plot.opts(invert_yaxis=True).options(width = 600)
+
+def hv_adjust_reference_landmarks(landmarks,ccf_regions,msize=40):
+    '''
+    landmarks = {'x': [-1.95, 0, 1.95, 0],
+                 'y': [-3.45, -3.45, -3.45, 3.2],
+                 'name': ['OB_left', 'OB_center', 'OB_right', 'RSP_base'],
+                 'color': ['#fc9d03', '#0367fc', '#fc9d03', '#fc4103']}
+    landmarks = pd.DataFrame(landmarks)
+    # adjust landmarks
+    wid,landmark_wid = hv_adjust_reference_landmarks(landmarks,ccf_regions)
+    wid # to display
+    # use the following to retrieve (on another cell) 
+    landmarks = pd.DataFrame(landmark_wid.data)[['x','y','name','color']]
+    '''
+    import holoviews as hv
+    from holoviews import opts, streams
+    from holoviews.plotting.links import DataLink
+    referenceplt = hv_plot_allen_regions(ccf_regions).options(
+        {'Curve': {'color':'black', 'width': 600}})
+
+    points = hv.Points(landmarks,vdims='color').opts(marker='+',size=msize)
+    point_stream = streams.PointDraw(data=points.columns(), 
+                                     add = False,num_objects=4, 
+                                     source=points, empty_value='black')
+    table = hv.Table(points, ['x', 'y','name'], 'color').opts(title='Landmarks location')
+    DataLink(points, table)
+    widget = (referenceplt*points + table).opts(
+        opts.Layout(merge_tools=False),
+        opts.Points(invert_yaxis=True,
+                    active_tools=['point_draw'],
+                    color='color', height=500,
+                    tools=['hover'], width=500),
+        opts.Table(editable=True))
+    return widget,point_stream
+
+def hv_adjust_image_landmarks(image,landmarks,
+                              landmarks_match = None,
+                              bregma_offset = None,
+                              resolution = 0.0194,
+                              msize = 40):
+    '''
+    TODO: merge part of this with the one for the landmarks
+    landmarks are in allen reference space
+    '''
+    h,w = image.shape
+    if bregma_offset is None:
+        # then it is the center of the image
+        bregma_offset = np.array([int(w/2),int(h/2)]) # place bregma in the center of the image
+        
+    landmarks_im = allen_landmarks_to_image_space(landmarks.copy(),bregma_offset,resolution)
+    if landmarks_match is None:
+        landmarks_match = landmarks_im
+    import holoviews as hv
+    from holoviews import opts, streams
+    from holoviews.plotting.links import DataLink
+
+    bounds = np.array([0,0,w,h])
+    im = hv.Image(image[::-1,:],
+                 bounds =tuple(bounds.tolist())).opts(
+        invert_yaxis = True,cmap = 'gray')
+
+    points = hv.Points(landmarks_match,vdims='color').opts(marker='+',size=msize)
+    point_stream = streams.PointDraw(data=points.columns(), 
+                                     add = False,num_objects=4, 
+                                     source=points, empty_value='black')
+    table = hv.Table(points, ['x', 'y','name'], 'color').opts(title='Annotation location')
+    DataLink(points, table)
+
+    from bokeh.models import HoverTool
+    hoverpts = HoverTool(tooltips=[("i", "$index")])
+
+    widget = (im*points + table).opts(
+        opts.Layout(merge_tools=False),
+        opts.Points(invert_yaxis=True,active_tools=['point_draw'], 
+                    color='color',
+                    tools=[hoverpts], 
+                    width=int(w),
+                    height=int(h)),
+        opts.Table(editable=True))
+    return widget,point_stream,landmarks_im
+
+def hv_show_transformed_overlay(image, M, ccf_regions,
+                                bregma_offset = None,resolution=0.0194):
+    import holoviews as hv
+    h,w = image.shape
+    if bregma_offset is None:
+        bregma_offset = np.array([int(w/2),int(h/2)]) # place bregma in the center of the image
+    bounds = np.array([0,0,w,h])
+    warped = warp(image,M,
+                  order = 0,
+                  clip=True,
+                  preserve_range=True)
+    im=hv.Image(warped[::-1,:],
+                 bounds =tuple(bounds.tolist())).opts(invert_yaxis = True,cmap = 'gray')
+    return im*hv_plot_allen_regions(ccf_regions,
+                                    bregma_offset=bregma_offset,
+                                    resolution=resolution).options(
+        {'Curve': {'color':'white', 'width': w,'height':h}})
