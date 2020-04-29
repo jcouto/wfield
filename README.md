@@ -13,9 +13,9 @@ This is a python package for visualizing and analysing data collected with a wid
 ### File format conventions
 
   - raw frame data is stored in binary files (uint16). The filename must end with: `_NCHANNELS_H_W_DTYPE.dat` for example "frames_2_540_640_uint16.dat" H and W are the dimensions of a single frame.
-  - denoised/decomposed data are stored as `npy` arrays with names `U.npy` for the spatial components and `VST.npy` for the temporal components.
-  - `VSTcorr.npy` contains the hemodynamic corrected temporal components.
-  - `info.json` contains information about the dataset like the `sampling rate`
+  - denoised/decomposed data are stored as `npy` arrays with names `U.npy` for the spatial components (H,W,NCOMPONENTS) and `VST.npy` for the temporal components (NCOMPONENTS, NFRAMES).
+  - `VSTcorr.npy` (NCOMPONENTS, NFRAMES) contains the hemodynamic corrected temporal components.
+  - `info.json` contains information about the dataset like the `sampling rate` number of acquired channels
     
 ### Using from the command line interface
 
