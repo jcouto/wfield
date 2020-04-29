@@ -1,4 +1,4 @@
-# Widefield analysis tools
+# Tools for analysis of widefield data 
 
 This is a python package for visualizing and analysing data collected with a widefield macroscope.
 
@@ -10,27 +10,34 @@ This is a python package for visualizing and analysing data collected with a wid
   - Extract ROIs
   - Visualize raw/reduced data and extracted ROIs
 
-### Using from the Command line interface
+### File format conventions
+
+    - raw frame data is stored in binary files (uint16). The filename must end with: `_NCHANNELS_H_W_DTYPE.dat` for example "frames_2_540_640_uint16.dat" H and W are the dimensions of a single frame.
+    - denoised/decomposed data are stored as `npy` arrays with names `U.npy` for the spatial components and `VST.npy` for the temporal components. 
+    - `VSTcorr.npy` contains the hemodynamic corrected temporal components.
+    - `info.json` contains information about the dataset like the `sampling rate`
+    
+### Using from the command line interface
 
 The command line interface can be used for pre-processing and data visualization.
 
 To get a list of commands available do:
 
-- `wfieldtools -h`
+- `wfield -h`
 
 To preprocess WidefieldImager data do:
 
-- `wfieldtools imager <DATAFOLDER> -o <LOCAL/DESTINATION FOLDER>`
-- Complete example `wfieldtools imager \\\\grid-hs.cshl.edu\\churchland_nlsas_data\\data\\BpodImager\\Animals\\CSP23\\SpatialDisc\\12-Mar-2020 -o /c/data/CSP23/SpatialDisc/12-Mar-2020`
+- `wfield imager <DATAFOLDER> -o <LOCAL/DESTINATION FOLDER>`
+- Complete example `wfieldtools imager_preprocess \\\\grid-hs.cshl.edu\\churchland_nlsas_data\\data\\BpodImager\\Animals\\CSP23\\SpatialDisc\\12-Mar-2020 -o /c/data/CSP23/SpatialDisc/12-Mar-2020`
 
 
 to list other options do:
 
-- `wfieldtools imager -h`
+- `wfield imager -h`
 
 To launch the GUI to explore processed data do:
 
-- `wfieldtools open <FOLDER>`
+- `wfield open <FOLDER>`
 
 ### Example datasets
 
