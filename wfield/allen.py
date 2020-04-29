@@ -235,9 +235,9 @@ Example:
     else:
         return extent
 
-#################################################################################
-#################################################################################
-#################################################################################
+########################################################################
+########################################################################
+########################################################################
 
 
 def apply_affine_to_points(x,y,M):
@@ -268,14 +268,65 @@ def allen_landmarks_to_image_space(landmarks,
     Convert landmarks from allen to "image" space.
     Basically just divides by the resolution and adds the bregma offset
     '''
-    landmarks.x = landmarks.x/resolution + bregma_offset[0]
-    landmarks.y = landmarks.y/resolution + bregma_offset[1]
+    landmarks['x'] = landmarks['x']/resolution + bregma_offset[0]
+    landmarks['y'] = landmarks['y']/resolution + bregma_offset[1]
     return landmarks
 
 
-#################################################################################
-#################################################################################
-#################################################################################
+#######################################################################
+################      READ AND WRITE FUNCTIONS      ###################
+#######################################################################
+
+def save_allen_landmarks(landmarks, filename = None,
+                         resolution = None,
+                         landmarks_match = None,
+                         bregma_offset = None,
+                         transform = None):
+    '''
+    landmarks need to be pandas dataframes.
+    '''
+    lmarks = dict(landmarks=landmarks.to_dict(orient='list'))
+    if not resolution is None:
+        lmarks['resolution'] = resolution    
+    if not landmarks_match is None:
+        lmarks['landmarks_match'] = landmarks_match.to_dict(orient='list')
+    if not bregma_offset is None:
+        if isinstance(bregma_offset,np.ndarray):
+            bregma_offset = bregma_offset.tolist()
+        lmarks['bregma_offset'] = bregma_offset
+    if not transform is None:
+        from skimage.transform import SimilarityTransform
+        if isinstance(transform,SimilarityTransform):
+            lmarks['transform'] = transform.params.tolist()
+        elif isinstance(transform,np.ndarray):
+            lmarks['transform'] = transform.tolist()
+        else:
+            lmarks['transform'] = transform
+    if 'bregma_offset' in lmarks.keys() and 'resolution' in lmarks.keys():
+        lmarks['landmarks_im'] = allen_landmarks_to_image_space(
+            landmarks.copy(), 
+            lmarks['bregma_offset'],
+            lmarks['resolution']).to_dict(orient='list')
+    if filename is None:
+        filename = pjoin(annotation_dir,'dorsal_cortex_landmarks.json')
+    with open(filename,'w') as fd:
+        import json
+        json.dump(lmarks,fd)
+
+def load_allen_landmarks(filename):
+    if filename is None:
+        filename = pjoin(annotation_dir,'dorsal_cortex_landmarks.json')
+    with open(filename,'r') as fd:
+        import json
+        lmarks = json.load(fd)
+    for k in ['landmarks_im','landmarks','landmarks_match']:
+        if k in lmarks.keys():
+            lmarks[k] = pd.DataFrame(lmarks[k])[['x','y','name','color']]
+    if 'transform' in lmarks.keys():
+        from skimage.transform import SimilarityTransform
+        lmarks['transform'] = SimilarityTransform(
+            np.array(lmarks['transform']))
+    return lmarks
 
     
 def allen_load_reference(reference_name,annotation_dir = annotation_dir):
@@ -316,9 +367,9 @@ def allen_save_reference(ccf_regions, proj, brainoutline,
 
     
 
-#################################################################################
-#########################HOLOVIEWS ALLEN FUNCTIONS###############################
-#################################################################################
+########################################################################
+################HOLOVIEWS PLOTTING FUNCTIONS############################
+########################################################################
 
 def hv_plot_allen_regions(ccf_regions,
                           resolution = 1,

@@ -68,6 +68,7 @@ def frames_average_for_trials(dat,onsets,nbaseline_frames):
             frame_averages.append(dat[on:on+nbaseline_frames].mean(axis=0))
     return np.stack(frames_average)
 
+
 #######################################################################
 ################        PARSE WIDEFIELDIMAGER       ###################
 #######################################################################

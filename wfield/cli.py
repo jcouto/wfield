@@ -21,10 +21,11 @@ class CLIParser(object):
 The commands are:
     open                Opens a gui to look at the preprocessed data        
     preprocess          Preprocess data in binary fornat
-    imager              Preprocesses data recorded with the WidefieldImager
     motion              Registers data from a binary file
     decompose           Performs single value decomposition
     correct             Performs hemodynamic correction on dual channel data
+    imager              Concatenates trials recorded with the WidefieldImager
+    imager_preprocess   Preprocesses data recorded with the WidefieldImager
 
 ''')
         parser.add_argument('command', help='type wfieldtools <command> -h for help')
@@ -74,7 +75,45 @@ The commands are:
 
     def imager(self):
         parser = argparse.ArgumentParser(
-            description='Performs preprocessing of widefield data recorded with the WidefieldImager')
+            description='Converts widefield data recorded with the WidefieldImager')
+        parser.add_argument('foldername', action='store',
+                            default=None, type=str,
+                            help='Folder where to search for mj2 and analog files.')
+        parser.add_argument('-o','--output', action='store',
+                            default=None, type=str,
+                            help='Output folder') # there should be an intermediate folder as well
+        
+        args = parser.parse_args(sys.argv[2:])
+        remotepath = args.foldername
+        localdisk = args.output # this should be an SSD or a fast drive
+
+        if localdisk is None:
+            print('Specify a fast local disk with the  -o option.')
+            exit(1)
+        if not os.path.isdir(localdisk):
+            os.makedirs(localdisk)
+            print('Created {0}'.format(localdisk))
+        print('''
+
+    Searching for mj2 files in: 
+        {0}
+        
+    Output folder: 
+        {1}
+
+        '''.format(remotepath,localdisk))
+        tfetch = time.time()
+        dat,frames_avg, trialonsets,trialinfo = parse_imager_mj2_folder(remotepath, localdisk)
+        del dat
+        del frames_avg
+        del trialonsets
+        del trialinfo
+        tfetch = (time.time() - tfetch)/60.
+
+        
+    def imager_preprocess(self):
+        parser = argparse.ArgumentParser(
+        description='Performs preprocessing of widefield data recorded with the WidefieldImager')
         parser.add_argument('foldername', action='store',
                             default=None, type=str,
                             help='Folder where to search for mj2 and analog files.')
