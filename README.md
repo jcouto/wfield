@@ -10,6 +10,8 @@ This is a python package for visualizing and analysing data collected with a wid
   - Extract ROIs
   - Visualize raw/reduced data and extracted ROIs
 
+Use cases and instructions [here](usecases.md)
+
 ### File format conventions
 
   - raw frame data is stored in binary files (uint16). The filename must end with: `_NCHANNELS_H_W_DTYPE.dat` for example "frames_2_540_640_uint16.dat" H and W are the dimensions of a single frame.

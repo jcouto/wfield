@@ -9,3 +9,4 @@ from .allen import *
 # other
 from .viz import *
 from .utils_svd import *
+from .plots import *
