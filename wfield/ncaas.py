@@ -31,6 +31,8 @@ Inputs:
     nreference            : number of frames to take as reference (default 60)
     mmap                  : default False; if True, result is written to disk and returns a memory mapped array
     flatten_frames        : returns [NFRAMES * NCHANNELS, H, W] instead
+    outputdir             : folder to write the results to.
+
 Returns:
     motion corrected frames [NFRAMES, NCHANNELS, H, W]
     '''
@@ -56,7 +58,7 @@ Returns:
             from .plots import plot_summary_motion_correction 
             import pylab as plt
             plt.matplotlib.style.use('ggplot')
-            plot_summary_motion_correction(shifts,outputdir);
+            plot_summary_motion_correction(shifts,localdisk = outputdir);
         except Exception as err:
             print('There was an issue plotting.')
             print(err)
@@ -69,3 +71,5 @@ Returns:
         return dat.reshape([-1,*dat.shape[-2:]])
 
     return dat
+
+

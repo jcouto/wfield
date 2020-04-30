@@ -69,7 +69,7 @@ def approximate_svd(dat, frames_average,
         V[:,idx[i]:idx[i+1],:] = np.dot(
             U,blk.reshape([-1,np.multiply(*dims[1:])]).T).reshape((k,-1,2))   
 
-    SVT = V.reshape((k,-1))
+    SVT = V.reshape((k,*dims))
     U = U.T
     return U,SVT
 
@@ -131,7 +131,7 @@ The chunks have all samples in time but only a fraction of pixels.
         block_SVT[iblock] = np.dot(np.diag(s),vt)
 
     U,SVT,S = _complete_svd_from_blocks(block_U,block_SVT,blocks,k,(w,h))    
-    return U,SVT,S,(block_U,block_SVT,blocks)      
+    return U,SVT.reshape([-1,w,h]),S,(block_U,block_SVT,blocks)      
 
 
 def _complete_svd_from_blocks(block_U,block_SVT,blocks,k,dims,
