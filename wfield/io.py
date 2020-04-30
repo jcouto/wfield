@@ -1,35 +1,93 @@
 from .utils import *
-import cv2
-from skvideo.io import FFmpegReader
 
-def mmap_dat(fname,
-             mode = 'r',
-             nchan = None,
-             w=None,
-             h=None,
-             dtype=None,
-             nframes=None):
-    assert os.path.isfile(fname)
-    meta = os.path.splitext(fname)[0].split('_')
-    if nchan is None: # try to get it from the filename
-        nchan = int(meta[-4])
-    if w is None: # try to get it from the filename
-        w = int(meta[-3])
-    if h is None: # try to get it from the filename
-        h = int(meta[-2])
-    if dtype is None: # try to get it from the filename
-        dtype = meta[-1]
+def load_dat(filename,
+             nframes = None,
+             offset = 0,
+             shape = None,
+             dtype='uint16'): 
+    '''
+    Loads frames from a binary file.
+    
+    Inputs:
+        filename (str)       : fileformat convention, file ends in _NCHANNELS_H_W_DTYPE.dat
+        nframes (int)        : number of frames to read (default is None: the entire file)
+        offset (int)         : offset frame number (default 0)
+        shape (list|tuple)   : dimensions (NCHANNELS, HEIGHT, WIDTH) default is None
+        dtype (str)          : datatype (default uint16) 
+    Returns:
+        An array with size (NFRAMES,NCHANNELS, HEIGHT, WIDTH).
+
+    Example:
+        dat = load_dat(filename)
+        
+    ''' 
+    if not os.path.isfile(filename):
+        raise OSError('File {0} not found.'.format(filename))
+    if shape is None or dtype is None: # try to get it from the filename
+        meta = os.path.splitext(filename)[0].split('_')
+        if shape is None:
+            shape = [int(m) for m in meta[-4:-1]]
+        if dtype is None:
+            dtype = meta[-1]
     dt = np.dtype(dtype)
     if nframes is None:
         # Get the number of samples from the file size
-        nsamples = os.path.getsize(fname)/(nchan*w*h*dt.itemsize)
-    return np.memmap(fname,
+        nframes = int(os.path.getsize(filename)/(np.prod(shape)*dt.itemsize))
+    framesize = int(np.prod(shape))
+    dt = np.dtype(dtype)
+    offset = int(offset)
+    with open(filename,'rb') as fd:
+        fd.seek(offset*framesize*int(dt.itemsize))
+        buf = np.fromfile(fd,dtype = dt, count=framesize*nframes)
+    buf = buf.reshape((-1,*shape),
+                      order='C')
+    return buf
+
+def mmap_dat(filename,
+             mode = 'r',
+             nframes = None,
+             shape = None,
+             dtype='uint16'):
+    '''
+    Loads frames from a binary file as a memory map.
+    This is useful when the data does not fit to memory.
+    
+    Inputs:
+        filename (str)       : fileformat convention, file ends in _NCHANNELS_H_W_DTYPE.dat
+        mode (str)           : memory map access mode (default 'r')
+                'r'   | Open existing file for reading only.
+                'r+'  | Open existing file for reading and writing.                 
+        nframes (int)        : number of frames to read (default is None: the entire file)
+        offset (int)         : offset frame number (default 0)
+        shape (list|tuple)   : dimensions (NCHANNELS, HEIGHT, WIDTH) default is None
+        dtype (str)          : datatype (default uint16) 
+    Returns:
+        A memory mapped  array with size (NFRAMES,NCHANNELS, HEIGHT, WIDTH).
+
+    Example:
+        dat = mmap_dat(filename)
+    '''
+    
+    if not os.path.isfile(filename):
+        raise OSError('File {0} not found.'.format(filename))
+    if shape is None or dtype is None: # try to get it from the filename
+        meta = os.path.splitext(filename)[0].split('_')
+        if shape is None:
+            shape = [int(m) for m in meta[-4:-1]]
+        if dtype is None:
+            dtype = meta[-1]
+    dt = np.dtype(dtype)
+    if nframes is None:
+        # Get the number of samples from the file size
+        nframes = int(os.path.getsize(filename)/(np.prod(shape)*dt.itemsize))
+    dt = np.dtype(dtype)
+    return np.memmap(filename,
                      mode=mode,
                      dtype=dt,
-                     shape = (int(nsamples),int(nchan),int(w),int(h)))
+                     shape = (int(nframes),*shape))
 
 def load_binary_block(block, #(filename,onset,offset)
-                       shape = None,
+                      shape = None,
                       dtype='uint16'): 
     '''Loads a block from a binary file (nchannels,W,H)'''
     fname,offset,bsize = block
@@ -74,6 +132,7 @@ def frames_average_for_trials(dat,onsets,nbaseline_frames):
 #######################################################################
 
 def read_mj2_frames(fname):
+    from skvideo.io import FFmpegReader
     sq = FFmpegReader(fname,outputdict={'-pix_fmt':'gray16le'})
     imgs = []
     for s in sq:
