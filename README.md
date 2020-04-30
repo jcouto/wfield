@@ -14,13 +14,16 @@ Use cases and instructions [here](usecases.md)
 
 ### File format conventions
 
-  - raw frame data is stored in binary files (uint16).
-  The filename must end with: `_NCHANNELS_H_W_DTYPE.dat`
-  Example: "frames_2_540_640_uint16.dat" H and W are the dimensions of a single frame.
-  - denoised/decomposed data are stored as `npy` arrays.
-  `U.npy` are the spatial components `(H, W, NCOMPONENTS)`
-  `VST.npy` are the temporal components `(NCOMPONENTS, NFRAMES)`
-  - `VSTcorr.npy` is the hemodynamic corrected temporal components `(NCOMPONENTS, NFRAMES)`.
+  - raw frame data is stored in binary files (uint16) <br />
+    The filename must end with: `_NCHANNELS_H_W_DTYPE.dat` <br />
+    Example: "frames_2_540_640_uint16.dat" H and W are the dimensions of a single frame. <br /> 
+  
+  - denoised/decomposed data are stored as `npy` arrays <br /> 
+  `U.npy` are the spatial components `(H, W, NCOMPONENTS)` <br />
+  `VST.npy` are the temporal components `(NCOMPONENTS, NFRAMES)` <br /> 
+  
+  - `VSTcorr.npy` is the hemodynamic corrected temporal components `(NCOMPONENTS, NFRAMES)`
+  
   - `info.json` has information about the dataset like the `frame_rate` or the `n_channels`
     
 ### Using from the command line interface
