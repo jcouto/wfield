@@ -1,4 +1,4 @@
-# Tools for analysis of widefield data 
+# Tools to analyze widefield data 
 
 This is a python package for visualizing and analysing data collected with a widefield macroscope.
 
@@ -10,7 +10,7 @@ This is a python package for visualizing and analysing data collected with a wid
   - Extract ROIs
   - Visualize raw/reduced data and extracted ROIs
 
-Use cases and instructions [here](usecases.md)
+### Use cases and instructions [here](usecases.md)
 
 ### File format conventions
 
@@ -26,32 +26,6 @@ Use cases and instructions [here](usecases.md)
   
   - `info.json` has information about the dataset like the `frame_rate` or the `n_channels`
     
-### Using from the command line interface
-
-The command line interface can be used for pre-processing and data visualization.
-
-To get a list of commands available do:
-
-- `wfield -h`
-
-To preprocess WidefieldImager data do:
-
-- `wfield imager_preprocess <DATAFOLDER> -o <LOCAL/DESTINATION FOLDER>`
-- Complete example `wfield imager_preprocess C:\\data\\CSP23\\SpatialDisc\\12-Mar-2020 -o c:\\data\\CSP23\\SpatialDisc\\12-Mar-2020`
-
-
-to list other options do:
-
-- `wfield imager -h`
-
-To launch the GUI to explore processed data do:
-
-- `wfield open <FOLDER>`
-
-### Example datasets
-
-Example datasets are here.
-
 ### Installation
 
 To install start by getting [Anaconda](https://www.anaconda.com/distribution/#download-section) or [Miniconda](https://docs.conda.io/en/latest/miniconda.html). Install for all users and set as system python (this is not essential if you know what you are doing).
@@ -73,3 +47,9 @@ If you are using Windows, get a terminal like [git bash](https://git-scm.com/dow
 ### Tutorial
 
 Tutorials are [here](https://github.com/jcouto/wfield/tree/master/notebooks).
+
+### Example datasets
+
+Example datasets are here.
+
+

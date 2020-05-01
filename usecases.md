@@ -1,6 +1,29 @@
 # Some use cases and notes
 
-## NeuroCAAS integration
+### Using from the command line interface
+
+The command line interface can be used for pre-processing and data visualization.
+
+To get a list of commands available do:
+
+- `wfield -h`
+
+To preprocess WidefieldImager data do:
+
+- `wfield imager_preprocess <DATAFOLDER> -o <LOCAL/DESTINATION FOLDER>`
+- Complete example `wfield imager_preprocess C:\\data\\CSP23\\SpatialDisc\\12-Mar-2020 -o c:\\data\\CSP23\\SpatialDisc\\12-Mar-2020`
+
+
+to list other options do:
+
+- `wfield imager -h`
+
+To launch the GUI to explore processed data do:
+
+- `wfield open <FOLDER>`
+
+
+## Integration with NeuroCAAS 
 
 #### Motion correction example
 
