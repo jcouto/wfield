@@ -84,8 +84,17 @@ def dual_color_hemodymamic_correction(U,SVT, output_folder = None,
     
     Inputs:
     
-    U 
+    U (array)     : spatial components (H,W,NCOMPONENTS)
+    SVT (array)   : temporal components (NCOMPONENTS,NFRAMES*2CHANNELS)
+    output_folder : where to store results and figures (default current directory)
+    frame_rate    : frame rate of the acquisition 
+    freq_lowpass  : lowpass frequency (only for violet - default 15. (none at 30Hz))
+    freq_highpass : frequency of the highpass filter, applied to both channels (default is 0.1)
+
+    Returns:
+    SVTcorr      : the corrected temporal components (NCOMPONENTS, NFRAMES)
     '''
+    
     if output_folder is None:
         output_folder = os.path.abspath(os.path.curdir)
         print('Output not specified, using {0}'.format(output_folder))
