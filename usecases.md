@@ -20,7 +20,7 @@ Y = load_and_motion_correct(dat_path,
                             flatten_frames=False) # true: return frames and channels as single dimension
 ```
 
-### Hemodynamics correction example
+#### Hemodynamics correction example
 
 This performs hemodynamics correction on widefield data collected with 2 excitation wavelengths (470 and 405 nm). Result is saved in `SVTcorr.npy`.
 
@@ -30,7 +30,7 @@ U = np.load('U.npy')
 SVT = np.load('SVT.npy')
 
 frame_rate = 30.        # acquisition rate (2 channels)
-output_folder = None    # write to current directory
+output_folder = None    # write to current directory or path
 
 from wfield.ncaas import dual_color_hemodymamic_correction
 
