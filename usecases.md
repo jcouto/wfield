@@ -1,6 +1,6 @@
-# Some use cases and notes
+# Use cases and notes
 
-### Using from the command line interface
+### Using the command line interface
 
 The command line interface can be used for pre-processing and data visualization.
 
