@@ -2,13 +2,13 @@ from .utils import *
 from sklearn.preprocessing import normalize
 
 class svd_pix_correlation():
-    def __init__(self,U,SVT,dims,norm_svt=False):
+    def __init__(self,U,SVT,norm_svt=False):
         '''
         Local correlation using the decomposed matrices.
         '''
         normed = SVT.copy()
-        self.U = U
-        self.dims = dims
+        self.dims = U.shape[:2]
+        self.U = U.copy().reshape([-1,U.shape[-1]])
         if norm_svt:
             # Careful interpreting the results with normalized components...
             normed = normalize(SVT,norm='l2',axis=0)

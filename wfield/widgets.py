@@ -98,7 +98,7 @@ class DisplayWidget(ImageWidget):
         x = int(np.clip(x,0,self.stack.shape[1]))
         y = int(np.clip(y,0,self.stack.shape[2]))
         idx = np.ravel_multi_index((x,y),self.stack.shape[1:])
-        t = np.dot(self.stack.U[idx,:],self.stack.SVT)
+        t = np.dot(self.stack.Uflat[idx,:],self.stack.SVT)
         return t
 
     def mouseMoved(self,pos):
@@ -153,7 +153,6 @@ class LocalCorrelationWidget(ImageWidget):
         SVT = stack.SVT
         from .utils_svd import svd_pix_correlation
         self.localcorr = svd_pix_correlation(U,SVT,
-                                             dims = self.stack.shape[1:],
                                              norm_svt=True)
         self.levels = [0,1.]
         
@@ -232,7 +231,7 @@ class ROIPlotWidget(QWidget):
         r = self.rois[i].getArraySlice(X, self.view,axes=(0,1))
         X[r[0][0],r[0][1]]=1
         idx = np.ravel_multi_index(np.where(X==1),self.stack.shape[1:])
-        t = np.mean(np.dot(self.stack.U[idx,:].astype('float32'),
+        t = np.mean(np.dot(self.stack.Uflat[idx,:].astype('float32'),
                            self.stack.SVT.astype('float32')),axis=0).astype('float32')
         self.plots[i].setData(x = self.time,
                               y = t+self.offset*i)

@@ -18,12 +18,13 @@ def two_chan_to_rgb(dat,norm=True):
 #######################  MATPLOTLIB WRAPPERS ###################
 ################################################################
 
-def imshow_noborder(img,figsize = [7,7],**kwargs):
-    fig = plt.figure(figsize = figsize)
-    ax = fig.add_axes([0,0,1,1])
-    ax.axis('off')
+def imshow_noborder(img,fig = None,figsize = [7,7],**kwargs):
+    if fig is None:
+        fig = plt.figure(figsize = figsize)
+        ax = fig.add_axes([0,0,1,1])
+    plt.gca().axis('off')            
     plt.imshow(img,**kwargs)
-    return fig,ax
+    return fig
 
 ################################################################
 ##################### PYQTGRAPH WRAPPERS #######################

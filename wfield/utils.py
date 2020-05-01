@@ -76,14 +76,17 @@ def make_overlapping_blocks(dims,blocksize=128,overlap=16):
             blocks.append([(a,np.clip(a+blocksize,0,w)),(b,np.clip(b+blocksize,0,h))])
     return blocks
 
-def reconstruct(u,svt,dims):
-    return np.dot(u,svt).reshape((*dims,-1)).transpose(-1,0,1)
+def reconstruct(u,svt):
+    dims = u.shape
+    return np.dot(u.reshape([-1,dims[-1]]),svt).reshape((*dims[:2],-1)).transpose(-1,0,1).squeeze()
 
 
 class SVDStack(object):
-    def __init__(self,U,SVT,dims,dtype = 'float32'):
+    def __init__(self,U,SVT,dtype = 'float32'):
         self.U = U.astype('float32')
+        self.Uflat = self.U.reshape(-1,self.U.shape[-1])
         self.SVT = SVT.astype('float32')
+        dims = U.shape[:2]
         self.shape = [SVT.shape[1],*dims]
         self.dtype = dtype
     def __len__(self):
@@ -94,13 +97,13 @@ class SVDStack(object):
             idxz = range(*args[0].indices(self.shape[0]))
         else:
             idxz = args[0]        
-        return reconstruct(self.U,self.SVT[:,idxz],self.shape[1:]).squeeze()
+        return reconstruct(self.U,self.SVT[:,idxz])
     def get_timecourse(xy):
         # TODO: this needs a better interface
         x = int(np.clip(xy[0],0,self.shape[1]))
         y = int(np.clip(yy[1],0,self.shape[2]))
         idx = np.ravel_multi_index((x,y),self.shape[1:])
-        t = np.dot(self.U[idx,:],self.SVT)
+        t = np.dot(self.U.reshape([-1,self.U.shape[-1]])[idx,:],self.SVT)
         return t
 
 def get_trial_baseline(idx,frames_average,onsets):

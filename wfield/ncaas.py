@@ -11,6 +11,7 @@
 from .utils import *
 from .io import load_dat, mmap_dat
 from .registration import motion_correct
+from .hemocorrection import hemodynamic_correction
 
 def load_and_motion_correct(filename,
                             outputfolder = None,
@@ -72,4 +73,46 @@ Returns:
 
     return dat
 
+
+def dual_color_hemodymamic_correction(U,SVT, output_folder = None,
+                                      frame_rate = 30.,
+                                      freq_lowpass = 15., 
+                                      freq_highpass = 0.1):
+    ''' 
+    Hemodynamic correction on dual channel data.
+    The blue channel is assumed to be the first.
+    
+    Inputs:
+    
+    U 
+    '''
+    if output_folder is None:
+        output_folder = os.path.abspath(os.path.curdir)
+        print('Output not specified, using {0}'.format(output_folder))
+    
+    SVTcorr, rcoeffs, T = hemodynamic_correction(U, SVT, 
+                                                 fs=frame_rate,
+                                                 freq_lowpass=freq_lowpass,
+                                                 freq_highpass = freq_highpass)        
+
+    np.save(pjoin(output_folder,'rcoeffs.npy'),rcoeffs) # regression coefficients
+    np.save(pjoin(output_folder,'T.npy'),T)             # transformation matrix
+    np.save(pjoin(output_folder,'SVTcorr.npy'),SVTcorr) # corrected SVT
+
+    try: # don't crash while plotting
+        import pylab as plt
+        plt.matplotlib.style.use('ggplot')
+        from wfield import  plot_summary_hemodynamics_dual_colors
+        plot_summary_hemodynamics_dual_colors(rcoeffs,
+                                              SVT,
+                                              U,
+                                              T,
+                                              frame_rate=frame_rate,
+                                              duration_frames = 60,
+                                              outputdir = output_folder);
+    except Exception as err:
+        print('There was an issue plotting.')
+        print(err)
+        
+    return SVTcorr
 

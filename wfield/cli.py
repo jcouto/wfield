@@ -122,8 +122,8 @@ The commands are:
                             help='Output folder') # there should be an intermediate folder as well
         parser.add_argument('-k', action='store',default=200,type=int,
                             help = 'Number of components for SVD')
-        parser.add_argument('--mask-edge', action='store',default=30,type=int,
-                            help = 'Size of the mask used on the edges during motion correction ') 
+        #parser.add_argument('--mask-edge', action='store',default=30,type=int,
+        #                    help = 'Size of the mask used on the edges during motion correction ') 
         parser.add_argument('--nbaseline-frames', action='store',
                             default=30, type=int,
                             help='Number of frames to compute the  baseline')
@@ -159,7 +159,7 @@ The commands are:
 
         tproc = time.time()
         # MOTION CORRECTION
-        _motion(localdisk,args.mask_edge)
+        _motion(localdisk)
         # COMPUTE AVERAGE FOR BASELINE
         _baseline(localdisk,args.nbaseline_frames)
         # DATA REDUCTION
@@ -186,8 +186,8 @@ The commands are:
                             help='Folder that has the binary file (FAST DISK).')
         parser.add_argument('-k', action='store',default=200,type=int,
                             help = 'Number of components for SVD')
-        parser.add_argument('--mask-edge', action='store',default=30,type=int,
-                            help = 'Size of the mask used on the edges during motion correction ') 
+        #parser.add_argument('--mask-edge', action='store',default=30,type=int,
+        #                    help = 'Size of the mask used on the edges during motion correction ') 
         parser.add_argument('--nbaseline-frames', action='store',
                             default=30, type=int,
                             help='Number of frames to compute the  baseline')
@@ -206,7 +206,7 @@ The commands are:
 
         tproc = time.time()
         # MOTION CORRECTION
-        _motion(localdisk,args.mask_edge)
+        _motion(localdisk)
         # COMPUTE AVERAGE FOR BASELINE
         _baseline(localdisk,args.nbaseline_frames)
         # DATA REDUCTION
@@ -223,12 +223,12 @@ The commands are:
         parser.add_argument('foldername', action='store',
                             default=None, type=str,
                             help='Folder with dat file.')
-        parser.add_argument('--mask-edge', action='store',default=30,type=int,
-                            help = 'Size of the mask used on the edges during motion correction ') 
+        #parser.add_argument('--mask-edge', action='store',default=30,type=int,
+        #                    help = 'Size of the mask used on the edges during motion correction ') 
         
         args = parser.parse_args(sys.argv[2:])
         localdisk = args.foldername 
-        _motion(localdisk,args.mask_edge)
+        _motion(localdisk)
     def decompose(self):
         parser = argparse.ArgumentParser(
             description='Performs single value decomposition')
@@ -237,9 +237,16 @@ The commands are:
                             help='Folder with dat file.')
         parser.add_argument('-k', action='store',default=200,type=int,
                             help = 'Number of components for SVD ') 
-        
+        parser.add_argument('--no-baseline',
+                            action='store_true', default=False,
+                            help = 'Skip baseline ') 
+        parser.add_argument('--nbaseline-frames', action='store',
+                            default=30, type=int,
+                            help='Number of frames to compute the  baseline')        
         args = parser.parse_args(sys.argv[2:])
-        localdisk = args.foldername 
+        localdisk = args.foldername
+        if not args.no_baseline:
+            _baseline(localdisk,args.nbaseline_frames)
         _decompose(localdisk,k=args.k)
     def correct(self):
         parser = argparse.ArgumentParser(
@@ -255,16 +262,15 @@ The commands are:
 
         _hemocorrect(localdisk,fs=args.fs)
         
-def _motion(localdisk,mask_edge):
+def _motion(localdisk):
     dat_path = glob(pjoin(localdisk,'*.dat'))[0]        
     dat = mmap_dat(dat_path, mode='r+')
-    yshifts,xshifts,avg_dat = motion_correct(dat,chunksize=512,
-                                             mask_edge=mask_edge,
-                                             apply_shifts=True)
+    yshifts,xshifts = motion_correct(dat,chunksize=512,
+                                     apply_shifts=True)
     del dat # close and finish writing
     shifts = np.rec.array([yshifts,xshifts],dtype=[('y','int'),('x','int')])
     np.save(pjoin(localdisk,'motion_correction_shifts.npy'),shifts)
-    np.save(pjoin(localdisk,'frames_average.npy'),avg_dat)
+    plot_summary_motion_correction(shifts,localdisk)
     del shifts
 
 def _baseline(localdisk,nbaseline_frames):
@@ -296,12 +302,12 @@ def _decompose(localdisk, k):
         onsets = None
     dat = mmap_dat(dat_path) # load to memory if you have enough
     U,SVT = approximate_svd(dat, frames_average,onsets = onsets,k = k)
-    np.save(pjoin(localdisk,'Ua.npy'),U)
-    np.save(pjoin(localdisk,'SVTa.npy'),SVT)
+    np.save(pjoin(localdisk,'U.npy'),U)
+    np.save(pjoin(localdisk,'SVT.npy'),SVT)
 
 def _hemocorrect(localdisk,fs):
-    U = np.load(pjoin(localdisk,'Ua.npy'))
-    SVT = np.load(pjoin(localdisk,'SVTa.npy'))
+    U = np.load(pjoin(localdisk,'U.npy'))
+    SVT = np.load(pjoin(localdisk,'SVT.npy'))
 
     SVTcorr, rcoeffs, T = hemodynamic_correction(U, SVT, fs=fs)        
 

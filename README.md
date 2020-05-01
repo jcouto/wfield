@@ -36,8 +36,8 @@ To get a list of commands available do:
 
 To preprocess WidefieldImager data do:
 
-- `wfield imager <DATAFOLDER> -o <LOCAL/DESTINATION FOLDER>`
-- Complete example `wfieldtools imager_preprocess \\\\grid-hs.cshl.edu\\churchland_nlsas_data\\data\\BpodImager\\Animals\\CSP23\\SpatialDisc\\12-Mar-2020 -o /c/data/CSP23/SpatialDisc/12-Mar-2020`
+- `wfield imager_preprocess <DATAFOLDER> -o <LOCAL/DESTINATION FOLDER>`
+- Complete example `wfield imager_preprocess C:\\data\\CSP23\\SpatialDisc\\12-Mar-2020 -o c:\\data\\CSP23\\SpatialDisc\\12-Mar-2020`
 
 
 to list other options do:
@@ -62,7 +62,7 @@ If you are using Windows, get a terminal like [git bash](https://git-scm.com/dow
 
 - Use anaconda to install all dependencies: `conda env create -f env.yml` the file env.yml is inside the wfield directory.
 
-- Enter the environment `conda activate wfield` and install wfieldtools `python setup.py install`
+- Enter the environment `conda activate wfield` and install wfield `python setup.py install`
 
 - You will need to run `conda activate wfield` to activate the environment before running the software.
 
