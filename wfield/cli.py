@@ -20,14 +20,14 @@ class CLIParser(object):
 
 The commands are:
     open                Opens a gui to look at the preprocessed data        
-    inspect_raw         Opens a gui to look at the raw frames
+    open_raw            Opens a gui to look at the raw frames
     preprocess          Preprocess data in binary fornat
     motion              Registers data from a binary file
     decompose           Performs single value decomposition
     correct             Performs hemodynamic correction on dual channel data
-    imager              Concatenates trials recorded with the WidefieldImager
+    imager              
     imager_preprocess   Preprocesses data recorded with the WidefieldImager
-
+    imager_ncaas        [Not implemented] Concatenates trials recorded with the WidefieldImager and uploads
 ''')
         parser.add_argument('command', help='type wfieldtools <command> -h for help')
         # parse_args defaults to [1:] for args, but you need to
@@ -74,7 +74,7 @@ The commands are:
         w = SVDViewer(stack)
         sys.exit(app.exec_())
 
-    def inspect_raw(self):
+    def open_raw(self):
         parser = argparse.ArgumentParser(
             description='Inspect the raw video frames')
         parser.add_argument('foldername', action='store',
@@ -277,8 +277,6 @@ The commands are:
         localdisk = args.foldername 
 
         _hemocorrect(localdisk,fs=args.fs)
-
-        
         
 def _motion(localdisk):
     dat_path = glob(pjoin(localdisk,'*.dat'))[0]        
@@ -319,8 +317,8 @@ def _decompose(localdisk, k):
 
     else:
         onsets = None
-    dat = mmap_dat(dat_path) # load to memory if you have enough
-    U,SVT = approximate_svd(dat, frames_average,onsets = onsets,k = k)
+    dat = mmap_dat(dat_path)
+    U,SVT = approximate_svd(dat, frames_average, onsets = onsets, k = k)
     np.save(pjoin(localdisk,'U.npy'),U)
     np.save(pjoin(localdisk,'SVT.npy'),SVT)
 
