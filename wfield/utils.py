@@ -1,3 +1,4 @@
+import cv2 # OpenCV needs to be imported before numpy for some seg faulted reason...
 import numpy as np
 from tqdm import tqdm
 import pandas as pd

@@ -20,6 +20,7 @@ class CLIParser(object):
 
 The commands are:
     open                Opens a gui to look at the preprocessed data        
+    inspect_raw         Opens a gui to look at the raw frames
     preprocess          Preprocess data in binary fornat
     motion              Registers data from a binary file
     decompose           Performs single value decomposition
@@ -55,24 +56,39 @@ The commands are:
         args = parser.parse_args(sys.argv[2:])
         localdisk = args.foldername
         from .io import mmap_dat
-        fname = pjoin(localdisk,'Ua.npy')
+        fname = pjoin(localdisk,'U.npy')
         if os.path.isfile(fname):
             U = np.load(fname)
             if not args.before_corr:
                 SVT = np.load(pjoin(localdisk,'SVTcorr.npy'))
             else:
-                SVT = np.load(pjoin(localdisk,'SVTa.npy'))
+                SVT = np.load(pjoin(localdisk,'SVT.npy'))
         else:
             print('Could not find: {0} '.format(fname))
         dat_path = glob(pjoin(localdisk,'*.dat'))[0]
         dat = mmap_dat(dat_path)
-        stack = SVDStack(U,SVT,dat.shape[-2:])
+        stack = SVDStack(U,SVT)
         del dat
         from .widgets import QApplication,SVDViewer
         app = QApplication(sys.argv)
         w = SVDViewer(stack)
         sys.exit(app.exec_())
 
+    def inspect_raw(self):
+        parser = argparse.ArgumentParser(
+            description='Inspect the raw video frames')
+        parser.add_argument('foldername', action='store',
+                            default=None, type=str,
+                            help='Folder where to search for files.')
+        args = parser.parse_args(sys.argv[2:])
+        localdisk = args.foldername
+        from .io import mmap_dat
+        dat_path = glob(pjoin(localdisk,'*.dat'))[0]
+        dat = mmap_dat(dat_path)
+        from .viz import napari_show
+        napari_show(dat)
+        del dat
+        
     def imager(self):
         parser = argparse.ArgumentParser(
             description='Converts widefield data recorded with the WidefieldImager')
@@ -261,15 +277,18 @@ The commands are:
         localdisk = args.foldername 
 
         _hemocorrect(localdisk,fs=args.fs)
+
+        
         
 def _motion(localdisk):
     dat_path = glob(pjoin(localdisk,'*.dat'))[0]        
     dat = mmap_dat(dat_path, mode='r+')
-    yshifts,xshifts = motion_correct(dat,chunksize=512,
+    (yshifts,xshifts),rshifts = motion_correct(dat,chunksize=512,
                                      apply_shifts=True)
     del dat # close and finish writing
     shifts = np.rec.array([yshifts,xshifts],dtype=[('y','int'),('x','int')])
     np.save(pjoin(localdisk,'motion_correction_shifts.npy'),shifts)
+    np.save(pjoin(localdisk,'motion_correction_rotation.npy'),rshifts)
     plot_summary_motion_correction(shifts,localdisk)
     del shifts
 

@@ -45,7 +45,7 @@ Returns:
         # this will take a while, loads the entire dataset to memory
         dat = load_dat(filename) 
         
-    yshifts,xshifts = motion_correct(dat, chunksize=chunksize,
+    (yshifts,xshifts),rshifts = motion_correct(dat, chunksize=chunksize,
                                      nreference = nreference,
                                      apply_shifts= True)
 
@@ -54,6 +54,7 @@ Returns:
         # save the shifts
         shifts = np.rec.array([yshifts,xshifts],dtype=[('y','int'),('x','int')])
         np.save(pjoin(outputdir,'motion_correction_shifts.npy'),shifts)
+        np.save(pjoin(outputdir,'motion_correction_rotation.npy'),rshifts)
 
         try: # don't crash if there are issues plotting
             from .plots import plot_summary_motion_correction 
