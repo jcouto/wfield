@@ -52,7 +52,7 @@ Returns:
     if outputdir is None:
         outputdir = os.path.dirname(filename)
         # save the shifts
-        shifts = np.rec.array([yshifts,xshifts],dtype=[('y','int'),('x','int')])
+        shifts = np.rec.array([yshifts,xshifts],dtype=[('y','float32'),('x','float32')])
         np.save(pjoin(outputdir,'motion_correction_shifts.npy'),shifts)
         np.save(pjoin(outputdir,'motion_correction_rotation.npy'),rshifts)
 

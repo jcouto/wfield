@@ -29,6 +29,14 @@ def estimate_similarity_transform(ref,points):
     M.estimate(ref,points)
     return M 
 
+def im_adapt_hist(im,clip_limit = .1, grid_size=(8,8)):
+    ''' Adaptative histogram of image
+
+        eqim = im_adapt_hist(im,.1)
+    '''
+    clahe = cv2.createCLAHE(clipLimit=clip_limit, tileGridSize=grid_size)
+    return clahe.apply(im)
+
 def im_apply_transform(im,M):
     return warp(im,M,
                 order = 0,

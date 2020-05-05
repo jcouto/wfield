@@ -206,6 +206,7 @@ def split_imager_channels(fname_mj2):
 
 def parse_imager_mj2_folder(folder, destination, 
                             nchannels = 2,
+                            chunksize = 4,
                             dtype = 'uint16'):
     fnames_mj2 = natsorted(glob(pjoin(folder,'Frames_*.mj2')))
     if not len(fnames_mj2):
@@ -221,33 +222,45 @@ def parse_imager_mj2_folder(folder, destination,
         os.makedirs(destination)
 
     tstart = time.time()
-    frametrial = [(0,0)]
+    frametrial = [[0,0,0]]
     framesinfo = []
     cnt_trials = 0
     frames_avg = np.zeros((nchannels,w,h),dtype=float).squeeze()
+    fnames_mj2_chunks = [fnames_mj2[a:b] for a,b in chunk_indices(len(fnames_mj2),chunksize)]
     with open(dat_path,'wb') as dat:
-        for itrial,f in tqdm(enumerate(fnames_mj2),
-                             total=len(fnames_mj2),
+        for itrial,f in tqdm(enumerate(fnames_mj2_chunks),
+                             total=len(fnames_mj2_chunks),
                              desc='Collecting imager trials'):
-            ch1,ch2,info = split_imager_channels(f)
-            if ch1 is None:
-                print('Skipped trial {0}'.format(f))
-                continue
-            d = np.stack([ch1,ch2]).transpose([1,0,2,3])
-            frames_avg += np.mean(d,axis = 0).squeeze()
-            d = d.reshape([-1,w,h])
-            frametrial.append((itrial,frametrial[-1][1]+len(d)/2))
-            dat.write(d.astype(dtype))
-            framesinfo.append(dict(itrial=itrial,**info))
-            cnt_trials += 1
-    frames_avg /= float(cnt_trials)
+            res = runpar(split_imager_channels,f)
+            #         ch1,ch2,info = split_imager_channels(f)
+            for ch1,ch2,info in res:
+                cnt_trials += 1
+                if ch1 is None:
+                    print('Skipped trial {0} (no frames).'.format(f))
+                    continue
+                # compute the stimuli onsets
+                if not len(info['stim_onset']):
+                    print('Trial {0} had no stimulus; skiped trial.'.format(cnt_trials))
+                    continue
+                else:
+                    stim_onset_frames = np.where(info['ch1']<info['stim_onset'])[0][-1]
+                d = np.stack([ch1,ch2]).transpose([1,0,2,3])
+                frames_avg += np.mean(d,axis = 0).squeeze()
+                d = d.reshape([-1,w,h])
+                lenframes = frametrial[-1][1] +len(d)/2
+                # write meta and frames
+                frametrial[-1][2] = frametrial[-1][1] + stim_onset_frames
+                frametrial.append([cnt_trials,lenframes,lenframes])
+                dat.write(d.astype(dtype))
+                framesinfo.append(dict(itrial=cnt_trials,**info))
+    frames_avg /= float(len(frametrial))
     np.save(pjoin(destination,'frames_average.npy'),
             frames_avg.astype(np.float32))
     tstop = time.time()
     print('Took {0} min to collect data and compute the averages'.format((tstop-tstart)/60))
     # Save trial onset frames
     trialonsets = np.rec.array(frametrial,
-                              dtype=([('itrial','i4'),('iframe','i4')]))
+                               dtype=([('itrial','i4'),('iframe','i4'),('istimonset','i4')]))
     np.save(pjoin(destination,'trial_onsets.npy'),trialonsets[:-1])
     # Save trial information
     trialinfo = pd.DataFrame(framesinfo)

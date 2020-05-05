@@ -239,12 +239,12 @@ The commands are:
         parser.add_argument('foldername', action='store',
                             default=None, type=str,
                             help='Folder with dat file.')
-        #parser.add_argument('--mask-edge', action='store',default=30,type=int,
-        #                    help = 'Size of the mask used on the edges during motion correction ') 
+        parser.add_argument('--mode', choices=('ecc','2d'),default='ecc',
+                            help = 'Algorithm for  motion correction ') 
         
         args = parser.parse_args(sys.argv[2:])
         localdisk = args.foldername 
-        _motion(localdisk)
+        _motion(localdisk,mode = args.mode)
     def decompose(self):
         parser = argparse.ArgumentParser(
             description='Performs single value decomposition')
@@ -278,15 +278,16 @@ The commands are:
 
         _hemocorrect(localdisk,fs=args.fs)
         
-def _motion(localdisk):
+def _motion(localdisk,mode = 'ecc'):
     dat_path = glob(pjoin(localdisk,'*.dat'))[0]        
     dat = mmap_dat(dat_path, mode='r+')
-    (yshifts,xshifts),rshifts = motion_correct(dat,chunksize=512,
+    (yshifts,xshifts),rshifts = motion_correct(dat,chunksize=512,mode = mode,
                                      apply_shifts=True)
     del dat # close and finish writing
-    shifts = np.rec.array([yshifts,xshifts],dtype=[('y','int'),('x','int')])
+    shifts = np.rec.array([yshifts,xshifts],dtype=[('y','float32'),('x','float32')])
     np.save(pjoin(localdisk,'motion_correction_shifts.npy'),shifts)
     np.save(pjoin(localdisk,'motion_correction_rotation.npy'),rshifts)
+    from .plots import plot_summary_motion_correction
     plot_summary_motion_correction(shifts,localdisk)
     del shifts
 

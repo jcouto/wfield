@@ -10,6 +10,7 @@ def registration_ecc(frame,template,
                      niter = 25,
                      eps0 = 1e-2,
                      warp_mode = cv2.MOTION_EUCLIDEAN,
+                     prepare = True,
                      gaussian_filter = 1,
                      hann = None,
                      **kwargs):
@@ -17,15 +18,16 @@ def registration_ecc(frame,template,
     if hann is None:
         hann = cv2.createHanningWindow((w,h),cv2.CV_32FC1)
         hann = (hann*255).astype('uint8')
+    dst = frame.astype('float32')
     M = np.eye(2, 3, dtype=np.float32)
     criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT,
                 niter,  eps0)
-    
-    (res, M) = cv2.findTransformECC(template,frame.astype('float32'),
+    (res, M) = cv2.findTransformECC(template,dst,
                                     M, warp_mode,
                                     criteria,
                                     inputMask=hann, gaussFiltSize=gaussian_filter)
-    dst = cv2.warpAffine(frame, M, (w,h),flags=cv2.INTER_LINEAR + cv2.WARP_INVERSE_MAP);
+    dst = cv2.warpAffine(frame, M, (w,h),
+                         flags=cv2.INTER_LINEAR + cv2.WARP_INVERSE_MAP);
     return M, np.clip(dst,0,2**16).astype('uint16')
 
 
@@ -122,7 +124,16 @@ def motion_correct(dat,chunksize=512, nreference = 60, mode = 'ecc', apply_shift
     for c in tqdm(chunks,desc='Motion correction'):
         # this is the reg bit
         localchunk = np.array(dat[c[0]:c[-1]])
-        (xs,ys,rot),corrected = _register_multichannel_stack(localchunk,refs, mode=mode)
+        # always do 2d first
+        #(xs,ys,rot),corrected = _register_multichannel_stack(localchunk,refs,
+        #                                                     mode='2d')
+        #if not mode == '2d' :
+        #xs += xs0
+        #ys += ys0
+        (xs,ys,rot),corrected = _register_multichannel_stack(
+            localchunk,
+            refs,
+            mode=mode)
         if apply_shifts:
             dat[c[0]:c[-1]] = corrected[:]
         yshifts.append(ys)
