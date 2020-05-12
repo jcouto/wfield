@@ -1,4 +1,11 @@
 from .utils import *
+from .allen import (load_allen_landmarks,
+                    save_allen_landmarks,
+                    allen_landmarks_to_image_space,
+                    allen_transform_from_landmarks,
+                    allen_load_reference,
+                    allen_transform_regions)
+
 from PyQt5.QtWidgets import (QApplication,
                              QWidget,
                              QTableWidgetItem,
@@ -38,7 +45,6 @@ class AllenMatchTable(QWidget):
     def __init__(self, landmarks_file = None,parent = None):
         super(AllenMatchTable,self).__init__()
         # This widget shows: bregmaoffset in image coordinates, resolution, landmarks table
-        from .allen import load_allen_landmarks, allen_landmarks_to_image_space
         lmarks = load_allen_landmarks(landmarks_file)
         self.landmarks_file = landmarks_file
         self.parent  = parent
@@ -113,7 +119,6 @@ class AllenMatchTable(QWidget):
             else:
                 fname = os.path.basename(landmarks_file)
             fname = pjoin(self.parent.folder, fname)
-            from .allen import save_allen_landmarks,allen_transform_from_landmarks
             landmarks_match = self.landmarks.copy()
             landmarks_match.x = self.landmarks_im.nx
             landmarks_match.y = self.landmarks_im.ny
@@ -155,6 +160,54 @@ class ImageWidget(QWidget):
         self.hist.setImageItem(self.im)
         self.pl.addItem(self.hist)
 
+class QAllenAreasPlot():
+    def __init__(self,plot,
+                 reference='dorsal_cortex',
+                 parent = None,
+                 resolution = 0.01,
+                 bregma_offset = [0,0]):
+        self.ccf_regions,self.proj,self.brain_outline = allen_load_reference(reference)
+        self.parent = parent
+        self.landmarks = None
+        self.resolution = resolution
+        self.sides = ['left','right']
+        if hasattr(self.parent.parent,'allenparwidget'):
+            self.landmarks = self.parent.parent.allenparwidget.landmarks
+            self.resolution = self.parent.parent.allenparwidget.resolution
+            self.bregma_offset = self.parent.parent.allenparwidget.bregma_offset
+            self.M = self.parent.parent.allenparwidget.M
+        self.plot = plot
+        self.plot_items = []
+        self.plot_text = []
+        self.plot_centers = []
+        self.warped_image = self.parent.warp_im # then transform the points'
+
+    def update(self):
+        self.warped_image = self.parent.warp_im # then transform the points'
+        if self.warped_image:
+            M = None
+        else:
+            M = self.M
+        nccf_regions = allen_transform_regions(M, self.ccf_regions,
+                                               resolution = self.resolution,
+                                               bregma_offset = self.bregma_offset)
+        self.remove()
+        for iarea,area in nccf_regions.iterrows():
+            for side in self.sides:
+                self.plot_items.append(pg.PlotCurveItem())
+                self.plot_items[-1].setData(x = area[side+'_x'],y = area[side+'_y'])
+                self.plot_text.append(area['acronym'])
+                self.plot_centers.append(area[side+'_center'])
+                self.plot.addItem(self.plot_items[-1])
+    def remove(self):
+        for p in self.plot_items:
+            p.setVisible(False)
+            p.scene().removeItem(p)
+        self.plot_items = []
+        self.plot_text = []
+        self.plot_centers = []
+
+            
 class CustomDragPoints(pg.GraphItem):
     def __init__(self):
         self.drag_points = None
@@ -181,7 +234,11 @@ class CustomDragPoints(pg.GraphItem):
             self.text_items[-1].setParentItem(self)
             self.text_items[-1].setPos(*p['pos'])
         self.informViewBoundsChanged()
-
+    def set_visible(self,val):
+        self.scatter.setVisible(val)
+        for t in self.text_items:
+            t.setVisible(val)
+            
     def _findind(self,pt):
         for i,p in enumerate(self.points):
             if ((pt.pos().x() == p['pos'][0]) and
@@ -229,7 +286,9 @@ class RawDisplayWidget(ImageWidget):
         self._add_hist()
         self.hist.setHistogramRange(*self.levels)
         self.adaptative_histogram = False
+        self.allen_show_areas = False
         self.set_image(self.iframe)
+        
         if hasattr(self.parent,'allenparwidget'):
             self.allenwidget = self.parent.allenparwidget
             self.points = CustomDragPoints()
@@ -252,6 +311,7 @@ class RawDisplayWidget(ImageWidget):
                     self.allenwidget.table.item(i,4).setText(str(x))
                     self.allenwidget.table.item(i,5).setText(str(y))
             self.points.scatter.sigPlotChanged.connect(update_table)
+            self.allenplot = QAllenAreasPlot(plot=self.pl,parent = self)
     def _init_ui(self):
         widget = QWidget()
         slayout = QFormLayout()
@@ -280,6 +340,9 @@ class RawDisplayWidget(ImageWidget):
         self.wimwarp = QCheckBox()
         l1.addWidget(QLabel('Warp image:'))
         l1.addWidget(self.wimwarp)
+        self.wallen = QCheckBox()
+        l1.addWidget(QLabel('Show CCF:'))
+        l1.addWidget(self.wallen)
 
         slayout.addRow(w1)
         self.layout.addRow(widget)
@@ -290,7 +353,15 @@ class RawDisplayWidget(ImageWidget):
         def uwarp(val):
             self.warp_im = val
             self.set_image()
-            
+            self.points.set_visible(not val)
+            if self.allen_show_areas:
+                self.allenplot.update()
+        def uallen(val):
+            self.allen_show_areas = val
+            if val:
+                self.allenplot.update()
+            else:
+                self.allenplot.remove()
         def uframe(val):
             i = self.wframe.value()
             self.wframelabel.setText('Frame {0:d}:'.format(i))
@@ -304,6 +375,7 @@ class RawDisplayWidget(ImageWidget):
         self.wimadapt.stateChanged.connect(uhist)
         self.wimwarp.stateChanged.connect(uwarp)
         self.wchan.valueChanged.connect(uchan)
+        self.wallen.stateChanged.connect(uallen)
        
     def set_image(self,i=None,redo_levels=False):
         if not i is None:
@@ -331,9 +403,10 @@ class SVDDisplayWidget(ImageWidget):
         self._init_ui()
         self._add_hist()
         self.hist.setHistogramRange(*self.levels)
+        self.allen_show_areas = False
         self.set_image(self.iframe)
         self.win.scene().sigMouseClicked.connect(self.mouseMoved)    
-
+        
     def _init_ui(self):
         w = QWidget()
         l = QHBoxLayout()
@@ -349,12 +422,25 @@ class SVDDisplayWidget(ImageWidget):
         self.wimwarp = QCheckBox()
         l.addWidget(QLabel('Warp stack:'))
         l.addWidget(self.wimwarp)
+        self.wallen = QCheckBox()
+        l.addWidget(QLabel('Show CCF:'))
+        l.addWidget(self.wallen)
         self.layout.addRow(w)
         def uwarp(val):
             self.warp_im = val
             if hasattr(self.parent,'M'):
                 self.stack.set_warped(val,self.parent.M)
+            if self.allen_show_areas:
+                self.allenplot.update()
             self.set_image()
+        def uallen(val):
+            self.allen_show_areas = val
+            if val:
+                if not hasattr(self,'allenplot'):
+                    self.allenplot = QAllenAreasPlot(plot=self.pl,parent = self)
+                self.allenplot.update()
+            else:
+                self.allenplot.remove()
 
         def uframe(val):
             i = self.wframe.value()
@@ -364,6 +450,7 @@ class SVDDisplayWidget(ImageWidget):
             self.parent.roiwidget.line.setPos((i,0))
         self.wframe.valueChanged.connect(uframe)
         self.wimwarp.stateChanged.connect(uwarp)
+        self.wallen.stateChanged.connect(uallen)
 
     def set_image(self,i=None):
         if not i is None:

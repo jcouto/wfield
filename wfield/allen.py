@@ -241,18 +241,24 @@ Example:
 
 
 def apply_affine_to_points(x,y,M):
+    if M is None:
+        nM = np.identity(3,dtype = np.float32)
+    else:
+        nM = M.params
     xy = np.vstack([x,y,np.ones_like(y)])
-    res = (M.params @ xy).T
+    res = (nM @ xy).T
     return res[:,0],res[:,1]
 
-def allen_transform_regions(M,ccf_regions):
+def allen_transform_regions(M,ccf_regions,resolution = 1,bregma_offset = [0.,0.]):
     nccf = ccf_regions.copy()
     for i,c in nccf.iterrows():
         for side in ['left','right']:
-            x,y = apply_affine_to_points(c[side+'_x'], c[side+'_y'],M)
+            x,y = apply_affine_to_points(np.array(c[side+'_x'])/resolution + bregma_offset[0],
+                                         np.array(c[side+'_y'])/resolution + bregma_offset[1], M)
             nccf.at[i,side+'_x'] = x.tolist()
             nccf.at[i,side+'_y'] = y.tolist()
-            x,y = apply_affine_to_points(c[side+'_center'][0], c[side+'_center'][1],M)
+            x,y = apply_affine_to_points(c[side+'_center'][0]/resolution + bregma_offset[0],
+                                         c[side+'_center'][1]/resolution + bregma_offset[1], M)
             nccf.at[i,side+'_center'] = [x[0],y[0]]
     return nccf
 
