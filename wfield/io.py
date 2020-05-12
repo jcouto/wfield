@@ -259,8 +259,7 @@ def parse_imager_mj2_folder(folder, destination,
     tstop = time.time()
     print('Took {0} min to collect data and compute the averages'.format((tstop-tstart)/60))
     # Save trial onset frames
-    trialonsets = np.rec.array(frametrial,
-                               dtype=([('itrial','i4'),('iframe','i4'),('istimonset','i4')]))
+    trialonsets = np.array(frametrial)
     np.save(pjoin(destination,'trial_onsets.npy'),trialonsets[:-1])
     # Save trial information
     trialinfo = pd.DataFrame(framesinfo)

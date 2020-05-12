@@ -277,13 +277,18 @@ def allen_landmarks_to_image_space(landmarks,
 ################      READ AND WRITE FUNCTIONS      ###################
 #######################################################################
 
-def save_allen_landmarks(landmarks, filename = None,
+def save_allen_landmarks(landmarks,
+                         filename = None,
                          resolution = None,
                          landmarks_match = None,
                          bregma_offset = None,
-                         transform = None):
+                         transform = None,
+                         **kwargs):
     '''
     landmarks need to be pandas dataframes.
+
+    default is dorsal_cortex_landmarks.json in the ~/.wfield directory.
+
     '''
     lmarks = dict(landmarks=landmarks.to_dict(orient='list'))
     if not resolution is None:
@@ -311,7 +316,7 @@ def save_allen_landmarks(landmarks, filename = None,
         filename = pjoin(annotation_dir,'dorsal_cortex_landmarks.json')
     with open(filename,'w') as fd:
         import json
-        json.dump(lmarks,fd)
+        json.dump(lmarks,fd, sort_keys = True, indent = 4)
 
 def load_allen_landmarks(filename):
     if filename is None:
@@ -346,7 +351,9 @@ Example:
                                   '{0}_outline.npy'.format(reference_name)))
     return ccf_regions,proj,brain_outline
 
-def allen_save_reference(ccf_regions, proj, brainoutline,
+def allen_save_reference(ccf_regions,
+                         proj,
+                         brainoutline,
                          reference_name,
                          annotation_dir=annotation_dir):
     '''

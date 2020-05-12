@@ -66,14 +66,33 @@ The commands are:
         else:
             print('Could not find: {0} '.format(fname))
         dat_path = glob(pjoin(localdisk,'*.dat'))[0]
-        dat = mmap_dat(dat_path)
+        trial_onsets = pjoin(localdisk,'trial_onsets.npy')
+        if os.path.isfile(trial_onsets):
+            trial_onsets = np.load(trial_onsets)
+        else:
+            trial_onsets = None
+        dat = None
+        if os.path.isfile(dat_path):
+            dat = mmap_dat(dat_path)
+
+        # find landmark files
+        landmarks_file = glob(pjoin(localdisk,'*_landmarks.json'))
+        if len(landmarks_file):
+            landmarks_file = landmarks_file[0]
+        else:
+            landmarks_file = None
+        
         stack = SVDStack(U,SVT)
-        del dat
         from .widgets import QApplication,SVDViewer
         app = QApplication(sys.argv)
-        w = SVDViewer(stack)
+        w = SVDViewer(stack,
+                      folder = localdisk,
+                      raw = dat,
+                      trial_onsets = trial_onsets,
+                      landmarks_file = landmarks_file)
+        del dat
         sys.exit(app.exec_())
-
+        
     def open_raw(self):
         parser = argparse.ArgumentParser(
             description='Inspect the raw video frames')

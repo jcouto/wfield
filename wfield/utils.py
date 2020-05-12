@@ -96,8 +96,27 @@ class SVDStack(object):
         self.Uflat = self.U.reshape(-1,self.U.shape[-1])
         self.SVT = SVT.astype('float32')
         dims = U.shape[:2]
+        self.warped = False
+        self.M = None
         self.shape = [SVT.shape[1],*dims]
         self.dtype = dtype
+        
+    def set_warped(self,value,M = None):
+        ''' Apply affine transform to the spatial components '''
+        if not M is None:
+            self.M = M
+        if self.warped:
+            self.U = self.originalU
+            self.warped = False
+        else:
+            self.originalU = self.U.copy()
+            if not self.M is None:
+                U = np.stack(runpar(im_apply_transform,self.U.transpose([2,0,1]),
+                                                       M = self.M)).transpose([1,2,0])
+                self.U = U
+                self.warped = True
+        self.Uflat = self.U.reshape(-1,self.U.shape[-1])
+        
     def __len__(self):
         return self.SVT.shape[1]
     def __getitem__(self,*args):
