@@ -1,6 +1,4 @@
 from .utils import *
-from numba import jit
-from numba import int16 as numba_int16
 from skimage import measure
 from skimage.filters import gaussian
 from scipy import ndimage
@@ -130,6 +128,7 @@ Creates a top view and extracts contours from each area in an annotation volume
     The default reference point is a (certainly wrong) guess of the location of bregma.
 
 '''
+    from .allen_utils import allen_top_proj_from_volume
     proj = allen_top_proj_from_volume(mask_volume)
     uproj = np.unique(proj)
     h,w = proj.shape
@@ -185,25 +184,7 @@ Get the outline from the projection
     a = ndimage.binary_dilation(a)
     return (measure.find_contours(a,.5)[0][:,::-1]- np.array(reference)[::-1])*resolution/1000. 
 
-@jit(nopython=True)
-def allen_top_proj_from_volume(bvol):
-    '''
-Get the top projection from a volume.
 
-    proj = allen_top_proj_from_volume(allen_volume)
-
-'''
-    h,d,w = bvol.shape
-    proj = np.zeros((h,w),dtype=numba_int16)
-    # this can be done with a np.where but is probably faster like this
-    for i in range(h):
-        for j in range(w):
-            for z in range(d): 
-                if bvol[i,z,j] > 0:
-                    proj[i,j] = bvol[i,z,j]
-                    break
-            
-    return proj
 
 ########################################################################
 ########################################################################
