@@ -12,6 +12,8 @@ from multiprocessing import Pool,cpu_count
 from functools import partial
 from scipy.signal import butter,filtfilt
 from skimage.transform import warp
+from scipy.interpolate import interp1d
+from scipy.ndimage import morphology
 
 print = partial(print, flush=True)
 
@@ -39,7 +41,9 @@ def im_adapt_hist(im,clip_limit = .1, grid_size=(8,8)):
 
 def im_apply_transform(im,M):
     return warp(im,M,
-                order = 0,
+                order = 1,
+                mode='constant',
+                cval = 0,
                 clip=True,
                 preserve_range=True)
 
@@ -142,6 +146,86 @@ def get_trial_baseline(idx,frames_average,onsets):
             print(' Trial onsets not defined, using the first trial')
             return frames_average[0]
         return frames_average[np.where(onsets<=idx)[0][-1]]
+
+def point_find_ccf_region(point,ccf_regions,sides = ['left','right'],approx_value=-0.01):
+    '''
+    Find the area where a point is contained from ccf_regions contours.
+    Example:
+    point = [6.5,3.0]
+    region,side,index = point_find_ccf_region(point,refregions)
+    
+    '''
+    region = None
+    idx = None
+    ir = None
+    for ir, r in ccf_regions.iterrows():
+        for s in sides:
+            c = np.vstack([r[s + '_x'], r[s + '_y']]).astype('float32').T
+            c = c.reshape([c.shape[0],1,c.shape[1]])
+            d = cv2.pointPolygonTest(c,tuple(point),True)
+            if d >= approx_value:
+                region = r
+                idx = ir
+                side = s
+        if not region is None:
+            break
+    return region,side,idx
+
+def contour_to_im(x,y,dims,extent=None,n_up_samples = 1000):
+    '''
+    im = contour_to_im(x,y,dims,extent=None,n_up_samples = 1000)
+    
+    Imprint a contour on an image.
+    
+    see also: contour_to_mask
+'''
+    if extent is None:
+        extent = [0,dims[0],0,dims[1]]
+    
+    cont = np.vstack([y,x]).T
+    x = np.linspace(extent[0], extent[1], dims[0]+1)
+    y = np.linspace(extent[2], extent[3], dims[1]+1)
+    
+    C = cont.copy()
+    C = np.vstack([C,C[0,:]])
+    if n_up_samples > cont.shape[0]:
+        C = np.zeros((n_up_samples,2))
+        C[:,0] = interp1d(np.linspace(0,1,cont.shape[0]),cont[:,0])(np.linspace(0,1,n_up_samples))
+        C[:,1] = interp1d(np.linspace(0,1,cont.shape[0]),cont[:,1])(np.linspace(0,1,n_up_samples))
+    H, xedges, yedges = np.histogram2d(C[:,0], C[:,1], bins=(np.sort(x), np.sort(y)))
+    H = H>0
+    return H.astype(bool)
+
+def contour_to_mask(x,y,dims,extent = None,n_up_samples = 2000):
+    '''
+        H = contour_to_mask(x,y,dims,extent = None,n_up_samples = 2000)
+    
+        Create a mask from a contour
+        
+    '''
+
+    H = contour_to_im(x=x, y=y, 
+                      dims = dims,
+                      extent = extent,
+                      n_up_samples = n_up_samples)    
+    # fix border cases
+    if np.sum(H[0,:]):
+        H[0,:] = np.uint8(1)
+    if np.sum(H[-1,:]):
+        H[-1,:] = np.uint8(1)
+    if np.sum(H[:,0]):
+        H[:,0] = np.uint8(1)
+    if np.sum(H[:,-1]):
+        H[:,-1] = np.uint8(1)
+    H = morphology.binary_dilation(H)
+    H = morphology.binary_fill_holes(H)
+    H = morphology.binary_erosion(H)
+    H[0,:] = 0
+    H[-1,:] = 0
+    H[:,0] = 0
+    H[:,-1] = 0
+    return H.astype(bool)
+
 
 def parinit():
     import os

@@ -135,6 +135,92 @@ class AllenMatchTable(QWidget):
             self.parent.M = self.M
         self.wsave.clicked.connect(usave)    
         lay.addRow(self.table,w)
+
+class AllenArea(pg.PlotCurveItem):
+    def __init__(self,area, side, *args,**kwargs):
+        super().__init__(*args,**kwargs)
+        self.area = area
+        self.side = side
+        x = area[side+'_x']
+        y = area[side+'_y']
+        self.setData(x=x, y=y)
+        self.setAcceptHoverEvents(False)
+    def highlight(self,color = None):
+        if color is None:
+            color = self.area['allen_rgb']
+        self.setPen(pg.mkPen(color=color,
+                             width=5))
+        
+    def hoverEnterEvent(self, ev):
+        self.highlight()
+        self.text = pg.TextItem(text = self.area['acronym'])
+        self.text.setPos(*self.area[self.side+'_center'][::-1])
+        self.scene().addItem(self.text)
+    def hoverLeaveEvent(self, ev):
+        self.setPen(pg.mkPen(color='w',size=1))
+        self.scene().removeItem(self.text)
+        
+class QAllenAreasPlot():
+    def __init__(self,plot,
+                 reference='dorsal_cortex',
+                 sides = ['left','right'],
+                 parent = None,
+                 resolution = 0.01,
+                 bregma_offset = [0,0]):
+        self.ccf_regions,self.proj,self.brain_outline = allen_load_reference(reference)
+        self.parent = parent
+        self.landmarks = None
+        self.resolution = resolution
+        self.sides = sides
+        self._parameters_from_gui()
+        self.plot = plot
+        self.plot_items = []
+        self.plot_text = []
+        self.plot_centers = []
+        self.warped_image = False
+
+    def _parameters_from_gui(self):
+        if hasattr(self.parent,'parent'):
+            if hasattr(self.parent.parent,'allenparwidget'):
+                self.landmarks = self.parent.parent.allenparwidget.landmarks
+                self.resolution = self.parent.parent.allenparwidget.resolution
+                self.bregma_offset = self.parent.parent.allenparwidget.bregma_offset
+                self.M = self.parent.parent.allenparwidget.M
+            if hasattr(self.parent,'warp_im'):
+                self.warped_image = self.parent.warp_im 
+
+    def highlight(self,idx,side,color = None):
+        s = self.sides.index(side)
+        idx *= 2
+        idx += s
+        self.plot_items[int(idx)].highlight(color)
+        
+    def update(self):
+        self._parameters_from_gui()
+        if self.warped_image:
+            M = None
+        else:
+            M = self.M
+        self.nccf_regions = allen_transform_regions(M, self.ccf_regions,
+                                                    resolution = self.resolution,
+                                                    bregma_offset = self.bregma_offset)
+        self.remove()
+        for iarea,area in self.nccf_regions.iterrows():
+            for side in self.sides:
+                self.plot_items.append(AllenArea(area,side))
+                self.plot_text.append(area['acronym'])
+                self.plot_centers.append(area[side+'_center'])
+                self.plot.addItem(self.plot_items[-1])
+                self.plot_items[-1].setClickable(True, width=2)
+                
+    def remove(self):
+        for p in self.plot_items:
+            p.setVisible(False)
+            p.scene().removeItem(p)
+        self.plot_items = []
+        self.plot_text = []
+        self.plot_centers = []
+
         
 class ImageWidget(QWidget):
     def __init__(self):
@@ -159,54 +245,6 @@ class ImageWidget(QWidget):
         self.hist = pg.HistogramLUTItem()
         self.hist.setImageItem(self.im)
         self.pl.addItem(self.hist)
-
-class QAllenAreasPlot():
-    def __init__(self,plot,
-                 reference='dorsal_cortex',
-                 parent = None,
-                 resolution = 0.01,
-                 bregma_offset = [0,0]):
-        self.ccf_regions,self.proj,self.brain_outline = allen_load_reference(reference)
-        self.parent = parent
-        self.landmarks = None
-        self.resolution = resolution
-        self.sides = ['left','right']
-        if hasattr(self.parent.parent,'allenparwidget'):
-            self.landmarks = self.parent.parent.allenparwidget.landmarks
-            self.resolution = self.parent.parent.allenparwidget.resolution
-            self.bregma_offset = self.parent.parent.allenparwidget.bregma_offset
-            self.M = self.parent.parent.allenparwidget.M
-        self.plot = plot
-        self.plot_items = []
-        self.plot_text = []
-        self.plot_centers = []
-        self.warped_image = self.parent.warp_im # then transform the points'
-
-    def update(self):
-        self.warped_image = self.parent.warp_im # then transform the points'
-        if self.warped_image:
-            M = None
-        else:
-            M = self.M
-        nccf_regions = allen_transform_regions(M, self.ccf_regions,
-                                               resolution = self.resolution,
-                                               bregma_offset = self.bregma_offset)
-        self.remove()
-        for iarea,area in nccf_regions.iterrows():
-            for side in self.sides:
-                self.plot_items.append(pg.PlotCurveItem())
-                self.plot_items[-1].setData(x = area[side+'_x'],y = area[side+'_y'])
-                self.plot_text.append(area['acronym'])
-                self.plot_centers.append(area[side+'_center'])
-                self.plot.addItem(self.plot_items[-1])
-    def remove(self):
-        for p in self.plot_items:
-            p.setVisible(False)
-            p.scene().removeItem(p)
-        self.plot_items = []
-        self.plot_text = []
-        self.plot_centers = []
-
             
 class CustomDragPoints(pg.GraphItem):
     def __init__(self):
@@ -405,6 +443,8 @@ class SVDDisplayWidget(ImageWidget):
         self.hist.setHistogramRange(*self.levels)
         self.allen_show_areas = False
         self.set_image(self.iframe)
+        self.roiwidget = self.parent.roiwidget
+        self.regions_plot = []
         self.win.scene().sigMouseClicked.connect(self.mouseMoved)    
         
     def _init_ui(self):
@@ -441,13 +481,14 @@ class SVDDisplayWidget(ImageWidget):
                 self.allenplot.update()
             else:
                 self.allenplot.remove()
+                del self.allenplot
 
         def uframe(val):
             i = self.wframe.value()
             self.wframelabel.setText('Frame {0:d}:'.format(i))
             self.set_image(i)
-            self.parent.roiwidget.p1.setRange(xRange=self.parent.roiwidget.xlim+i)
-            self.parent.roiwidget.line.setPos((i,0))
+            self.roiwidget.line.setPos((i,0))
+            self.roiwidget.update()
         self.wframe.valueChanged.connect(uframe)
         self.wimwarp.stateChanged.connect(uwarp)
         self.wallen.stateChanged.connect(uallen)
@@ -465,11 +506,57 @@ class SVDDisplayWidget(ImageWidget):
         t = np.dot(self.stack.Uflat[idx,:],self.stack.SVT)
         return t
 
+    def on_roi_update(self,i):
+        idx = self.roiwidget.get_roi_flatidx(i)
+        xidx = self.roiwidget.xidx + self.iframe
+        xidx = np.clip(xidx,0,len(self.stack))
+        t = np.nanmean(np.dot(self.stack.Uflat[idx,:],
+                              self.stack.SVT[:,xidx[0]:xidx[1]]),
+                       axis=0).astype('float32')
+        time = np.arange(xidx[0],xidx[1])
+        self.roiwidget.plots[i].setData(x = time,
+                                        y = t+self.roiwidget.offset*i)#,connect=self.trial_mask)
+
+    def plot_allenroi(self,i,idx):
+        t = np.nanmean(np.dot(self.stack.Uflat[idx,:],
+                              self.stack.SVT),
+                       axis=0).astype('float32')
+        time = np.arange(0,t.shape[0])
+        self.roiwidget.plots[i].setData(x = time,
+                                        y = t+self.roiwidget.offset*i)#,connect=self.trial_mask)
+    def on_allenroi_update(self):
+        self.roiwidget.p1.setRange(xRange=self.roiwidget.xidx+self.iframe)
     def mouseMoved(self,pos):
         modifiers = QApplication.keyboardModifiers()
         pos = self.im.mapFromScene(pos.scenePos())
-        if bool(modifiers == Qt.ControlModifier):
-            self.parent.roiwidget.add_roi((pos.x(),pos.y()))
+        if bool(modifiers == Qt.ControlModifier):            
+            updatefunc = partial(self.on_roi_update, i=len(self.roiwidget.rois))
+            self.parent.roiwidget.add_roi((pos.x(),pos.y()),
+                                          roitarget = self.im,
+                                          roiscene=self.pl,
+                                          ROI = True,
+                                          updatefunc = updatefunc)
+        else:
+            if hasattr(self,'allenplot'):
+                p = (pos.x(),pos.y())
+                region,side,i = point_find_ccf_region(p,self.allenplot.nccf_regions)
+                if not region is None:
+                    if not [i,side] in self.regions_plot:
+                        self.regions_plot.append([i,side])
+                        
+                        H = contour_to_mask(region[side + '_x'],
+                                            region[side + '_y'],
+                                            self.stack.shape[1:])
+                        idx = np.ravel_multi_index(np.where(H==1),self.stack.shape[1:])
+                        color = self.parent.roiwidget.add_roi(None,
+                                                              roitarget = self.im,
+                                                              roiscene=self.pl,
+                                                              ROI = False,
+                                                              updatefunc = self.on_allenroi_update)
+
+                        self.plot_allenroi(len(self.roiwidget.rois)-1,idx)
+                        color = tuple(int(color.strip('#')[i:i+2], 16) for i in (0, 2, 4))
+                        self.allenplot.highlight(i,side,color)
 
 class SVDViewer(QMainWindow):
     def __init__(self,stack, folder = None, raw = None, landmarks_file = None, trial_onsets = None):
@@ -488,10 +575,9 @@ class SVDViewer(QMainWindow):
                             QMainWindow.AllowNestedDocks |
                             QMainWindow.AnimatedDocks)
 
-        
+        self.roiwidget = ROIPlotWidget(stack)        
         self.displaywidget = SVDDisplayWidget( self.stack,parent = self)
-        self.roiwidget = ROIPlotWidget(stack,self.displaywidget.pl,self.displaywidget.im,
-                                       trial_mask = self.trial_mask)
+
         self.localcorrwidget = LocalCorrelationWidget(stack)
         
         if not self.raw is None:
@@ -501,19 +587,22 @@ class SVDViewer(QMainWindow):
             
         self.svdtab = QDockWidget('Reconstructed')
         self.svdtab.setWidget(self.displaywidget)
-        self.addDockWidget(Qt.RightDockWidgetArea,self.svdtab)        
+        self.addDockWidget(Qt.TopDockWidgetArea,self.svdtab)        
         # Pixel correlation 
-        self.lcorrtab = QDockWidget('Pixel correlation')
-        self.lcorrtab.setWidget(self.localcorrwidget)
-        self.addDockWidget(Qt.RightDockWidgetArea,self.lcorrtab)
-        self.tabifyDockWidget(self.lcorrtab,self.svdtab)
         # Raw data
         if not raw is None:
             self.rawtab = QDockWidget('Raw data')
             self.rawtab.setWidget(self.rawwidget)
-            self.addDockWidget(Qt.RightDockWidgetArea,self.rawtab)
-            self.tabifyDockWidget(self.svdtab,self.rawtab)
-
+            self.addDockWidget(Qt.TopDockWidgetArea,self.rawtab)
+            
+        self.lcorrtab = QDockWidget('Pixel correlation')
+        self.lcorrtab.setWidget(self.localcorrwidget)
+        self.addDockWidget(Qt.TopDockWidgetArea,self.lcorrtab)
+        if not raw is None:
+            self.tabifyDockWidget(self.lcorrtab,self.rawtab)
+            self.tabifyDockWidget(self.rawtab,self.svdtab)
+        else:
+            self.tabifyDockWidget(self.lcorrtab,self.svdtab)
         self.roitab = QDockWidget("ROI", self)
         self.roitab.setWidget(self.roiwidget)
         self.addDockWidget(Qt.BottomDockWidgetArea,self.roitab)
@@ -545,7 +634,7 @@ class LocalCorrelationWidget(ImageWidget):
         from .utils_svd import svd_pix_correlation
         self.localcorr = svd_pix_correlation(U,SVT,
                                              norm_svt=True)
-        self.levels = [0,1.]
+        self.levels = [0,1]
         
         pos = np.array([0, 0.5, 1.])
         color = np.array([[0,0,255,255], [255,255,255,255], [255,0,0,255]], dtype=np.ubyte)
@@ -561,7 +650,7 @@ class LocalCorrelationWidget(ImageWidget):
         
     def set_image(self,xy=[0,0]):
         img = (self.localcorr.get(*xy)+1)/2.
-        self.im.setImage(img,levels = self.levels)
+        self.im.setImage(img)#,levels = self.levels)
 
     def mouseMoved(self,pos):
         modifiers = QApplication.keyboardModifiers()
@@ -580,16 +669,12 @@ class ROIPlotWidget(QWidget):
           '#7f7f7f',
           '#bcbd22']
     penwidth = 1
-    def __init__(self,stack, roi_target= None,view=None,npoints = 500,trial_mask = None):
+
+    def __init__(self,stack,npoints = 500):
         super(ROIPlotWidget,self).__init__()	
         layout = QGridLayout()
         self.stack = stack
         self.setLayout(layout)
-        self.view = view
-        self.roi_target = roi_target
-        self.trial_mask = trial_mask
-        if self.trial_mask is None:
-            self.trial_mask = 'finite'
         win = pg.GraphicsLayoutWidget(parent=self)
         self.p1 = win.addPlot()
         self.p1.getAxis('bottom').setPen(axiscolor) 
@@ -597,43 +682,54 @@ class ROIPlotWidget(QWidget):
         layout.addWidget(win,0,0)
         self.line = pg.InfiniteLine(angle = 90,movable = True)
         self.p1.addItem(self.line)
-        self.xlim = np.array([0,1000])
+        self.xidx = np.array([-npoints,npoints])
         self.N = npoints
         self.rois = []
+        self.rois_parent = []
+        self.rois_scene = []
+        self.plot_updates = []
         self.plots = []
         self.buffers = []
         self.time = np.arange(self.stack.shape[0],dtype='float32')
         self.offset = 0.1
-    def add_roi(self,pos):
+        
+    def add_roi(self,pos,roitarget = None, roiscene = None, ROI=True,updatefunc = None):
         pencolor = self.colors[
             np.mod(len(self.plots),len(self.colors))]
-        self.rois.append(pg.RectROI(pos=pos,
-                                    size=20,
-                                    pen=pencolor))
+        if ROI:
+            self.rois.append(pg.RectROI(pos=pos,
+                                        size=20,
+                                        pen=pencolor))
+            roiscene.addItem(self.rois[-1])
+            self.rois[-1].sigRegionChanged.connect(updatefunc)
+            self.rois_parent.append(roitarget)
+            self.rois_scene.append(roiscene)
+        else:
+            self.rois.append(None)
+            self.rois_parent.append(None)
+            self.rois_scene.append(None)
         self.plots.append(pg.PlotCurveItem(pen=pg.mkPen(
             color=pencolor,width=self.penwidth)))
         self.p1.addItem(self.plots[-1])
-        self.roi_target.addItem(self.rois[-1])
-        self.update(len(self.rois)-1)
-        self.rois[-1].sigRegionChanged.connect(partial(self.update,i=len(self.rois)-1))
-
+        self.plot_updates.append(updatefunc)
+        updatefunc()
+        return pencolor
+    
     def items(self):
         return self.rois
+    def update(self):
+        for p in self.plot_updates:
+            p()
     def closeEvent(self,ev):
-        for roi in self.rois:
-            self.roi_target.removeItem(roi)
+        for i,roi in enumerate(self.rois):
+            self.rois_scene[i].removeItem(roi)
         ev.accept()
-    def update(self,i):
+        
+    def get_roi_flatidx(self,i):
         X = np.zeros(self.stack.shape[1:],dtype='uint8')
-        r = self.rois[i].getArraySlice(X, self.view,axes=(0,1))
+        r = self.rois[i].getArraySlice(X, self.rois_parent[i], axes=(0,1))
         X[r[0][0],r[0][1]]=1
-        idx = np.ravel_multi_index(np.where(X==1),self.stack.shape[1:])
-        t = np.nanmean(np.dot(self.stack.Uflat[idx,:],
-                              self.stack.SVT),
-                    axis=0).astype('float32')
-        t[0] = t[1]
-        self.plots[i].setData(x = self.time,
-                              y = t+self.offset*i,connect=self.trial_mask)
+        return np.ravel_multi_index(np.where(X==1),self.stack.shape[1:])
 
 
 
