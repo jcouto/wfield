@@ -6,6 +6,22 @@ from  .utils import *
 from skimage.transform import AffineTransform
 cv2.setNumThreads(1)
 
+def findTransformECC(template,dst,M,warp_mode,criteria,inputMask,gaussFiltSize):
+    return cv2.findTransformECC(template,dst,
+                                M, warp_mode,
+                                criteria,
+                                inputMask=inputMask,
+                                gaussFiltSize=gaussFiltSize)
+
+cv2ver = cv2.__version__.split('.')
+if int(cv2ver[1]) <= 4:
+    if int(cv2ver[2]) <= 5:
+        def findTransformECC(template,dst,M,warp_mode,criteria,inputMask,gaussFiltSize):
+            return cv2.findTransformECC(template,dst,
+                                        M, warp_mode,
+                                        criteria,
+                                        inputMask=inputMask)
+        
 def registration_ecc(frame,template,
                      niter = 25,
                      eps0 = 1e-2,
@@ -22,10 +38,10 @@ def registration_ecc(frame,template,
     M = np.eye(2, 3, dtype=np.float32)
     criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT,
                 niter,  eps0)
-    (res, M) = cv2.findTransformECC(template,dst,
-                                    M, warp_mode,
-                                    criteria,
-                                    inputMask=hann, gaussFiltSize=gaussian_filter)
+    (res, M) = findTransformECC(template,dst,
+                                M, warp_mode,
+                                criteria,
+                                inputMask=hann, gaussFiltSize=gaussian_filter)
     dst = cv2.warpAffine(frame, M, (w,h),
                          flags=cv2.INTER_LINEAR + cv2.WARP_INVERSE_MAP);
     return M, np.clip(dst,0,2**16).astype('uint16')
