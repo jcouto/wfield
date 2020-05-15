@@ -25,6 +25,22 @@ To launch the GUI to explore processed data do:
 
 ## Integration with NeuroCAAS 
 
+
+##### Installation on Ubuntu 20.04 fresh install - no GUI 
+
+```bash
+
+# Download miniconda
+wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
+# install conda
+bash Miniconda3-latest-Linux-x86_64.sh -b
+echo 'export PATH=$PATH:$HOME/miniconda3/bin' >> ~/.bashrc && source ~/.bashrc
+# install dependencies
+conda install opencv tqdm scikit-image pandas natsort matplotlib
+# clone and install wfield
+git clone https://github.com/jcouto/wfield.git
+cd wfield && python setup.py install
+```
 #### Motion correction example
 
 This runs motion correction on a file and returns ``Y`` motion corrected array.
