@@ -1,5 +1,4 @@
 from .utils import *
-from sklearn.preprocessing import normalize
 
 class svd_pix_correlation():
     def __init__(self,U,SVT,norm_svt=False):
@@ -11,6 +10,7 @@ class svd_pix_correlation():
         self.U = U.copy().reshape([-1,U.shape[-1]])
         if norm_svt:
             # Careful interpreting the results with normalized components...
+            from sklearn.preprocessing import normalize
             normed = normalize(SVT,norm='l2',axis=0)
         # compute the covariance of the temporal components and estimate the pixelwise variance 
         self.cov_svt = np.cov(normed).astype('float32')

@@ -1,8 +1,6 @@
 from .utils import *
 from .io import load_binary_block
-from sklearn.utils.extmath import randomized_svd
 from numpy.linalg import svd
-from sklearn.preprocessing import normalize
 
 def approximate_svd(dat, frames_average,
                     onsets = None,
@@ -18,6 +16,8 @@ def approximate_svd(dat, frames_average,
 
     TODO: Separate the movie binning from the actual SVD?
     '''
+    from sklearn.preprocessing import normalize
+
     if hasattr(dat,'filename'):
         dat_path = dat.filename
     else:
@@ -99,6 +99,9 @@ The chunks have all samples in time but only a fraction of pixels.
 
     Joao Couto - March 2020
     '''
+    from sklearn.utils.extmath import randomized_svd
+    from sklearn.preprocessing import normalize
+
     nframes,nchannels,w,h = dat.shape
     n = nframes*nchannels
     # Create the chunks where the SVD is ran initially, 
@@ -137,6 +140,7 @@ The chunks have all samples in time but only a fraction of pixels.
 def _complete_svd_from_blocks(block_U,block_SVT,blocks,k,dims,
                               n_iter=15,random_state=42):
     # Compute the svd of the temporal components from all blocks
+    from sklearn.utils.extmath import randomized_svd
     u, s, vt = randomized_svd(
         block_SVT.reshape([np.multiply(*block_SVT.shape[:2]),-1]),
         n_components=k,
