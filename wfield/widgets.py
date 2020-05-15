@@ -315,6 +315,8 @@ class RawDisplayWidget(ImageWidget):
         super(RawDisplayWidget,self).__init__()
         self.parent = parent
         self.stack = stack
+        self.roiwidget = self.parent.roiwidget
+        self.regions_plot = []
         self.iframe = np.clip(100,0,len(self.stack))
         self.ichan  = 0
         self.warp_im = False
@@ -326,6 +328,7 @@ class RawDisplayWidget(ImageWidget):
         self.adaptative_histogram = False
         self.allen_show_areas = False
         self.set_image(self.iframe)
+        #self.win.scene().sigMouseClicked.connect(self.mouseMoved) # not ready yet    
         
         if hasattr(self.parent,'allenparwidget'):
             self.allenwidget = self.parent.allenparwidget
@@ -350,6 +353,8 @@ class RawDisplayWidget(ImageWidget):
                     self.allenwidget.table.item(i,5).setText(str(y))
             self.points.scatter.sigPlotChanged.connect(update_table)
             self.allenplot = QAllenAreasPlot(plot=self.pl,parent = self)
+
+
     def _init_ui(self):
         widget = QWidget()
         slayout = QFormLayout()
@@ -404,6 +409,7 @@ class RawDisplayWidget(ImageWidget):
             i = self.wframe.value()
             self.wframelabel.setText('Frame {0:d}:'.format(i))
             self.set_image(i)
+
         def uchan(val):
             self.ichan = self.wchan.value()
             self.wchanlabel.setText('Channel {0:d}:'.format(self.ichan))
@@ -414,7 +420,7 @@ class RawDisplayWidget(ImageWidget):
         self.wimwarp.stateChanged.connect(uwarp)
         self.wchan.valueChanged.connect(uchan)
         self.wallen.stateChanged.connect(uallen)
-       
+
     def set_image(self,i=None,redo_levels=False):
         if not i is None:
             self.iframe = i
@@ -427,6 +433,31 @@ class RawDisplayWidget(ImageWidget):
             if hasattr(self.parent,'M'):
                 img = im_apply_transform(img,self.parent.M)
         self.im.setImage(img,levels = self.levels)
+        self.roiwidget.line.setPos((self.iframe,0))
+        self.roiwidget.update()
+        
+    def on_roi_update(self,i):
+        idx = self.roiwidget.get_roi_flatidx(i)
+        xidx = self.roiwidget.xidx + self.iframe
+        xidx = np.clip(xidx,0,len(self.stack))
+        s = self.stack[xidx[0]:xidx[1],self.ichan]
+        s = s.reshape([s.shape[0],-1])
+        t = np.nanmean(s[:,idx],
+                       axis=1).astype('float32')
+        time = np.arange(xidx[0],xidx[1])
+        self.roiwidget.plots[i].setData(x = time,
+                                        y = t+self.roiwidget.offset*i)#,connect=self.trial_mask)
+
+    def mouseMoved(self,pos):
+        modifiers = QApplication.keyboardModifiers()
+        pos = self.im.mapFromScene(pos.scenePos())
+        if bool(modifiers == Qt.ControlModifier):            
+            updatefunc = partial(self.on_roi_update, i=len(self.roiwidget.rois))
+            self.parent.roiwidget.add_roi((pos.x(),pos.y()),
+                                          roitarget = self.im,
+                                          roiscene=self.pl,
+                                          ROI = True,
+                                          updatefunc = updatefunc)
         
         
 class SVDDisplayWidget(ImageWidget):
@@ -435,6 +466,8 @@ class SVDDisplayWidget(ImageWidget):
         self.parent = parent
         self.stack = stack
         self.warp_im = False
+        self.roiwidget = self.parent.roiwidget
+        self.regions_plot = []
         self.iframe = np.clip(100,0,len(self.stack))
         tmp = self.stack[:np.clip(100,0,len(self.stack))]
         self.levels = np.nanpercentile(tmp,[5,99])
@@ -443,8 +476,6 @@ class SVDDisplayWidget(ImageWidget):
         self.hist.setHistogramRange(*self.levels)
         self.allen_show_areas = False
         self.set_image(self.iframe)
-        self.roiwidget = self.parent.roiwidget
-        self.regions_plot = []
         self.win.scene().sigMouseClicked.connect(self.mouseMoved)    
         
     def _init_ui(self):
@@ -526,6 +557,7 @@ class SVDDisplayWidget(ImageWidget):
                                         y = t+self.roiwidget.offset*i)#,connect=self.trial_mask)
     def on_allenroi_update(self):
         self.roiwidget.p1.setRange(xRange=self.roiwidget.xidx+self.iframe)
+        
     def mouseMoved(self,pos):
         modifiers = QApplication.keyboardModifiers()
         pos = self.im.mapFromScene(pos.scenePos())
