@@ -42,11 +42,14 @@ pg.setConfigOptions(imageAxisOrder='row-major')
 axiscolor = 'k'
 
 class AllenMatchTable(QWidget):
-    def __init__(self, landmarks_file = None,parent = None):
+    def __init__(self, landmarks_file = None,reference = 'dorsal_cortex',parent = None):
         super(AllenMatchTable,self).__init__()
         # This widget shows: bregmaoffset in image coordinates, resolution, landmarks table
-        lmarks = load_allen_landmarks(landmarks_file)
+        self.reference = reference
         self.landmarks_file = landmarks_file
+        if os.path.isfile(landmarks_file):
+            landmarks_file = None
+        lmarks = load_allen_landmarks(landmarks_file,reference = reference)
         self.parent  = parent
         if ('landmarks' in lmarks.keys() and 
             'bregma_offset' in lmarks.keys() and
@@ -114,10 +117,10 @@ class AllenMatchTable(QWidget):
         def usave():
             if self.parent.folder is None:
                 print('Folder is not defined..')
-            if landmarks_file is None: # then it is the dorsal_cortex
-                fname = 'dorsal_cortex_landmarks.json'
+            if self.landmarks_file is None: # then it is the dorsal_cortex
+                fname = self.reference+'_landmarks.json'
             else:
-                fname = os.path.basename(landmarks_file)
+                fname = os.path.basename(self.landmarks_file)
             fname = pjoin(self.parent.folder, fname)
             landmarks_match = self.landmarks.copy()
             landmarks_match.x = self.landmarks_im.nx
@@ -311,10 +314,11 @@ class CustomDragPoints(pg.GraphItem):
 
         
 class RawDisplayWidget(ImageWidget):
-    def __init__(self, stack,parent=None,pointsize = 10):
+    def __init__(self, stack,parent=None,pointsize = 10,reference = 'dorsal_cortex'):
         super(RawDisplayWidget,self).__init__()
         self.parent = parent
         self.stack = stack
+        self.referencename = reference
         self.roiwidget = self.parent.roiwidget
         self.regions_plot = []
         self.iframe = np.clip(100,0,len(self.stack))
@@ -352,7 +356,8 @@ class RawDisplayWidget(ImageWidget):
                     self.allenwidget.table.item(i,4).setText(str(x))
                     self.allenwidget.table.item(i,5).setText(str(y))
             self.points.scatter.sigPlotChanged.connect(update_table)
-            self.allenplot = QAllenAreasPlot(plot=self.pl,parent = self)
+            self.allenplot = QAllenAreasPlot(plot=self.pl,parent = self,
+                                             reference = self.referencename)
 
 
     def _init_ui(self):
@@ -461,11 +466,12 @@ class RawDisplayWidget(ImageWidget):
         
         
 class SVDDisplayWidget(ImageWidget):
-    def __init__(self, stack,parent=None):
+    def __init__(self, stack,parent=None,reference = 'dorsal_cortex'):
         super(SVDDisplayWidget,self).__init__()
         self.parent = parent
         self.stack = stack
         self.warp_im = False
+        self.referencename = reference
         self.roiwidget = self.parent.roiwidget
         self.regions_plot = []
         self.iframe = np.clip(100,0,len(self.stack))
@@ -508,7 +514,8 @@ class SVDDisplayWidget(ImageWidget):
             self.allen_show_areas = val
             if val:
                 if not hasattr(self,'allenplot'):
-                    self.allenplot = QAllenAreasPlot(plot=self.pl,parent = self)
+                    self.allenplot = QAllenAreasPlot(plot=self.pl,parent = self,
+                                                     reference=self.referencename)
                 self.allenplot.update()
             else:
                 self.allenplot.remove()
@@ -591,12 +598,15 @@ class SVDDisplayWidget(ImageWidget):
                         self.allenplot.highlight(i,side,color)
 
 class SVDViewer(QMainWindow):
-    def __init__(self,stack, folder = None, raw = None, landmarks_file = None, trial_onsets = None):
+    def __init__(self,stack, folder = None, raw = None, reference = 'dorsal_cortex', trial_onsets = None):
         super(SVDViewer,self).__init__()
         self.setWindowTitle('wfield')
         self.folder = folder
         if self.folder is None:
             self.folder = os.path.abspath(os.path.curdir)
+        self.referencename = reference
+        landmarks_file = pjoin(self.folder,reference+'_landmarks.json')
+
         self.stack = stack
         self.trial_onsets = trial_onsets
         self.raw = raw
@@ -606,16 +616,16 @@ class SVDViewer(QMainWindow):
         self.setDockOptions(QMainWindow.AllowTabbedDocks |
                             QMainWindow.AllowNestedDocks |
                             QMainWindow.AnimatedDocks)
-
         self.roiwidget = ROIPlotWidget(stack)        
-        self.displaywidget = SVDDisplayWidget( self.stack,parent = self)
+        self.displaywidget = SVDDisplayWidget( self.stack,parent = self,reference = self.referencename)
 
         self.localcorrwidget = LocalCorrelationWidget(stack)
         
         if not self.raw is None:
             self.allenparwidget = AllenMatchTable(landmarks_file = landmarks_file,
+                                                  reference = self.referencename,
                                                   parent = self) 
-            self.rawwidget = RawDisplayWidget(raw,parent = self)
+            self.rawwidget = RawDisplayWidget(raw,parent = self,reference = self.referencename)
             
         self.svdtab = QDockWidget('Reconstructed')
         self.svdtab.setWidget(self.displaywidget)
@@ -682,7 +692,7 @@ class LocalCorrelationWidget(ImageWidget):
         
     def set_image(self,xy=[0,0]):
         img = (self.localcorr.get(*xy)+1)/2.
-        self.im.setImage(img)#,levels = self.levels)
+        self.im.setImage(img,levels = self.levels)
 
     def mouseMoved(self,pos):
         modifiers = QApplication.keyboardModifiers()

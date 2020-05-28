@@ -305,9 +305,9 @@ def save_allen_landmarks(landmarks,
         import json
         json.dump(lmarks,fd, sort_keys = True, indent = 4)
 
-def load_allen_landmarks(filename):
+def load_allen_landmarks(filename, reference = 'dorsal_cortex'):
     if filename is None:
-        filename = pjoin(annotation_dir,'dorsal_cortex_landmarks.json')
+        filename = pjoin(annotation_dir,reference + '_landmarks.json')
     with open(filename,'r') as fd:
         import json
         lmarks = json.load(fd)
@@ -360,6 +360,29 @@ def allen_save_reference(ccf_regions,
                   '{0}_outline.npy'.format(reference_name)),brainoutline)
 
     
+
+def allen_regions_to_atlas(ccf_regions,dims,
+                           sides = ['left','right'],
+                           fillnan = False):
+    ''' 
+    Atlas as called in locaNMF; it is the masks of allen areas.
+    This function returns also the names of the areas
+    '''
+    atlas = np.zeros(dims,dtype = np.float32)
+    if fillnan:
+        atlas.fill(np.nan)
+    areanames = []
+    for ireg,r in ccf_regions.iterrows():
+        for iside,side in enumerate(sides):
+            mask = contour_to_mask(
+                r[side+'_x'],r[side+'_y'],
+                dims = dims)
+            factor = 1
+            if iside==1:
+                factor = -1
+            atlas[mask==1] = factor*(ireg+1)
+            areanames.append([factor*(ireg+1),r['acronym']+'_'+side])
+    return atlas,areanames
 
 ########################################################################
 ################HOLOVIEWS PLOTTING FUNCTIONS############################
@@ -492,3 +515,4 @@ def hv_show_transformed_overlay(image, M, ccf_regions,
                                     bregma_offset=bregma_offset,
                                     resolution=resolution).options(
         {'Curve': {'color':'white', 'width': w,'height':h}})
+

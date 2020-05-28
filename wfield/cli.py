@@ -50,6 +50,7 @@ The commands are:
             Right click and drag mouse on the trace plot to zoom.
 ''')
         parser.add_argument('foldername', action='store',default=None,type=str)
+        parser.add_argument('--allen-reference', action='store',default='dorsal_cortex',type=str)
         parser.add_argument('--before-corr', action='store_true',
                             default=False,
                             help= 'Load SVT before hemodynamics correction.')
@@ -65,22 +66,24 @@ The commands are:
                 SVT = np.load(pjoin(localdisk,'SVT.npy'))
         else:
             print('Could not find: {0} '.format(fname))
-        dat_path = glob(pjoin(localdisk,'*.dat'))[0]
+        
+        dat_path = glob(pjoin(localdisk,'*.dat'))
+        if len(dat_path):
+            dat_path = dat_path[0]
+            if os.path.isfile(dat_path):
+                dat = mmap_dat(dat_path)
+        else:
+            dat = None
+            dat_path = None
+            average_path = pjoin(localdisk,'frames_average.npy')
+            if os.path.isfile(average_path):
+                dat = np.load(average_path)
+            dat = dat.reshape([1,*dat.shape])
         trial_onsets = pjoin(localdisk,'trial_onsets.npy')
         if os.path.isfile(trial_onsets):
             trial_onsets = np.load(trial_onsets)
         else:
             trial_onsets = None
-        dat = None
-        if os.path.isfile(dat_path):
-            dat = mmap_dat(dat_path)
-
-        # find landmark files
-        landmarks_file = glob(pjoin(localdisk,'*_landmarks.json'))
-        if len(landmarks_file):
-            landmarks_file = landmarks_file[0]
-        else:
-            landmarks_file = None
         
         stack = SVDStack(U,SVT)
         from .widgets import QApplication,SVDViewer
@@ -89,7 +92,7 @@ The commands are:
                       folder = localdisk,
                       raw = dat,
                       trial_onsets = trial_onsets,
-                      landmarks_file = landmarks_file)
+                      reference = args.allen_reference)
         del dat
         sys.exit(app.exec_())
         
