@@ -93,8 +93,8 @@ The commands are:
                       raw = dat,
                       trial_onsets = trial_onsets,
                       reference = args.allen_reference)
-        del dat
         sys.exit(app.exec_())
+        del dat
         
     def open_raw(self):
         parser = argparse.ArgumentParser(
@@ -102,14 +102,48 @@ The commands are:
         parser.add_argument('foldername', action='store',
                             default=None, type=str,
                             help='Folder where to search for files.')
+        parser.add_argument('--allen-reference', action='store',default='dorsal_cortex',type=str)
+        parser.add_argument('--napari', action='store_true',
+                            default=False,
+                            help='Show with napari')
         args = parser.parse_args(sys.argv[2:])
         localdisk = args.foldername
         from .io import mmap_dat
-        dat_path = glob(pjoin(localdisk,'*.dat'))[0]
-        dat = mmap_dat(dat_path)
-        from .viz import napari_show
-        napari_show(dat)
+        if args.napari:
+            print(args.napari)
+            dat_path = glob(pjoin(localdisk,'*.dat'))[0]
+            dat = mmap_dat(dat_path)
+            from .viz import napari_show
+            napari_show(dat)
+            del dat
+            sys.exit()
+        dat_path = glob(pjoin(localdisk,'*.dat'))
+        if len(dat_path):
+            dat_path = dat_path[0]
+            if os.path.isfile(dat_path):
+                dat = mmap_dat(dat_path)
+        else:
+            dat = None
+            dat_path = None
+            average_path = pjoin(localdisk,'frames_average.npy')
+            if os.path.isfile(average_path):
+                dat = np.load(average_path)
+            dat = dat.reshape([1,*dat.shape])
+        trial_onsets = pjoin(localdisk,'trial_onsets.npy')
+        if os.path.isfile(trial_onsets):
+            trial_onsets = np.load(trial_onsets)
+        else:
+            trial_onsets = None
+        
+        from .widgets import QApplication,RawViewer
+        app = QApplication(sys.argv)
+        w = RawViewer(raw = dat,
+                      folder = localdisk,
+                      trial_onsets = trial_onsets,
+                      reference = args.allen_reference)
+        sys.exit(app.exec_())
         del dat
+
         
     def imager(self):
         parser = argparse.ArgumentParser(

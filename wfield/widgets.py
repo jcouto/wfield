@@ -135,6 +135,7 @@ class AllenMatchTable(QWidget):
                                  bregma_offset = self.bregma_offset,
                                  landmarks_match = landmarks_match,
                                  transform = self.M)
+            print('Saving points and landmarks to {0}'.format(fname))
             self.parent.M = self.M
         self.wsave.clicked.connect(usave)    
         lay.addRow(self.table,w)
@@ -666,6 +667,61 @@ class SVDViewer(QMainWindow):
                          QDockWidget.DockWidgetFloatable)
         dock.setFloating(floating)
 
+class RawViewer(QMainWindow):
+    def __init__(self,raw, folder = None, reference = 'dorsal_cortex', trial_onsets = None):
+        super(RawViewer,self).__init__()
+        self.setWindowTitle('wfield')
+        self.raw = raw
+        self.folder = folder
+        if self.folder is None:
+            self.folder = os.path.abspath(os.path.curdir)
+        self.referencename = reference
+        landmarks_file = pjoin(self.folder,reference+'_landmarks.json')
+
+        self.trial_onsets = trial_onsets
+        self.raw = raw
+        self.trial_mask = np.ones((self.raw.shape[0]),dtype=bool)
+        if not self.trial_onsets is None:
+            self.trial_mask[self.trial_onsets[:,1]] = False
+        self.setDockOptions(QMainWindow.AllowTabbedDocks |
+                            QMainWindow.AllowNestedDocks |
+                            QMainWindow.AnimatedDocks)
+        self.roiwidget = ROIPlotWidget(self.raw)  
+        
+        if not self.raw is None:
+            self.allenparwidget = AllenMatchTable(landmarks_file = landmarks_file,
+                                                  reference = self.referencename,
+                                                  parent = self) 
+            self.rawwidget = RawDisplayWidget(raw,parent = self,reference = self.referencename)
+            
+        # Raw data
+        if not raw is None:
+            self.rawtab = QDockWidget('Raw data')
+            self.rawtab.setWidget(self.rawwidget)
+            self.addDockWidget(Qt.TopDockWidgetArea,self.rawtab)
+            
+        self.roitab = QDockWidget("ROI", self)
+        self.roitab.setWidget(self.roiwidget)
+        self.addDockWidget(Qt.BottomDockWidgetArea,self.roitab)
+        self.set_dock(self.roitab,False)
+        # Allen match
+        if hasattr(self,'allenparwidget'):
+            self.allenpartab = QDockWidget('CCF match parameters')
+            self.allenpartab.setWidget(self.allenparwidget)
+            self.addDockWidget(Qt.BottomDockWidgetArea,self.allenpartab)
+            self.tabifyDockWidget(self.allenpartab,self.roitab)        
+        self.show()
+
+    def set_dock(self,dock,floating=False):
+        dock.setAllowedAreas(Qt.LeftDockWidgetArea |
+                             Qt.RightDockWidgetArea |
+                             Qt.BottomDockWidgetArea |
+                             Qt.TopDockWidgetArea)
+        dock.setFeatures(QDockWidget.DockWidgetMovable |
+                         QDockWidget.DockWidgetFloatable)
+        dock.setFloating(floating)
+
+        
 class LocalCorrelationWidget(ImageWidget):
     def __init__(self, stack,parent=None):
         super(LocalCorrelationWidget,self).__init__()
