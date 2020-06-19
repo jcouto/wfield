@@ -33,7 +33,7 @@ def plot_summary_motion_correction(shifts, localdisk = None,
     plt.ylim([mi,ma])
 
     if not localdisk is None:
-        folder = pjoin(localdisk,'figures')
+        folder = localdisk
         if not os.path.isdir(folder):
             os.makedirs(folder)
         fig.savefig(pjoin(folder,'motion_correction.pdf'))
@@ -108,7 +108,7 @@ def plot_summary_hemodynamics_dual_colors(rcoeffs,
     plt.text(5*frame_rate/2,mi,'10s',ha='center',va='bottom')
     plt.text(0,mi+0.05,'10% df/f',ha='right',va='center',rotation=90)
     if not outputdir is None:
-        folder = pjoin(outputdir,'figures')
+        folder = outputdir
         if not os.path.isdir(folder):
             os.makedirs(folder)
         fig.savefig(pjoin(folder,'hemodynamic_correction.pdf'))
