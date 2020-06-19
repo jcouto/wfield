@@ -1,4 +1,8 @@
 from .utils import *
+# Pass temporal components in channels
+# Uses a sparse U
+# Write directly to the outputfolder, not figures.
+
 
 def _hemodynamic_find_coeffs(U,SVTa,SVTb):
     a = np.dot(U,SVTa)

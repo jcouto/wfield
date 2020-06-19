@@ -7,7 +7,10 @@
 #     - Wrappers for data viz and run some parts
 #
 # Wrapper to run motion correction that takes a filename and kicks out a structure (first step of 'this' blueprint - link)
-# 
+#
+
+
+
 from .utils import *
 from .io import load_dat, mmap_dat
 from .registration import motion_correct
@@ -56,14 +59,14 @@ Returns:
         np.save(pjoin(outputdir,'motion_correction_shifts.npy'),shifts)
         np.save(pjoin(outputdir,'motion_correction_rotation.npy'),rshifts)
 
-        try: # don't crash if there are issues plotting
-            from .plots import plot_summary_motion_correction 
-            import pylab as plt
-            plt.matplotlib.style.use('ggplot')
-            plot_summary_motion_correction(shifts,localdisk = outputdir);
-        except Exception as err:
-            print('There was an issue plotting.')
-            print(err)
+    try: # don't crash if there are issues plotting
+        from .plots import plot_summary_motion_correction 
+        import pylab as plt
+        plt.matplotlib.style.use('ggplot')
+        plot_summary_motion_correction(shifts,localdisk = outputdir);
+    except Exception as err:
+        print('There was an issue plotting.')
+        print(err)
 
     if mmap:
         del dat
