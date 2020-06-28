@@ -134,7 +134,6 @@ The commands are:
             trial_onsets = np.load(trial_onsets)
         else:
             trial_onsets = None
-        
         from .widgets import QApplication,RawViewer
         app = QApplication(sys.argv)
         w = RawViewer(raw = dat,

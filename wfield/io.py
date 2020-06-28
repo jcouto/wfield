@@ -25,11 +25,11 @@ def load_dat(filename,
         raise OSError('File {0} not found.'.format(filename))
     if shape is None or dtype is None: # try to get it from the filename
         meta = os.path.splitext(filename)[0].split('_')
-        if shape is None:
-            shape = [int(m) for m in meta[-4:-1]]
-        if dtype is None:
-            dtype = meta[-1]
-    dt = np.dtype(dtype)
+    if dtype is None:
+        dtype = meta[-1]
+        dt = np.dtype(dtype)
+    if shape is None:
+        shape = [int(m) for m in meta[-4:-1]]
     if nframes is None:
         # Get the number of samples from the file size
         nframes = int(os.path.getsize(filename)/(np.prod(shape)*dt.itemsize))
