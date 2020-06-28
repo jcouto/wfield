@@ -51,6 +51,7 @@ class AllenMatchTable(QWidget):
             landmarks_file = None
         lmarks = load_allen_landmarks(landmarks_file,reference = reference)
         self.parent  = parent
+        self.M = None
         if ('landmarks' in lmarks.keys() and 
             'bregma_offset' in lmarks.keys() and
             'resolution' in lmarks.keys()):
@@ -321,7 +322,8 @@ class RawDisplayWidget(ImageWidget):
         self.parent = parent
         self.stack = stack
         self.referencename = reference
-        self.roiwidget = self.parent.roiwidget
+        if hasattr(self.parent,'roiwidget'):
+            self.roiwidget = self.parent.roiwidget
         self.regions_plot = []
         self.iframe = np.clip(100,0,len(self.stack))
         self.ichan  = 0
@@ -330,11 +332,11 @@ class RawDisplayWidget(ImageWidget):
         self.levels = np.nanpercentile(tmp,[5,99])
         self._init_ui()
         self._add_hist()
-        self.hist.setHistogramRange(*self.levels)
+        #self.hist.setHistogramRange(*self.levels)
         self.adaptative_histogram = False
         self.allen_show_areas = False
         self.set_image(self.iframe)
-        #self.win.scene().sigMouseClicked.connect(self.mouseMoved) # not ready yet    
+        self.win.scene().sigMouseClicked.connect(self.mouseMoved) # not ready yet    
         
         if hasattr(self.parent,'allenparwidget'):
             self.allenwidget = self.parent.allenparwidget
@@ -439,9 +441,10 @@ class RawDisplayWidget(ImageWidget):
         if self.warp_im:
             if hasattr(self.parent,'M'):
                 img = im_apply_transform(img,self.parent.M)
-        self.im.setImage(img,levels = self.levels)
-        self.roiwidget.line.setPos((self.iframe,0))
-        self.roiwidget.update()
+        self.im.setImage(img,levelAuto=False)
+        if hasattr(self,'roiwidget'):
+            self.roiwidget.line.setPos((self.iframe,0))
+            self.roiwidget.update()
         
     def on_roi_update(self,i):
         idx = self.roiwidget.get_roi_flatidx(i)
@@ -458,7 +461,8 @@ class RawDisplayWidget(ImageWidget):
     def mouseMoved(self,pos):
         modifiers = QApplication.keyboardModifiers()
         pos = self.im.mapFromScene(pos.scenePos())
-        if bool(modifiers == Qt.ControlModifier):            
+        if (bool(modifiers == Qt.ControlModifier) and
+            hasattr(self,'roiwidget')):            
             updatefunc = partial(self.on_roi_update, i=len(self.roiwidget.rois))
             self.parent.roiwidget.add_roi((pos.x(),pos.y()),
                                           roitarget = self.im,
@@ -537,7 +541,7 @@ class SVDDisplayWidget(ImageWidget):
         if not i is None:
             self.iframe = i
         img = self.stack[self.iframe]
-        self.im.setImage(img,levels = self.levels)
+        self.im.setImage(img,autoLevels = False, levels = self.levels)
         
     def get_xy(self,x,y):
         x = int(np.clip(x,0,self.stack.shape[1]))
@@ -589,11 +593,12 @@ class SVDDisplayWidget(ImageWidget):
                                             region[side + '_y'],
                                             self.stack.shape[1:])
                         idx = np.ravel_multi_index(np.where(H==1),self.stack.shape[1:])
-                        color = self.parent.roiwidget.add_roi(None,
-                                                              roitarget = self.im,
-                                                              roiscene=self.pl,
-                                                              ROI = False,
-                                                              updatefunc = self.on_allenroi_update)
+                        color = self.parent.roiwidget.add_roi(
+                            None,
+                            roitarget = self.im,
+                            roiscene=self.pl,
+                            ROI = False,
+                            updatefunc = self.on_allenroi_update)
 
                         self.plot_allenroi(len(self.roiwidget.rois)-1,idx)
                         color = tuple(int(color.strip('#')[i:i+2], 16) for i in (0, 2, 4))
@@ -627,7 +632,9 @@ class SVDViewer(QMainWindow):
             self.allenparwidget = AllenMatchTable(landmarks_file = landmarks_file,
                                                   reference = self.referencename,
                                                   parent = self) 
-            self.rawwidget = RawDisplayWidget(raw,parent = self,reference = self.referencename)
+            self.rawwidget = RawDisplayWidget(raw,
+                                              parent = self,
+                                              reference = self.referencename)
             
         self.svdtab = QDockWidget('Reconstructed')
         self.svdtab.setWidget(self.displaywidget)
@@ -669,7 +676,10 @@ class SVDViewer(QMainWindow):
         dock.setFloating(floating)
 
 class RawViewer(QMainWindow):
-    def __init__(self,raw, folder = None, reference = 'dorsal_cortex', trial_onsets = None):
+    def __init__(self,raw,
+                 folder = None,
+                 reference = 'dorsal_cortex',
+                 trial_onsets = None):
         super(RawViewer,self).__init__()
         self.setWindowTitle('wfield')
         self.raw = raw
@@ -678,9 +688,8 @@ class RawViewer(QMainWindow):
             self.folder = os.path.abspath(os.path.curdir)
         self.referencename = reference
         landmarks_file = pjoin(self.folder,reference+'_landmarks.json')
-
+        
         self.trial_onsets = trial_onsets
-        self.raw = raw
         self.trial_mask = np.ones((self.raw.shape[0]),dtype=bool)
         if not self.trial_onsets is None:
             self.trial_mask[self.trial_onsets[:,1]] = False
@@ -688,12 +697,13 @@ class RawViewer(QMainWindow):
                             QMainWindow.AllowNestedDocks |
                             QMainWindow.AnimatedDocks)
         self.roiwidget = ROIPlotWidget(self.raw)  
-        
         if not self.raw is None:
             self.allenparwidget = AllenMatchTable(landmarks_file = landmarks_file,
                                                   reference = self.referencename,
-                                                  parent = self) 
-            self.rawwidget = RawDisplayWidget(raw,parent = self,reference = self.referencename)
+                                                  parent = self)
+            self.rawwidget = RawDisplayWidget(raw,
+                                              parent = self,
+                                              reference = self.referencename)
             
         # Raw data
         if not raw is None:
@@ -710,7 +720,8 @@ class RawViewer(QMainWindow):
             self.allenpartab = QDockWidget('CCF match parameters')
             self.allenpartab.setWidget(self.allenparwidget)
             self.addDockWidget(Qt.BottomDockWidgetArea,self.allenpartab)
-            self.tabifyDockWidget(self.allenpartab,self.roitab)        
+            if hasattr(self,'roitab'):
+                self.tabifyDockWidget(self.allenpartab,self.roitab)        
         self.show()
 
     def set_dock(self,dock,floating=False):
@@ -749,7 +760,7 @@ class LocalCorrelationWidget(ImageWidget):
         
     def set_image(self,xy=[0,0]):
         img = (self.localcorr.get(*xy)+1)/2.
-        self.im.setImage(img,levels = self.levels)
+        self.im.setImage(img,autoLevels = False)
 
     def mouseMoved(self,pos):
         modifiers = QApplication.keyboardModifiers()
@@ -825,10 +836,11 @@ class ROIPlotWidget(QWidget):
         ev.accept()
         
     def get_roi_flatidx(self,i):
-        X = np.zeros(self.stack.shape[1:],dtype='uint8')
+        X = np.zeros(self.stack.shape[-2:],dtype='uint8')
+        print(X.shape)
         r = self.rois[i].getArraySlice(X, self.rois_parent[i], axes=(0,1))
         X[r[0][0],r[0][1]]=1
-        return np.ravel_multi_index(np.where(X==1),self.stack.shape[1:])
+        return np.ravel_multi_index(np.where(X==1),self.stack.shape[-2:])
 
 
 
