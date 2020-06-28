@@ -62,8 +62,8 @@ def plot_summary_hemodynamics_dual_colors(rcoeffs,
           pidx[1]-2:pidx[1]+2].reshape([-1]))
     # gets 60 seconds of data
     nframes = int(np.clip(duration_frames*frame_rate,0,SVT.shape[1]))
-    SVTa = SVT[:,0:-nframes::2] 
-    SVTb = SVT[:,1:-nframes::2]
+    SVTa = SVT[:,0:nframes:2] 
+    SVTb = SVT[:,1:nframes:2]
     # similar proprocessing as for correction
     SVTa = highpass(SVTa,.1,fs = frame_rate/2)
     SVTb = highpass(SVTb,.1,fs = frame_rate/2)

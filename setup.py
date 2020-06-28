@@ -30,6 +30,7 @@ setup(
     entry_points = {
         'console_scripts': [
             'wfield = wfield.cli:main',
+            'wfield-ncaas = wfield.ncaas_gui:main',
         ]
     },
     data_files=[(wfield_dir, [r]) for r in reference_files],
