@@ -67,7 +67,11 @@ def napari_show(dat,contrast_limits = None):
     if contrast_limits is None:
         contrast_limits = [dat[0].min(),dat[0].max()]
     with napari.gui_qt():
-        napari.view_image(dat,
-                          contrast_limits=contrast_limits,
-                          is_pyramid=False)
-
+        try:
+            napari.view_image(dat,
+                              contrast_limits=contrast_limits,
+                              is_pyramid=False)
+        except: # napari 0.3.5 .... why??
+            napari.view_image(dat,
+                              contrast_limits=contrast_limits)
+            
