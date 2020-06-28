@@ -47,7 +47,7 @@ class AllenMatchTable(QWidget):
         # This widget shows: bregmaoffset in image coordinates, resolution, landmarks table
         self.reference = reference
         self.landmarks_file = landmarks_file
-        if os.path.isfile(landmarks_file):
+        if not os.path.isfile(landmarks_file):
             landmarks_file = None
         lmarks = load_allen_landmarks(landmarks_file,reference = reference)
         self.parent  = parent
@@ -315,7 +315,8 @@ class CustomDragPoints(pg.GraphItem):
 
         
 class RawDisplayWidget(ImageWidget):
-    def __init__(self, stack,parent=None,pointsize = 10,reference = 'dorsal_cortex'):
+    def __init__(self, stack,parent=None,pointsize = 10,
+                 reference = 'dorsal_cortex'):
         super(RawDisplayWidget,self).__init__()
         self.parent = parent
         self.stack = stack
