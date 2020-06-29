@@ -49,7 +49,7 @@ defaultconfig = dict(analysis = 'cshl-wfield-preprocessing',
                      userfolder = 'ChurchlandLab',
                      instance_type =  'r5.16xlarge',
                      config = dict(block_height = 90,
-                                   block_width = 90,
+                                   block_width = 80,
                                    frame_rate = 30,
                                    max_components = 15,
                                    num_sims = 64,
@@ -445,8 +445,13 @@ class NCAASwrapper(QMainWindow):
                 item.setForeground(QColor(204,102,0))
             elif itt['last_status'] == 'in_transfer':
                 item.setForeground(QColor(0,102,0))
+            elif itt['last_status'] == 'uploaded':
+                item.setForeground(QColor(255,0,0))
+            elif itt['last_status'] == 'submitted':
+                item.setForeground(QColor(0,255,0))
             else:
                 item.setForeground(QColor(0,0,0))
+                
 
     def process_aws_transfer(self):
         if self.uploading:
@@ -454,9 +459,9 @@ class NCAASwrapper(QMainWindow):
             return
         self.uploading = True
         for i,t in enumerate(self.aws_view.aws_transfer_queue):
+            print(t)
             if t['last_status'] == 'pending_transfer':
                 if os.path.isfile(t['localpath']):
-
                     self.aws_view.aws_transfer_queue[i]['last_status'] = 'in_transfer'
                     self.refresh_queuelist()
                     self.pbar.setValue(0)
@@ -477,29 +482,59 @@ class NCAASwrapper(QMainWindow):
                             t = self.item
                             self.isrunning = True
                             bucket =self.s3.Bucket(self.config['analysis'])
-                            print('Uploading')
+                            print('Uploading to {0}'.format(t['awsdestination']))
                             bucket.upload_file(t['localpath'],
                                                t['awsdestination'],
-                                               Callback = update,
-                                               Config=multipart_config)
+                                               Callback = update)
+                                               #Config=multipart_config)
                             self.isrunning = False
                     upload = Upload(t,self.config,self.aws_view.s3)
                     self.to_log('Transfering {name}'.format(**t))
                     thread = threading.Thread(target=upload.run)
                     thread.start()
                     time.sleep(1)
+                    cnt = 0
                     while (upload.isrunning):
                         QApplication.processEvents()
-                        self.pbar.setValue(np.ceil(upload.count*100/upload.fsize))
+                        self.pbar.setValue(np.ceil(upload.count*98/upload.fsize))
+                        time.sleep(0.1)
+                        cnt+= 1
+                        if np.mod(cnt,2) == 0:
+                            self.submitb.setStyleSheet("color: red")
+                        else:
+                            self.submitb.setStyleSheet("color: black")
+                    self.submitb.setStyleSheet("color: red")
+
+                            
                     QApplication.processEvents()
                     self.to_log('Done transfering {name}'.format(**t))
-
-                    break
-                    
+                    self.aws_view.aws_transfer_queue[i]['last_status'] = 'uploaded'
                 else:
                     self.to_log('File not found {localpath}'.format(**t))
                     self.remove_from_queue(self.queuelist.item(i))
+                    return
+            if t['last_status'] == 'uploaded':
+                # add a config file
+                import yaml
+                tempfile = pjoin(os.path.expanduser('~'),'.wfield','temp_config.yaml')
+                with open(tempfile,'w') as f: 
+                    yaml.dump(self.config['config'],f)
+                bucket =self.aws_view.s3.Bucket(self.config['analysis'])
+                bucket.upload_file(tempfile,
+                                   os.path.dirname(t['awsdestination'])+'/'+'config.yaml')
+                self.to_log('Uploaded default config to {name}'.format(**t))
                 
+                tempfile = pjoin(os.path.expanduser('~'),'.wfield','temp_submit.json')
+                tmp = dict(dataname = os.path.dirname(t['awsdestination']),
+                           instance_type =  self.config["instance_type"])
+                with open(tempfile,'w') as f:
+                    json.dump(tmp,f)
+                bucket =self.aws_view.s3.Bucket(self.config['analysis'])
+                bucket.upload_file(tempfile,
+                                   os.path.dirname(t['awsdestination'])+'/'+'submit.json')
+                self.to_log('Submitted analysis {name}'.format(**t))
+                self.aws_view.aws_transfer_queue[i]['last_status'] = 'submitted'
+                        
         self.uploading = False
 
                 
