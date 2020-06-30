@@ -444,9 +444,9 @@ class NCAASwrapper(QMainWindow):
                 for a in self.aws_view.awsfiles:
                     if resultsdir in a:
                         resultsfiles.append(a)
+                if len(resultsfiles):
                     if logsdir in a:
                         resultsfiles.append(a)
-                if len(resultsfiles):
                     print('Found results for {name}'.format(**t))
                     localpath = pjoin(os.path.dirname(t['localpath']),'results')
                     if not os.path.isdir(localpath):
