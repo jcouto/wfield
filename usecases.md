@@ -1,3 +1,30 @@
+# Analysing data with NeuroCAAS
+
+Motion correction, penalized matrix decomposition and hemodynamics correction are combined in a NeuroCAAS pipeline for a scalable and reproducible analysis pipeline.
+The blueprint in on the ``cshl-wfield-preprocessing`` analysis bucket; you may need that when getting a NeuroCAAS [account](http://neurocaas.org) .
+
+You can launch analysis with NeuroCAAS from the [website](http://neurocaas.org) or using the ``wfield-ncaas`` graphical user interface.
+
+### Using `the `wfield-ncaas`` interface
+
+1. To launch: open a terminal in the directory where data are and type ``wfield-ncaas``.
+2. This will bring up a window where you can insert the NeuroCAAS credentials.
+Insert the AWS **access** and **secret keys** and change the **userfolder** to the folder provided by NeuroCAAS. Press save and close this window.
+
+![picture](images/ncaas_gui_labeled.png)
+
+3. This will start the graphical interface like in the picture above. Use this interface to **upload data** to NeuroCAAS and for **running analysis** and **getting results** back.
+
+4. Drag and drop folders from the ``local disk`` to the ``NCAAS disk`` to add analysis to the ``local queue``. Folders should contain a ``.dat`` file containing the raw data in binary format.
+5. Press the ``Run on NCAAS button`` to transfer data from the **local queue** to the cloud and to start the analysis. The ``progress bar`` will show the copy progress of the ``.dat`` files. The ``local log`` informs what commands are ran.
+6. As the analysis run **results are automatically copied** to the ``local disk`` and the results and input folders deleted from the cloud. **Note:** The log file and transfer queue are stored in the local computer and reloaded when starting ``wfield-ncaas``. 
+
+**EXTRA:**
+
+1. To monitor log files, navigate to the logs folder in the ``ncaas disk`` and double click a file. The file is refreshed every 2 seconds if the ``watch file`` checkbox is selected.
+2. To re-submit a job, right click the a ``submit.json`` and click 're-submit'.
+
+
 # Use cases and notes
 
 ### Using the command line interface
@@ -21,24 +48,6 @@ to list other options do:
 To launch the GUI to explore processed data do:
 
 - `wfield open <FOLDER>`
-
-## Analysing data with NeuroCAAS
-
-Motion correction, penalized matrix decomposition and hemodynamics correction are combined in a NeuroCAAS pipeline for a scalable and reproducible analysis pipeline.
-The blueprint in on the ``cshl-wfield-preprocessing`` analysis bucket.
-
-You can interface with NeuroCAAS by the [website](http://neurocaas.org) or using the ``wfield-ncaas`` graphical user interface.
-
-#### Using the NeuroCAAS interface
-
-1. To launch open a terminal in the directory where data are and type ``wfield-ncaas``.
-2. This will bring up a window where you can insert the NeuroCAAS credentials.
-Insert the AWS **access and secret keys** and change the userfolder to the **foldername** provided by NeuroCAAS. Press save and close this window.
-
-![picture](images/ncaas_gui_labeled.png)
-
-
-
 
 
 ## Integration with NeuroCAAS (what's on the remote server)
