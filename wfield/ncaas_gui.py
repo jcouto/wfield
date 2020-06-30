@@ -247,8 +247,11 @@ class CredentialsManager(QDockWidget):
         self.show()
         
 class TextEditor(QDockWidget):
-    def __init__(self,path,s3=None,bucket=None,refresh_interval = 2):
+    def __init__(self,path,s3=None,bucket=None,
+                 parent = None,
+                 refresh_interval = 2,watch_file = True):
         super(TextEditor,self).__init__()
+        self.parent = parent
         self.s3 = s3
         self.bucketname = bucket
         self.path = path
@@ -261,7 +264,6 @@ class TextEditor(QDockWidget):
         self.setWindowTitle('NeuroCAAS file - {0}'.format(self.path))
         lay.addWidget(self.tx)
         self.tx.setText(self.original)
-        
         w = QWidget()
         hl = QFormLayout()
         w.setLayout(hl)
@@ -282,6 +284,7 @@ class TextEditor(QDockWidget):
             else:
                 self.timer.stop()
                 print('Timer stopped.')
+        ckbox.setChecked(watch_file)
         ckbox.stateChanged.connect(watch)
         lay.addWidget(w)
         
@@ -292,9 +295,9 @@ class TextEditor(QDockWidget):
             with open(tempfile,'r') as f:
                 return f.read()
 
-
 from boto3.s3.transfer import TransferConfig
 GB = 1024 ** 3
+# Not being used now.
 multipart_config = TransferConfig(multipart_threshold=int(1*GB),
                                   max_concurrency=10,
                                   multipart_chunksize=int(0.1*GB),
@@ -335,6 +338,10 @@ class NCAASwrapper(QMainWindow):
         self.config = config
         self.folder = folder
         self.uploading = False
+        self.fetching_results = False
+        
+        self.delete_inputs=True
+        self.delete_results=True
         
         awskeys = ncaas_read_aws_keys()
         if awskeys['access_key'] == '' or awskeys['secret_key'] == '':
@@ -348,6 +355,7 @@ class NCAASwrapper(QMainWindow):
         
         # Filesystem browser
         self.fs_view = FilesystemView(folder,parent=self)
+        self.fs_view.expandToDepth(2)
         # Add the widget with label
         w = QWidget()
         l = QVBoxLayout()
@@ -356,11 +364,11 @@ class NCAASwrapper(QMainWindow):
         l.addWidget(self.folder)
         l.addWidget(self.fs_view)
         lay.addWidget(w)
-        
+        self.open_editors = []        
         # AWS browser
         self.aws_view = AWSView(config,parent=self)
+        self.aws_view.expandToDepth(2)
 
-        #    print(f.key)
         # Add the widget with label
         historypath = pjoin(os.path.expanduser('~'),
                             '.wfield','ncaas_gui_log.txt')
@@ -383,10 +391,11 @@ class NCAASwrapper(QMainWindow):
                     self.aws_view.aws_transfer_queue = json.load(f)
                 except:
                     print('Corrupt transfer queue file?')
-        # There can be no transfers in init
         for i,t in enumerate(self.aws_view.aws_transfer_queue):
-            if t['last_status'] == 'in_transfer':
+            if t['last_status'] == 'in_transfer': # There can be no transfers in init - resume
                 self.aws_view.aws_transfer_queue[i]['last_status'] = 'pending_transfer'
+            if t['last_status'] == 'fetching_results': # there can be no fetching when init - resume
+                self.aws_view.aws_transfer_queue[i]['last_status'] = 'submitted'
         
         sw = QWidget()
         sl = QGridLayout()
@@ -413,6 +422,63 @@ class NCAASwrapper(QMainWindow):
         #ipdb.set_trace()
         self.resize(QDesktopWidget().availableGeometry().size() * 0.7);        
         self.show()
+        self.fetchresultstimer = QTimer()
+        self.fetchresultstimer.timeout.connect(self.fetch_results)
+        self.fetchresultstimer.start(3000)
+        
+    def fetch_results(self):
+        '''
+        Checks if the data are analyzed and copies the results. 
+        '''
+        for i,t in enumerate(self.aws_view.aws_transfer_queue):
+            resultsdir = os.path.dirname(t['awsdestination']).replace('{0}/inputs'.format(self.config['userfolder']),
+                                                                      '{0}/results'.format(self.config['userfolder']))
+            logsdir = os.path.dirname(t['awsdestination']).replace('{0}/inputs'.format(self.config['userfolder']),
+                                                                   '{0}/logs'.format(self.config['userfolder']))
+            if t['last_status'] == 'submitted':
+                self.aws_view.aws_transfer_queue[i]['last_status'] = 'fetching_results'
+                self.refresh_queuelist()
+                resultsfiles = []
+                for a in self.aws_view.awsfiles:
+                    if resultsdir in a:
+                        resultsfiles.append(a)
+                    if logsdir in a:
+                        resultsfiles.append(a)
+                if len(resultsfiles):
+                    print('Found results for {name}'.format(**t))
+                    localpath = pjoin(os.path.dirname(t['localpath']),'results')
+                    if not os.path.isdir(localpath):
+                        os.makedirs(localpath)
+                        self.to_log('Creating {0}'.format(localpath))
+                    bucket = self.aws_view.s3.Bucket(self.config["analysis"])
+                    self.fetching_results = True
+                    for f in resultsfiles:
+                        def get():
+                            bucket.download_file(f,pjoin(localpath,os.path.basename(f)))
+                        thread = threading.Thread(target=get)
+                        thread.start()
+                        self.to_log('Fetching {0}'.format(f))
+                        while thread.is_alive():
+                            QApplication.processEvents()
+                            time.sleep(0.1)
+                    self.to_log('Done fetching results to {0}'.format(localpath))
+                    self.aws_view.aws_transfer_queue[i]['last_status'] = 'got_results'
+                    if self.delete_inputs:
+                        # need to delete the remote data
+                        configpath = os.path.dirname(t['awsdestination'])+'/'+'config.yaml' 
+                        submitpath = os.path.dirname(t['awsdestination'])+'/'+'submit.json'
+                        self.aws_view.s3.Object(self.config["analysis"],t['awsdestination']).delete()
+                        self.aws_view.s3.Object(self.config["analysis"],configpath).delete()
+                        self.aws_view.s3.Object(self.config["analysis"],submitpath).delete()
+                        self.to_log('Remote delete: {0}'.format(t['awsdestination']))
+                    if self.delete_results:
+                        for f in resultsfiles:
+                            self.aws_view.s3.Object(self.config["analysis"],f).delete()
+                            self.to_log('Remote delete: {0}'.format(f))
+                    self.fetching_results = False
+                    self.remove_from_queue(self.queuelist.item(i))
+                    return # because we removed an item from the queue, restart the loop
+                    
 
     def remove_from_queue(self,item):
         itemname = item.text()
@@ -422,8 +488,7 @@ class NCAASwrapper(QMainWindow):
         self.to_log('Removed {name} from the tranfer queue'.format(**tt))
         self.queuelist.takeItem(self.queuelist.row(item))
         self.store_transfer_queue()
-        print(ii)
-
+        
     def to_log(self,msg):
         msg  = to_log(msg,logfile = self.historyfile)
         self.infomon.moveCursor(-1)
@@ -443,9 +508,9 @@ class NCAASwrapper(QMainWindow):
             item = self.queuelist.item(i)
             if itt['last_status'] == 'pending_transfer':
                 item.setForeground(QColor(204,102,0))
-            elif itt['last_status'] == 'in_transfer':
+            elif itt['last_status'] in ['in_transfer','fetching_results']:
                 item.setForeground(QColor(0,102,0))
-            elif itt['last_status'] == 'uploaded':
+            elif itt['last_status'] in ['uploaded']:
                 item.setForeground(QColor(255,0,0))
             elif itt['last_status'] == 'submitted':
                 item.setForeground(QColor(0,255,0))
@@ -503,9 +568,8 @@ class NCAASwrapper(QMainWindow):
                             self.submitb.setStyleSheet("color: red")
                         else:
                             self.submitb.setStyleSheet("color: black")
-                    self.submitb.setStyleSheet("color: red")
-
                             
+                    self.submitb.setStyleSheet("color: red")
                     QApplication.processEvents()
                     self.to_log('Done transfering {name}'.format(**t))
                     self.aws_view.aws_transfer_queue[i]['last_status'] = 'uploaded'
@@ -553,6 +617,9 @@ class AWSView(QTreeView):
         self.setDropIndicatorShown(True) 
         self.setAutoScroll(True) 
 
+        # add right click support
+
+        
         self.config = config
         self.s3 = s3_connect()
         self.bucketname = self.config['analysis']
@@ -570,6 +637,7 @@ class AWSView(QTreeView):
                 wid = TextEditor(paths[0],s3=self.s3,bucket = self.bucketname)
                 self.parent.addDockWidget(Qt.RightDockWidgetArea,wid)
                 wid.setFloating(True)
+                self.parent.open_editors.append(paths[0])
             elif extension == '':
                 print('Folder: {0}'.format(paths[0]))
         self.doubleClicked.connect(open_file)
@@ -656,7 +724,6 @@ class FilesystemView(QTreeView):
         self.fs_model.setReadOnly(True)
         self.setModel(self.fs_model)
         self.setRootIndex(self.fs_model.setRootPath(folder))
-        self.expandAll()
         self.fs_model.removeColumn(1)
         self.setAlternatingRowColors(True)
         self.setSelectionMode(3)
@@ -664,13 +731,15 @@ class FilesystemView(QTreeView):
         self.setAcceptDrops(True)
         self.setDragDropMode(QAbstractItemView.DragDrop)
         self.setDropIndicatorShown(True)
-        [self.hideColumn(i) for i in range(1,4)]
+        #[self.hideColumn(i) for i in range(1,4)]
+        
     def query_root(self):
         folder = QFileDialog().getExistingDirectory(self,"Select directory",os.path.curdir)
         self.setRootIndex(self.fs_model.setRootPath(folder))
         self.expandAll()
         if hasattr(self.parent,'folder'):
             self.parent.folder.setText('<b>{0}<\b>'.format(folder))
+
     def dragEnterEvent(self, e):        
         item = self.indexAt(e.pos())
         if e.mimeData().hasText():
@@ -678,6 +747,7 @@ class FilesystemView(QTreeView):
             e.accept()
         else:
             e.ignore()
+
     def dragMoveEvent(self, e):
         item = self.indexAt(e.pos())
         self.setCurrentIndex(item)
@@ -692,7 +762,6 @@ class FilesystemView(QTreeView):
             self.indexAt(e.pos()).row(),
             0,self.indexAt(e.pos()).parent())
         paths = get_tree_path([idx])
-        print(paths)
         self.setSelectionMode(3)
         e.ignore()
     
