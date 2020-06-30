@@ -40,7 +40,7 @@ try:
 except:
     print('boto3 not installed, installing with pip ')
     from subprocess import call
-    call('pip install boto3')
+    call('pip install boto3',)
     import boto3
 
 
@@ -650,7 +650,7 @@ class AWSView(QTreeView):
                                     localpath = None
                                     for i,t in enumerate(tt): # todo: re-write
                                         if t == 'inputs':
-                                            localpath = os.path.abspath(pjoin(os.path.curdir,*tt[i+1:]))
+                                            localpath = os.path.abspath(pjoin(os.path.curdir,*tt[i+1:-1]))
                                     if localpath is None:
                                         self.to_log('Could not set local folder to re-submit.')
                                         localpath = os.path.curdir

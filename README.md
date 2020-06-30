@@ -38,7 +38,8 @@ If you are using Windows, get a terminal like [git bash](https://git-scm.com/dow
 
 - Enter the environment `conda activate wfield` and install wfield `python setup.py install`
 
-- You will need to run `conda activate wfield` to activate the environment before running the software.
+
+*Note:* You will need to run `conda activate wfield` to activate the environment before running the software.
 
 *Note:* In some cases you may want to make changes to the software, if you need this run `python setup.py develop` (you can not move the folder after this - the installation will point to that directory).
 
