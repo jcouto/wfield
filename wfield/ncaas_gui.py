@@ -28,7 +28,8 @@ from PyQt5.QtWidgets import (QApplication,
                              QDesktopWidget,
                              QListWidgetItem,
                              QFileSystemModel,
-                             QAbstractItemView)
+                             QAbstractItemView,
+                             QMenu, QAction)
 
 from PyQt5 import QtCore
 from PyQt5.QtGui import QStandardItem, QStandardItemModel,QColor
@@ -48,6 +49,7 @@ tempfile = pjoin(os.path.expanduser('~'),'.wfield','tempfile')
 defaultconfig = dict(analysis = 'cshl-wfield-preprocessing',
                      userfolder = 'ChurchlandLab',
                      instance_type =  'r5.16xlarge',
+                     analysis_extension = '.dat',
                      config = dict(block_height = 90,
                                    block_width = 80,
                                    frame_rate = 30,
@@ -317,7 +319,7 @@ def ncaas_dat_upload_queue(path,
     aws_transfer_queue = []
     for root, dirs, files in os.walk(path):
         for f in files:
-            if '.dat' in f:
+            if config['analysis_extension'] in f:
                 filetransfer.append(pjoin(path,f))
                 aws_transfer_queue.append(
                     dict(name = os.path.basename(f),
@@ -340,7 +342,7 @@ class NCAASwrapper(QMainWindow):
         self.uploading = False
         self.fetching_results = False
         
-        self.delete_inputs=True
+        self.delete_inputs=False
         self.delete_results=True
         
         awskeys = ncaas_read_aws_keys()
@@ -420,7 +422,7 @@ class NCAASwrapper(QMainWindow):
         self.submitb.clicked.connect(self.process_aws_transfer)
         #import ipdb
         #ipdb.set_trace()
-        self.resize(QDesktopWidget().availableGeometry().size() * 0.7);        
+        self.resize(QDesktopWidget().availableGeometry().size() * 0.85);        
         self.show()
         self.fetchresultstimer = QTimer()
         self.fetchresultstimer.timeout.connect(self.fetch_results)
@@ -475,10 +477,10 @@ class NCAASwrapper(QMainWindow):
                         for f in resultsfiles:
                             self.aws_view.s3.Object(self.config["analysis"],f).delete()
                             self.to_log('Remote delete: {0}'.format(f))
+                    self.to_log('COMPLETED {0}'.format(t['name']))
                     self.fetching_results = False
                     self.remove_from_queue(self.queuelist.item(i))
                     return # because we removed an item from the queue, restart the loop
-                    
 
     def remove_from_queue(self,item):
         itemname = item.text()
@@ -618,7 +620,50 @@ class AWSView(QTreeView):
         self.setAutoScroll(True) 
 
         # add right click support
-
+        
+        def menu_here(event):
+            self.menu = QMenu(self)
+            delete = self.menu.addAction("Delete")
+            ii = self.indexAt(event)
+            item = self.model.index(ii.row(),0,ii.parent())
+            path = get_tree_path([item])[0]
+            if path.endswith('submit.json'):
+                rerun = self.menu.addAction("Re-submit")
+            tmp = self.menu.exec_(self.mapToGlobal(event))
+            if tmp is not None:
+                if tmp == delete:
+                    path = get_tree_path([item])[0]
+                    self.s3.Object(self.config["analysis"],path).delete()
+                elif tmp == rerun:
+                    # Download and upload to re-submit. 
+                    if not self.s3 is None:
+                        
+                        bucket = self.s3.Bucket(self.bucketname)
+                        bucket.download_file(path,tempfile)
+                        with open(tempfile,'r') as fd:
+                            temp = json.load(fd)
+                        dname = temp['dataname']
+                        for f in self.awsfiles: # find the datfile
+                            if dname in f and f.endswith(self.config['analysis_extension']):
+                                if 'inputs' in f:
+                                    tt = f.split('/')
+                                    localpath = None
+                                    for i,t in enumerate(tt): # todo: re-write
+                                        if t == 'inputs':
+                                            localpath = os.path.abspath(pjoin(os.path.curdir,*tt[i+1:]))
+                                    if localpath is None:
+                                        self.to_log('Could not set local folder to re-submit.')
+                                        localpath = os.path.curdir
+                                    toadd = dict(name = os.path.basename(f),
+                                                 awsdestination = f,
+                                                 localpath = pjoin(localpath,os.path.basename(f)),
+                                                 last_status = "uploaded")
+                                    self.aws_transfer_queue.append(toadd)
+                                    self.parent.refresh_queuelist()
+                                    self.parent.to_log(
+                                        'Re-submitted {0} to the queue, (press "Run on NCAAS" to run).'.format(path))
+        self.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.customContextMenuRequested.connect(menu_here)
         
         self.config = config
         self.s3 = s3_connect()
@@ -689,7 +734,7 @@ class AWSView(QTreeView):
                 path,
                 analysis = self.config['analysis'],
                 userfolder = self.config['userfolder'],
-                subfolder = 'inputs',config = None)
+                subfolder = 'inputs',config = self.config)
             for t in tt:
                 if len(self.aws_transfer_queue):
                     names = [a['name'] for a in self.aws_transfer_queue]
@@ -732,7 +777,7 @@ class FilesystemView(QTreeView):
         self.setDragDropMode(QAbstractItemView.DragDrop)
         self.setDropIndicatorShown(True)
         #[self.hideColumn(i) for i in range(1,4)]
-        
+        self.setColumnWidth(0,self.width()*.7)
     def query_root(self):
         folder = QFileDialog().getExistingDirectory(self,"Select directory",os.path.curdir)
         self.setRootIndex(self.fs_model.setRootPath(folder))
@@ -740,7 +785,8 @@ class FilesystemView(QTreeView):
         if hasattr(self.parent,'folder'):
             self.parent.folder.setText('<b>{0}<\b>'.format(folder))
 
-    def dragEnterEvent(self, e):        
+    def dragEnterEvent(self, e):
+        print(e)
         item = self.indexAt(e.pos())
         if e.mimeData().hasText():
             self.setSelectionMode(1)
