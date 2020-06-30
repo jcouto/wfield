@@ -22,9 +22,26 @@ To launch the GUI to explore processed data do:
 
 - `wfield open <FOLDER>`
 
+## Analysing data with NeuroCAAS
 
-## Integration with NeuroCAAS 
+Motion correction, penalized matrix decomposition and hemodynamics correction are combined in a NeuroCAAS pipeline for a scalable and reproducible analysis pipeline.
+The blueprint in on the ``cshl-wfield-preprocessing`` analysis bucket.
 
+You can interface with NeuroCAAS by the [website](http://neurocaas.org) or using the ``wfield-ncaas`` graphical user interface.
+
+#### Using the NeuroCAAS interface
+
+1. To launch open a terminal in the directory where data are and type ``wfield-ncaas``.
+2. This will bring up a window where you can insert the NeuroCAAS credentials.
+Insert the AWS **access and secret keys** and change the userfolder to the **foldername** provided by NeuroCAAS. Press save and close this window.
+
+
+
+
+
+
+
+## Integration with NeuroCAAS (what's on the remote server)
 
 ##### Installation on Ubuntu 20.04 fresh install - no GUI 
 
