@@ -40,7 +40,7 @@ try:
 except:
     print('boto3 not installed, installing with pip ')
     from subprocess import call
-    call('pip install boto3',)
+    call('pip install boto3',shell = True)
     import boto3
 
 
