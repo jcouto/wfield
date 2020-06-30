@@ -58,15 +58,31 @@ The commands are:
         localdisk = args.foldername
         from .io import mmap_dat
         fname = pjoin(localdisk,'U.npy')
-        if os.path.isfile(fname):
+        if os.path.isdir(pjoin(localdisk,'results')):
+            # then it is from neurocaas?
+            fname = pjoin(localdisk,'results','config.yaml')
+            if os.path.isfile(fname):
+                with open(fname,'r') as f:
+                    import yaml
+                    config = yaml.load(f)
+            H,W = (config['fov_height'],config['fov_width'])
+            fname = pjoin(localdisk,'results','sparse_spatial.npz')
+            if os.path.isfile(fname):
+                from scipy.sparse import load_npz
+                Us = load_npz(fname)
+                U = np.squeeze(np.asarray(Us.todense()))
+                U = U.reshape([H,W,-1])
+            SVT = np.load(pjoin(localdisk,'results','SVTcorr.npy'))
+        elif os.path.isfile(fname):
             U = np.load(fname)
             if not args.before_corr:
                 SVT = np.load(pjoin(localdisk,'SVTcorr.npy'))
             else:
                 SVT = np.load(pjoin(localdisk,'SVT.npy'))
         else:
+            # try in a results folder (did it come from ncaas?)
             print('Could not find: {0} '.format(fname))
-        
+            
         dat_path = glob(pjoin(localdisk,'*.dat'))
         if len(dat_path):
             dat_path = dat_path[0]

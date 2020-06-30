@@ -837,7 +837,6 @@ class ROIPlotWidget(QWidget):
         
     def get_roi_flatidx(self,i):
         X = np.zeros(self.stack.shape[-2:],dtype='uint8')
-        print(X.shape)
         r = self.rois[i].getArraySlice(X, self.rois_parent[i], axes=(0,1))
         X[r[0][0],r[0][1]]=1
         return np.ravel_multi_index(np.where(X==1),self.stack.shape[-2:])
