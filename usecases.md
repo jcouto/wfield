@@ -35,7 +35,7 @@ You can interface with NeuroCAAS by the [website](http://neurocaas.org) or using
 2. This will bring up a window where you can insert the NeuroCAAS credentials.
 Insert the AWS **access and secret keys** and change the userfolder to the **foldername** provided by NeuroCAAS. Press save and close this window.
 
-
+![picture](images/ncaas_gui_labeled.png)
 
 
 
