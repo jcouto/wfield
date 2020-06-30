@@ -5,7 +5,7 @@ The blueprint in on the ``cshl-wfield-preprocessing`` analysis bucket; you may n
 
 You can launch analysis with NeuroCAAS from the [website](http://neurocaas.org) or using the ``wfield-ncaas`` graphical user interface.
 
-### Using `the `wfield-ncaas`` interface
+### Using the ``wfield-ncaas`` interface
 
 1. To launch: open a terminal in the directory where data are and type ``wfield-ncaas``.
 2. This will bring up a window where you can insert the NeuroCAAS credentials.
