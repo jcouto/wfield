@@ -107,7 +107,8 @@ def compute_trial_baseline_from_binary(trial_onset,
                                        shape,
                                        nbaseline_frames,
                                        dtype='uint16'):
-    dd = load_binary_block((filename,trial_onset,nbaseline_frames),shape=shape,dtype=dtype)
+    dd = load_binary_block((filename,trial_onset,nbaseline_frames),
+                           shape=shape,dtype=dtype)
     return dd.mean(axis=0)
 
 def frames_average_for_trials(dat,onsets,nbaseline_frames):

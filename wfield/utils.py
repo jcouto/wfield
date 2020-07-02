@@ -8,9 +8,9 @@ from natsort import natsorted
 from glob import glob
 from os.path import join as pjoin
 from scipy.signal import medfilt
-from multiprocessing import Pool,cpu_count
+from multiprocessing import Pool, cpu_count
 from functools import partial
-from scipy.signal import butter,filtfilt
+from scipy.signal import butter, filtfilt
 from skimage.transform import warp
 from scipy.interpolate import interp1d
 from scipy.ndimage import morphology

@@ -51,6 +51,7 @@ The commands are:
 ''')
         parser.add_argument('foldername', action='store',default=None,type=str)
         parser.add_argument('--allen-reference', action='store',default='dorsal_cortex',type=str)
+        parser.add_argument('--no-ncaas', action='store_true',default=False)
         parser.add_argument('--before-corr', action='store_true',
                             default=False,
                             help= 'Load SVT before hemodynamics correction.')
@@ -58,7 +59,7 @@ The commands are:
         localdisk = args.foldername
         from .io import mmap_dat
         fname = pjoin(localdisk,'U.npy')
-        if os.path.isdir(pjoin(localdisk,'results')):
+        if os.path.isdir(pjoin(localdisk,'results')) and not args.no_ncaas:
             # then it is from neurocaas?
             fname = pjoin(localdisk,'results','config.yaml')
             if os.path.isfile(fname):
@@ -368,9 +369,16 @@ def _baseline(localdisk,nbaseline_frames):
     try:
         trial_onsets = np.load(pjoin(localdisk,'trial_onsets.npy'))
     except FileNotFoundError:
-        print('Skipping trial frame average because there was no trial_onsets.npy in the folder.')
+        print('Skipping trial frame average because there was no trial_onsets.npy in the folder. Estimating the mean by the average of the chunked min projection.')
+        chunkidx = chunk_indices(len(dat),chunksize=64)
+        frame_averages = []
+        for on,off in tqdm(chunkidx):
+            frame_averages.append(dat[on:off].min(axis=0))
         del dat
-        return
+        frames_average = np.stack(frame_averages).mean(axis = 0)
+        np.save(pjoin(localdisk,'frames_average.npy'),
+                frames_average)
+        return frames_average
     frames_average_trials = frames_average_for_trials(dat,
                                                       trial_onsets['iframe'],
                                                       nbaseline_frames)

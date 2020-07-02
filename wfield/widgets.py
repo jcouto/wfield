@@ -441,7 +441,7 @@ class RawDisplayWidget(ImageWidget):
         if self.warp_im:
             if hasattr(self.parent,'M'):
                 img = im_apply_transform(img,self.parent.M)
-        self.im.setImage(img,levelAuto=False)
+        self.im.setImage(img,autoLevels=False)
         if hasattr(self,'roiwidget'):
             self.roiwidget.line.setPos((self.iframe,0))
             self.roiwidget.update()
@@ -485,7 +485,7 @@ class SVDDisplayWidget(ImageWidget):
         self.levels = np.nanpercentile(tmp,[5,99])
         self._init_ui()
         self._add_hist()
-        self.hist.setHistogramRange(*self.levels)
+        #self.hist.setHistogramRange(*self.levels)
         self.allen_show_areas = False
         self.set_image(self.iframe)
         self.win.scene().sigMouseClicked.connect(self.mouseMoved)    
