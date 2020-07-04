@@ -12,6 +12,8 @@ This is a python package for visualizing and analysing data collected with a wid
 
 ### Use cases and instructions [here](usecases.md)
 
+Here to obtain a [dataset](http://repository.cshl.edu/id/eprint/38599/) that can be used to demo some of the functionality of this repository. Follow to instructions in the GUI for demo in NeuroCAAS.
+
 ### File format conventions
 
   - raw frame data is stored in binary files (uint16) <br />
