@@ -45,6 +45,9 @@ If you are using Windows, get a terminal like [git bash](https://git-scm.com/dow
 
 *Note:* Some reference files used to match to the Allen Common Coordinate Framework are copied from the folder [references](https://github.com/jcouto/wfield/tree/master/references) to ``$HOME/.wfield`` during installation. 
 
+The software has been tested on Windows, Linux and MacOS. Installation takes less than 5 minutes on a standard computer with fast access to internet and a previous anaconda installation.
+
+Support for motion correction for OpenCV 4.2 is broken and will be added in the future. 
 
 
 ### Tutorial
