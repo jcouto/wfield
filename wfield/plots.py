@@ -31,8 +31,8 @@ def plot_summary_motion_correction(shifts, localdisk = None,
     fig.add_subplot(2,1,1)
     # need to make sure this doesnt crash with one channel
     nchannels = shifts['y'].shape[1]
-    mi = shifts.view('int').min() - 1
-    ma = shifts.view('int').max() + 1
+    mi = shifts.view('float32').min() - 1
+    ma = shifts.view('float32').max() + 1
     for i in range(nchannels):
         plt.plot(shifts['y'][:,i],label='channel {0}'.format(i+1))
     plt.title(title)
