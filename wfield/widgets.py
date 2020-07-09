@@ -457,7 +457,7 @@ class RawDisplayWidget(ImageWidget):
         if self.warp_im:
             if hasattr(self.parent,'M'):
                 img = im_apply_transform(img,self.parent.M)
-        self.im.setImage(img,autoLevels=False)
+        self.im.setImage(img,levels = self.levels,autoLevels=False)
         if hasattr(self,'roiwidget'):
             self.roiwidget.line.setPos((self.iframe,0))
             self.roiwidget.update()

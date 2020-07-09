@@ -92,7 +92,8 @@ The commands are:
             SVT = np.load(pjoin(localdisk,'results','SVTcorr.npy'))
         elif os.path.isfile(fname):
             U = np.load(fname)
-            if not args.before_corr:
+            if (not args.before_corr
+                and os.path.isfile(pjoin(localdisk,'SVTcorr.npy'))):
                 SVT = np.load(pjoin(localdisk,'SVTcorr.npy'))
             else:
                 SVT = np.load(pjoin(localdisk,'SVT.npy'))
@@ -385,11 +386,15 @@ def _baseline(localdisk,nbaseline_frames):
     try:
         trial_onsets = np.load(pjoin(localdisk,'trial_onsets.npy'))
     except FileNotFoundError:
-        print('Skipping trial frame average because there was no trial_onsets.npy in the folder. Estimating the mean by the average of the chunked min projection.')
+        print('''
+Skipping trial frame average because there was no trial_onsets.npy in the folder.
+ Estimating the mean by the average of the chunked mean projection.
+
+''')
         chunkidx = chunk_indices(len(dat),chunksize=64)
         frame_averages = []
         for on,off in tqdm(chunkidx):
-            frame_averages.append(dat[on:off].min(axis=0))
+            frame_averages.append(dat[on:off].mean(axis=0))
         del dat
         frames_average = np.stack(frame_averages).mean(axis = 0)
         np.save(pjoin(localdisk,'frames_average.npy'),
