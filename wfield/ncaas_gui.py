@@ -42,6 +42,7 @@ from PyQt5.QtWidgets import (QApplication,
                              QLabel,
                              QProgressBar,
                              QFileDialog,
+                             QMessageBox,
                              QDesktopWidget,
                              QListWidgetItem,
                              QFileSystemModel,
@@ -789,6 +790,7 @@ class FilesystemView(QTreeView):
         self.fs_model = QFileSystemModel(self)
         self.fs_model.setReadOnly(True)
         self.setModel(self.fs_model)
+        self.folder = folder
         self.setRootIndex(self.fs_model.setRootPath(folder))
         self.fs_model.removeColumn(1)
         self.setAlternatingRowColors(True)
@@ -803,6 +805,7 @@ class FilesystemView(QTreeView):
         folder = QFileDialog().getExistingDirectory(self,"Select directory",os.path.curdir)
         self.setRootIndex(self.fs_model.setRootPath(folder))
         self.expandAll()
+        self.folder = folder
         if hasattr(self.parent,'folder'):
             self.parent.folder.setText('{0}'.format(folder))
 
@@ -829,6 +832,62 @@ class FilesystemView(QTreeView):
             self.indexAt(e.pos()).row(),
             0,self.indexAt(e.pos()).parent())
         paths = get_tree_path([idx])
+        to_fetch = e.mimeData().text()
+        
+        files = []
+        for a in self.parent.aws_view.awsfiles:
+            if to_fetch in a:
+                files.append(a)
+        if not len(files):
+            print('No files listed.')
+            e.ignore()
+            return
+        path = [pjoin(self.folder,p) for p in paths][0]
+        if len(files)>1:
+            # Then there are multiple files, it must be a folder
+            localpath = pjoin(path,os.path.basename(to_fetch))
+        else:
+            localpath = path
+        if not os.path.isdir(localpath):
+            os.makedirs(localpath)
+        self.parent.to_log('Fetching to {0}'.format(localpath))
+        bucket = self.parent.aws_view.s3.Bucket(self.parent.config["analysis"])
+        for f in files:
+            print(f)
+            def get():
+                bucket.download_file(f,pjoin(localpath,os.path.basename(f)))
+            thread = threading.Thread(target=get)
+            thread.start()
+            self.parent.to_log('MANUAL COPY {0}'.format(f))
+            while thread.is_alive():
+                QApplication.processEvents()
+                time.sleep(0.1)
+        self.parent.to_log('Done fetching results to {0}'.format(localpath))
+
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Critical)
+        msg.setText("Do you want to delete the remote files?")
+        msg.setInformativeText("Do you want to delete remote files:")
+        msg.setWindowTitle("[NCAAS] Remote delete?")
+        msg.setDetailedText("The following files will be deleted: "+'\n'.join(files))
+        msg.setStandardButtons(QMessageBox.Ok | QMessageBox.No)
+        delete_files = dict(msg = False)
+        def msgboxok(b):
+            if 'OK' in b.text():
+                delete_files['msg'] = True
+            else:
+                print(b.text())
+        msg.buttonClicked.connect(msgboxok)
+        msg.exec_()
+        delete_files = delete_files['msg']
+
+        if delete_files:
+            # need to delete the remote data
+            for f in files:
+                self.parent.aws_view.s3.Object(self.parent.config["analysis"],f).delete()
+                self.parent.to_log('Remote delete: {0}'.format(f))
+
+        self.parent.to_log('FINISHED MANUAL COPY {0}'.format(to_fetch))
         self.setSelectionMode(3)
         e.ignore()
     
