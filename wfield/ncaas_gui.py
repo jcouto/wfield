@@ -379,10 +379,14 @@ class NCAASwrapper(QMainWindow):
         w = QWidget()
         l = QVBoxLayout()
         w.setLayout(l)
-        self.folder = QLabel('<b>' + folder + '<\b>')
+        self.folder = QPushButton(folder)
+        self.folder.setStyleSheet("font: bold")
         l.addWidget(self.folder)
         l.addWidget(self.fs_view)
         lay.addWidget(w)
+        def set_folder():
+            self.fs_view.query_root()
+        self.folder.clicked.connect(set_folder)
         self.open_editors = []        
         # AWS browser
         self.aws_view = AWSView(config,parent=self)
@@ -800,7 +804,7 @@ class FilesystemView(QTreeView):
         self.setRootIndex(self.fs_model.setRootPath(folder))
         self.expandAll()
         if hasattr(self.parent,'folder'):
-            self.parent.folder.setText('<b>{0}<\b>'.format(folder))
+            self.parent.folder.setText('{0}'.format(folder))
 
     def dragEnterEvent(self, e):
         print(e)
