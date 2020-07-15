@@ -68,6 +68,7 @@ defaultconfig = dict(analysis = 'cshl-wfield-preprocessing',
                      userfolder = 'ChurchlandLab',
                      instance_type =  'r5.16xlarge',
                      analysis_extension = '.dat',
+                     decompress_results = True,  # this will decompress the U matrix when downloading
                      config = dict(block_height = 90,
                                    block_width = 80,
                                    frame_rate = 30,
@@ -158,6 +159,9 @@ def ncaas_read_analysis_config(config):
                       sort_keys = True)
     with open(config,'r') as f:
         config = json.load(f)
+        for k in defaultconfig.keys():
+            if not k in config.keys(): # Use default
+                config[k] = defaultconfig[k]
     return config
 
 def s3_connect():
@@ -487,6 +491,30 @@ class NCAASwrapper(QMainWindow):
                             time.sleep(0.1)
                     self.to_log('Done fetching results to {0}'.format(localpath))
                     self.aws_view.aws_transfer_queue[i]['last_status'] = 'got_results'
+                    if self.config['decompress_results']:
+                        for f in resultsfiles:
+                            # read U and decompress this should become a function 
+                            if 'sparse_spatial.npz' in f:
+                                fname = pjoin(localpath,'sparse_spatial.npz')
+                                fcfg =  pjoin(localpath,'config.yaml')
+                                if os.path.isfile(fcfg):
+                                    with open(fcfg,'r') as fc:
+                                        import yaml
+                                        config = yaml.load(fc)
+                                        H,W = (config['fov_height'],config['fov_width'])
+                                    if os.path.isfile(fname):
+                                        from scipy.sparse import load_npz
+                                        Us = load_npz(fname)
+                                        U = np.squeeze(np.asarray(Us.todense()))
+                                        U = U.reshape([H,W,-1])
+                                        # This may overwrite.. prompt
+                                        np.save(fname.replace('sparse_spatial.npz','U.npy'),U)
+                                        self.to_log('Decompressed {0}'.format(f))
+                                    else:
+                                        print('Could not decompress (no file)')
+                                else:
+                                    print('Could not decompress (no config.yaml?)')
+
                     if self.delete_inputs:
                         # need to delete the remote data
                         configpath = os.path.dirname(t['awsdestination'])+'/'+'config.yaml' 
@@ -853,7 +881,6 @@ class FilesystemView(QTreeView):
         self.parent.to_log('Fetching to {0}'.format(localpath))
         bucket = self.parent.aws_view.s3.Bucket(self.parent.config["analysis"])
         for f in files:
-            print(f)
             def get():
                 bucket.download_file(f,pjoin(localpath,os.path.basename(f)))
             thread = threading.Thread(target=get)
@@ -863,7 +890,30 @@ class FilesystemView(QTreeView):
                 QApplication.processEvents()
                 time.sleep(0.1)
         self.parent.to_log('Done fetching results to {0}'.format(localpath))
-
+        if self.parent.config['decompress_results']:
+            for f in files:
+                # read U and decompress
+                # this should become a function 
+                if 'sparse_spatial.npz' in f:
+                    fname = pjoin(localpath,'sparse_spatial.npz')
+                    fcfg =  pjoin(localpath,'config.yaml')
+                    if os.path.isfile(fcfg):
+                        with open(fcfg,'r') as fc:
+                            import yaml
+                            config = yaml.load(fc)
+                            H,W = (config['fov_height'],config['fov_width'])
+                        if os.path.isfile(fname):
+                            from scipy.sparse import load_npz
+                            Us = load_npz(fname)
+                            U = np.squeeze(np.asarray(Us.todense()))
+                            U = U.reshape([H,W,-1])
+                            np.save(fname.replace('sparse_spatial.npz','U.npy'),U)
+                            self.parent.to_log('Decompressed {0}'.format(f))
+                        else:
+                            print('Could not decompress (no file)')
+                    else:
+                        print('Could not decompress (no config.yaml?)')
+                    
         msg = QMessageBox()
         msg.setIcon(QMessageBox.Critical)
         msg.setText("Do you want to delete the remote files?")
