@@ -871,6 +871,9 @@ class FilesystemView(QTreeView):
             e.ignore()
             return
         path = [pjoin(self.folder,p) for p in paths][0]
+        path = os.path.abspath(path)
+        if os.path.isfile(path):
+            path = os.path.dirname(path)
         if len(files)>1:
             # Then there are multiple files, it must be a folder
             localpath = pjoin(path,os.path.basename(to_fetch))
