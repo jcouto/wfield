@@ -330,10 +330,12 @@ The commands are:
                             help='Folder with dat file.')
         parser.add_argument('--mode', choices=('ecc','2d'),default='ecc',
                             help = 'Algorithm for  motion correction ') 
+        parser.add_argument('--chunksize', default=256,
+                            help = 'Frames per batch ') 
         
         args = parser.parse_args(sys.argv[2:])
         localdisk = args.foldername 
-        _motion(localdisk,mode = args.mode)
+        _motion(localdisk,mode = args.mode,chunksize = args.chunksize)
     def decompose(self):
         parser = argparse.ArgumentParser(
             description='Performs single value decomposition')
@@ -367,10 +369,12 @@ The commands are:
 
         _hemocorrect(localdisk,fs=args.fs)
         
-def _motion(localdisk,mode = 'ecc'):
+def _motion(localdisk,mode = 'ecc',chunksize=256):
     dat_path = glob(pjoin(localdisk,'*.dat'))[0]        
     dat = mmap_dat(dat_path, mode='r+')
-    (yshifts,xshifts),rshifts = motion_correct(dat,chunksize=512,mode = mode,
+    (yshifts,xshifts),rshifts = motion_correct(dat,
+                                               chunksize=256,
+                                               mode = mode,
                                      apply_shifts=True)
     del dat # close and finish writing
     shifts = np.rec.array([yshifts,xshifts],dtype=[('y','float32'),('x','float32')])
