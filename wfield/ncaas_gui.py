@@ -492,28 +492,32 @@ class NCAASwrapper(QMainWindow):
                     self.to_log('Done fetching results to {0}'.format(localpath))
                     self.aws_view.aws_transfer_queue[i]['last_status'] = 'got_results'
                     if self.config['decompress_results']:
-                        for f in resultsfiles:
-                            # read U and decompress this should become a function 
-                            if 'sparse_spatial.npz' in f:
-                                fname = pjoin(localpath,'sparse_spatial.npz')
-                                fcfg =  pjoin(localpath,'config.yaml')
-                                if os.path.isfile(fcfg):
-                                    with open(fcfg,'r') as fc:
-                                        import yaml
-                                        config = yaml.load(fc)
-                                        H,W = (config['fov_height'],config['fov_width'])
-                                    if os.path.isfile(fname):
-                                        from scipy.sparse import load_npz
-                                        Us = load_npz(fname)
-                                        U = np.squeeze(np.asarray(Us.todense()))
-                                        U = U.reshape([H,W,-1])
-                                        # This may overwrite.. prompt
-                                        np.save(fname.replace('sparse_spatial.npz','U.npy'),U)
-                                        self.to_log('Decompressed {0}'.format(f))
+                        try:
+                            for f in resultsfiles:
+                                # read U and decompress this should become a function 
+                                if 'sparse_spatial.npz' in f:
+                                    fname = pjoin(localpath,'sparse_spatial.npz')
+                                    fcfg =  pjoin(localpath,'config.yaml')
+                                    if os.path.isfile(fcfg):
+                                        with open(fcfg,'r') as fc:
+                                            import yaml
+                                            config = yaml.load(fc)
+                                            H,W = (config['fov_height'],config['fov_width'])
+                                        if os.path.isfile(fname):
+                                            from scipy.sparse import load_npz
+                                            Us = load_npz(fname)
+                                            U = np.squeeze(np.asarray(Us.todense()))
+                                            U = U.reshape([H,W,-1])
+                                            # This may overwrite.. prompt
+                                            np.save(fname.replace('sparse_spatial.npz','U.npy'),U)
+                                            self.to_log('Decompressed {0}'.format(f))
+                                        else:
+                                            print('Could not decompress (no file)')
                                     else:
-                                        print('Could not decompress (no file)')
-                                else:
-                                    print('Could not decompress (no config.yaml?)')
+                                        print('Could not decompress (no config.yaml?)')
+                        except Exception as err:
+                            self.parent.to_log('ERROR: FAILED TO DECOMPRESS. The error was dumped to the console.')
+                            print(err)
 
                     if self.delete_inputs:
                         # need to delete the remote data
@@ -894,29 +898,32 @@ class FilesystemView(QTreeView):
                 time.sleep(0.1)
         self.parent.to_log('Done fetching results to {0}'.format(localpath))
         if self.parent.config['decompress_results']:
-            for f in files:
-                # read U and decompress
-                # this should become a function 
-                if 'sparse_spatial.npz' in f:
-                    fname = pjoin(localpath,'sparse_spatial.npz')
-                    fcfg =  pjoin(localpath,'config.yaml')
-                    if os.path.isfile(fcfg):
-                        with open(fcfg,'r') as fc:
-                            import yaml
-                            config = yaml.load(fc)
-                            H,W = (config['fov_height'],config['fov_width'])
-                        if os.path.isfile(fname):
-                            from scipy.sparse import load_npz
-                            Us = load_npz(fname)
-                            U = np.squeeze(np.asarray(Us.todense()))
-                            U = U.reshape([H,W,-1])
-                            np.save(fname.replace('sparse_spatial.npz','U.npy'),U)
-                            self.parent.to_log('Decompressed {0}'.format(f))
+            try:
+                for f in files:
+                    # read U and decompress
+                    # this should become a function 
+                    if 'sparse_spatial.npz' in f:
+                        fname = pjoin(localpath,'sparse_spatial.npz')
+                        fcfg =  pjoin(localpath,'config.yaml')
+                        if os.path.isfile(fcfg):
+                            with open(fcfg,'r') as fc:
+                                import yaml
+                                config = yaml.load(fc)
+                                H,W = (config['fov_height'],config['fov_width'])
+                            if os.path.isfile(fname):
+                                from scipy.sparse import load_npz
+                                Us = load_npz(fname)
+                                U = np.squeeze(np.asarray(Us.todense()))
+                                U = U.reshape([H,W,-1])
+                                np.save(fname.replace('sparse_spatial.npz','U.npy'),U)
+                                self.parent.to_log('Decompressed {0}'.format(f))
+                            else:
+                                print('Could not decompress (no file)')
                         else:
-                            print('Could not decompress (no file)')
-                    else:
-                        print('Could not decompress (no config.yaml?)')
-                    
+                            print('Could not decompress (no config.yaml?)')
+            except Exception as err:
+                self.parent.to_log('ERROR: FAILED TO DECOMPRESS. The error was dumped to the console.')
+                print(err)
         msg = QMessageBox()
         msg.setIcon(QMessageBox.Critical)
         msg.setText("Do you want to delete the remote files?")
