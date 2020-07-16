@@ -82,7 +82,7 @@ The commands are:
             if os.path.isfile(fname):
                 with open(fname,'r') as f:
                     import yaml
-                    config = yaml.load(f)
+                    config = yaml.safe_load(f)
             H,W = (config['fov_height'],config['fov_width'])
             fname = pjoin(localdisk,'results','sparse_spatial.npz')
             if os.path.isfile(fname):
