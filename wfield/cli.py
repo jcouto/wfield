@@ -68,6 +68,7 @@ The commands are:
         parser.add_argument('foldername', action='store',default=None,type=str)
         parser.add_argument('--allen-reference', action='store',default='dorsal_cortex',type=str)
         parser.add_argument('--no-ncaas', action='store_true',default=False)
+        parser.add_argument('--correlation', action='store_true',default=False,help = 'Show the correlation window - dont do this with sparse matrices.')        
         parser.add_argument('--before-corr', action='store_true',
                             default=False,
                             help= 'Load SVT before hemodynamics correction.')
@@ -85,13 +86,16 @@ The commands are:
             H,W = (config['fov_height'],config['fov_width'])
             fname = pjoin(localdisk,'results','sparse_spatial.npz')
             if os.path.isfile(fname):
+                print('Loading sparse format.')
                 from scipy.sparse import load_npz
-                Us = load_npz(fname)
-                U = np.squeeze(np.asarray(Us.todense()))
-                U = U.reshape([H,W,-1])
+                U = load_npz(fname)
+                #U = np.squeeze(np.asarray(Us.todense()))
+                #U = U.reshape([H,W,-1])
+                dims = [H,W]
             SVT = np.load(pjoin(localdisk,'results','SVTcorr.npy'))
         elif os.path.isfile(fname):
             U = np.load(fname)
+            dims = U.shape[:2]
             if (not args.before_corr
                 and os.path.isfile(pjoin(localdisk,'SVTcorr.npy'))):
                 SVT = np.load(pjoin(localdisk,'SVTcorr.npy'))
@@ -99,7 +103,7 @@ The commands are:
                 SVT = np.load(pjoin(localdisk,'SVT.npy'))
         else:
             # try in a results folder (did it come from ncaas?)
-            print('Could not find: {0} '.format(fname))
+            raise OSError('Could not find: {0} '.format(fname))
             
         dat_path = glob(pjoin(localdisk,'*.dat'))
         if len(dat_path):
@@ -112,21 +116,23 @@ The commands are:
             average_path = pjoin(localdisk,'frames_average.npy')
             if os.path.isfile(average_path):
                 dat = np.load(average_path)
-            dat = dat.reshape([1,*dat.shape])
+                dat = dat.reshape([1,*dat.shape])
+
         trial_onsets = pjoin(localdisk,'trial_onsets.npy')
         if os.path.isfile(trial_onsets):
             trial_onsets = np.load(trial_onsets)
         else:
             trial_onsets = None
         
-        stack = SVDStack(U,SVT)
+        stack = SVDStack(U,SVT,dims = dims)
         from .widgets import QApplication,SVDViewer
         app = QApplication(sys.argv)
         w = SVDViewer(stack,
                       folder = localdisk,
                       raw = dat,
                       trial_onsets = trial_onsets,
-                      reference = args.allen_reference)
+                      reference = args.allen_reference,
+                      start_correlation = args.correlation)
         sys.exit(app.exec_())
         del dat
         

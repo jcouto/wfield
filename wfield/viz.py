@@ -42,6 +42,84 @@ def imshow_noborder(img,fig = None,figsize = [7,7],**kwargs):
     plt.imshow(img,**kwargs)
     return fig
 
+###############################################################
+#######################  NOTEBOOK WRAPPERS  ###################
+###############################################################
+
+def _handle_sparse(im,shape):
+    if issparse(im):
+        if shape is None:
+            raise ValueError('Supply shape = [H,W] when using sparse arrays')
+        im = np.asarray(im.todense()).reshape(shape)
+    return im
+
+def nb_play_movie(data,interval=30,shape = None,**kwargs):
+    ''' 
+    Play a movie from the notebook
+    '''
+    from ipywidgets import Play,jslink,HBox,IntSlider
+    from IPython.display import display
+
+    i = _handle_sparse(data[0],shape = shape)
+    im = plt.imshow(i,**kwargs)
+    slider = IntSlider(0,min = 0,max = data.shape[0]-1,step = 1,description='Frame')
+    play = Play(interval=interval,
+                value=0,
+                min=0,
+                max=data.shape[0]-1,
+                step=1,
+                description="Press play",
+                disabled=False)
+    jslink((play, 'value'), (slider, 'value'))
+    display(HBox([play, slider]))
+    def updateImage(change):
+        i = _handle_sparse(data[change['new']],shape=shape)
+        im.set_data(i)
+    slider.observe(updateImage, names='value')
+    return dict(fig = plt.gcf(),
+                ax=plt.gca(),
+                im= im,
+                update = updateImage)
+
+def nb_save_movie(data,filename,interval = 100,dpi = 90,shape=None,**kwargs):
+    '''
+    Replace nb_play_movie with this to save to a file.
+
+    Example:
+
+    nb_save_movie(tmp[:,:,::-1],
+                  filename = '~/Desktop/example.avi',
+                  clim = [.06,.2],
+                  extent = extent,
+                  cmap = 'hot', 
+                  alpha = 0.5);
+    '''
+    from tqdm import tqdm
+    from matplotlib.animation import FuncAnimation
+    def animate(frame):
+        global pbar
+        pbar.update(1)
+        i = _handle_sparse(data[frame],shape = shape)
+        im.set_data(i)        
+        return im,
+    fig = plt.gcf()
+    i = _handle_sparse(data[0],shape = shape)
+    im = plt.imshow(i,**kwargs)
+    animation = FuncAnimation(
+        fig,
+        animate,
+        np.arange(data.shape[0]),
+        fargs=[],
+        interval=interval)
+    global pbar
+    pbar = tqdm(desc = 'Saving movie ',total=data.shape[0])
+    animation.save(filename, dpi=dpi)
+    pbar.close()
+    plt.show()
+    print('Saved to {0}'.format(filename))
+
+
+
 ################################################################
 ##################### PYQTGRAPH WRAPPERS #######################
 ################################################################

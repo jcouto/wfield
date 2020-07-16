@@ -449,7 +449,7 @@ class RawDisplayWidget(ImageWidget):
     def set_image(self,i=None,redo_levels=False):
         if not i is None:
             self.iframe = i
-        img = self.stack[self.iframe,self.ichan]
+        img = self.stack[np.clip(0,self.stack.shape[0]-1,self.iframe),self.ichan]
         if self.adaptative_histogram:
             img = im_adapt_hist(img)
         if redo_levels:
@@ -563,24 +563,31 @@ class SVDDisplayWidget(ImageWidget):
         x = int(np.clip(x,0,self.stack.shape[1]))
         y = int(np.clip(y,0,self.stack.shape[2]))
         idx = np.ravel_multi_index((x,y),self.stack.shape[1:])
-        t = np.dot(self.stack.Uflat[idx,:],self.stack.SVT)
+        t = np.asarray(self.stack.Uflat[idx,:].dot(self.stack.SVT))
         return t
 
     def on_roi_update(self,i):
         idx = self.roiwidget.get_roi_flatidx(i)
         xidx = self.roiwidget.xidx + self.iframe
         xidx = np.clip(xidx,0,len(self.stack))
-        t = np.nanmean(np.dot(self.stack.Uflat[idx,:],
-                              self.stack.SVT[:,xidx[0]:xidx[1]]),
-                       axis=0).astype('float32')
+        if issparse(self.stack.Uflat):
+            t = np.nanmean(np.asarray(self.stack.Uflat[idx,:].todense()) @ self.stack.SVT[:,xidx[0]:xidx[1]],
+                           axis=0).astype('float32')
+
+        else:
+            t = np.nanmean(self.stack.Uflat[idx,:] @ self.stack.SVT[:,xidx[0]:xidx[1]],
+                           axis=0).astype('float32')
         time = np.arange(xidx[0],xidx[1])
         self.roiwidget.plots[i].setData(x = time,
                                         y = t+self.roiwidget.offset*i)#,connect=self.trial_mask)
 
     def plot_allenroi(self,i,idx):
-        t = np.nanmean(np.dot(self.stack.Uflat[idx,:],
-                              self.stack.SVT),
-                       axis=0).astype('float32')
+        if issparse(self.stack.Uflat):
+            t = np.nanmean(np.asarray(self.stack.Uflat[idx,:].todense()) @ self.stack.SVT,
+                           axis=0).astype('float32')
+        else:
+            t = np.nanmean(self.stack.Uflat[idx,:] @ self.stack.SVT,
+                           axis=0).astype('float32')
         time = np.arange(0,t.shape[0])
         self.roiwidget.plots[i].setData(x = time,
                                         y = t+self.roiwidget.offset*i)#,connect=self.trial_mask)
@@ -604,7 +611,6 @@ class SVDDisplayWidget(ImageWidget):
                 if not region is None:
                     if not [i,side] in self.regions_plot:
                         self.regions_plot.append([i,side])
-                        
                         H = contour_to_mask(region[side + '_x'],
                                             region[side + '_y'],
                                             self.stack.shape[1:])
@@ -621,7 +627,9 @@ class SVDDisplayWidget(ImageWidget):
                         self.allenplot.highlight(i,side,color)
 
 class SVDViewer(QMainWindow):
-    def __init__(self,stack, folder = None, raw = None, reference = 'dorsal_cortex', trial_onsets = None):
+    def __init__(self,stack, folder = None, raw = None, reference = 'dorsal_cortex',
+                 trial_onsets = None,
+                 start_correlation = False):
         super(SVDViewer,self).__init__()
         self.setWindowTitle('wfield')
         self.folder = folder
@@ -641,9 +649,9 @@ class SVDViewer(QMainWindow):
                             QMainWindow.AnimatedDocks)
         self.roiwidget = ROIPlotWidget(stack)        
         self.displaywidget = SVDDisplayWidget( self.stack,parent = self,reference = self.referencename)
-
-        self.localcorrwidget = LocalCorrelationWidget(stack)
-        
+        if start_correlation:
+            self.localcorrwidget = LocalCorrelationWidget(stack)
+            
         if not self.raw is None:
             self.allenparwidget = AllenMatchTable(landmarks_file = landmarks_file,
                                                   reference = self.referencename,
@@ -655,21 +663,23 @@ class SVDViewer(QMainWindow):
         self.svdtab = QDockWidget('Reconstructed')
         self.svdtab.setWidget(self.displaywidget)
         self.addDockWidget(Qt.TopDockWidgetArea,self.svdtab)        
-        # Pixel correlation 
         # Raw data
         if not raw is None:
             self.rawtab = QDockWidget('Raw data')
             self.rawtab.setWidget(self.rawwidget)
             self.addDockWidget(Qt.TopDockWidgetArea,self.rawtab)
-            
-        self.lcorrtab = QDockWidget('Pixel correlation')
-        self.lcorrtab.setWidget(self.localcorrwidget)
-        self.addDockWidget(Qt.TopDockWidgetArea,self.lcorrtab)
+        # Pixel correlation 
+        if hasattr(self,'localcorrwidget'):
+            self.lcorrtab = QDockWidget('Pixel correlation')
+            self.lcorrtab.setWidget(self.localcorrwidget)
+            self.addDockWidget(Qt.TopDockWidgetArea,self.lcorrtab)
         if not raw is None:
-            self.tabifyDockWidget(self.lcorrtab,self.rawtab)
+            if hasattr(self,'lcorrtab'):
+                self.tabifyDockWidget(self.lcorrtab,self.rawtab)
             self.tabifyDockWidget(self.rawtab,self.svdtab)
         else:
-            self.tabifyDockWidget(self.lcorrtab,self.svdtab)
+            if hasattr(self,'lcorrtab'):
+                self.tabifyDockWidget(self.lcorrtab,self.svdtab)
         self.roitab = QDockWidget("ROI", self)
         self.roitab.setWidget(self.roiwidget)
         self.addDockWidget(Qt.BottomDockWidgetArea,self.roitab)
@@ -758,8 +768,13 @@ class LocalCorrelationWidget(ImageWidget):
         U = stack.U
         SVT = stack.SVT
         from .utils_svd import svd_pix_correlation
-        self.localcorr = svd_pix_correlation(U,SVT,
-                                             norm_svt=True)
+        try:
+            self.localcorr = svd_pix_correlation(U,SVT,
+                                                 dims = stack.shape[1:],
+                                                 norm_svt=True)
+        except:
+            print('Could not compute correlation (sparse mode?)')
+            return
         self.levels = [0,1]
         
         pos = np.array([0, 0.5, 1.])

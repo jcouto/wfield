@@ -17,21 +17,28 @@
 from .utils import *
 
 class svd_pix_correlation():
-    def __init__(self,U,SVT,norm_svt=False):
+    def __init__(self,U,SVT,dims = None, norm_svt=False):
         '''
         Local correlation using the decomposed matrices.
         '''
         normed = SVT.copy()
-        self.dims = U.shape[:2]
-        self.U = U.copy().reshape([-1,U.shape[-1]])
+        if issparse(U):
+            if dims is None:
+                raise ValueError('Supply dims when using with sparse arrays.')
+            self.U = U
+        else:
+            self.dims = U.shape[:2]
+            self.U = U.copy().reshape([-1,U.shape[-1]])
         if norm_svt:
             # Careful interpreting the results with normalized components...
             from sklearn.preprocessing import normalize
             normed = normalize(SVT,norm='l2',axis=0)
         # compute the covariance of the temporal components and estimate the pixelwise variance 
         self.cov_svt = np.cov(normed).astype('float32')
+        #import ipdb
+        #ipdb.set_trace()
         self.var_pix = np.sum(np.conj((self.U @ self.cov_svt).T)*self.U.T, axis = 0)
-        
+                
     def get(self,x,y):
         xy=np.ravel_multi_index([x,y],dims=self.dims)
         # Estimate the cov for a pixel from the covariance of the temporal components
@@ -52,6 +59,6 @@ class svd_pix_correlation():
                 xy = [int(event.ydata),int(event.xdata)]
                 self.pylab_im.set_data(self.get(*xy))
                 fig.canvas.draw()
-            fig.cancas.flush_events()
+            fig.canvas.flush_events()
         fig.canvas.mpl_connect('button_press_event', update)
     

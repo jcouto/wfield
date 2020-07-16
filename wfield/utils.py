@@ -30,6 +30,7 @@ from scipy.signal import butter, filtfilt
 from skimage.transform import warp
 from scipy.interpolate import interp1d
 from scipy.ndimage import morphology
+from scipy.sparse import load_npz, issparse,csr_matrix
 
 print = partial(print, flush=True)
 
@@ -55,13 +56,27 @@ def im_adapt_hist(im,clip_limit = .1, grid_size=(8,8)):
     clahe = cv2.createCLAHE(clipLimit=clip_limit, tileGridSize=grid_size)
     return clahe.apply(im)
 
-def im_apply_transform(im,M):
-    return warp(im,M,
-                order = 1,
-                mode='constant',
-                cval = 0,
-                clip=True,
-                preserve_range=True)
+def im_apply_transform(im,M,dims = None):
+    if issparse(im):
+        # then reshape before
+        if dims is None:
+            raise ValueError('Provide dims when warping sparse matrices.')
+        shape = im.shape
+        tmp  = np.asarray(im.todense()).reshape(dims)
+        tmp = warp(tmp,M,
+                   order = 1,
+                   mode='constant',
+                   cval = 0,
+                   clip=True,
+                   preserve_range=True)
+        return csr_matrix(tmp.reshape(shape))
+    else:    
+        return warp(im,M,
+                    order = 1,
+                    mode='constant',
+                    cval = 0,
+                    clip=True,
+                    preserve_range=True)
 
 def lowpass(X, w = 7.5, fs = 30.):
     b, a = butter(2,w/(fs/2.), btype='lowpass');
@@ -105,17 +120,31 @@ def make_overlapping_blocks(dims,blocksize=128,overlap=16):
             blocks.append([(a,np.clip(a+blocksize,0,w)),(b,np.clip(b+blocksize,0,h))])
     return blocks
 
-def reconstruct(u,svt):
-    dims = u.shape
-    return np.dot(u.reshape([-1,dims[-1]]),svt).reshape((*dims[:2],-1)).transpose(-1,0,1).squeeze()
+def reconstruct(u,svt,dims = None):
+    if issparse(u):
+        if dims is None:
+            raise ValueError('Supply dims = [H,W] when using sparse arrays')
+    else:
+        if dims is None:
+            dims = u.shape[:2]
+    return u.dot(svt).reshape((*dims,-1)).transpose(-1,0,1).squeeze()
 
 
 class SVDStack(object):
-    def __init__(self,U,SVT,dtype = 'float32'):
+    def __init__(self, U, SVT, dims = None, dtype = 'float32'):
         self.U = U.astype('float32')
-        self.Uflat = self.U.reshape(-1,self.U.shape[-1])
         self.SVT = SVT.astype('float32')
-        dims = U.shape[:2]
+        self.issparse = False
+        if issparse(U):
+            self.issparse = True
+            if dims is None:
+                raise ValueError('Supply dims = [H,W] when using sparse arrays')
+            self.Uflat = self.U
+        else:
+            if dims is None:
+                dims = U.shape[:2]
+            self.Uflat = self.U.reshape(-1,self.U.shape[-1])
+   
         self.warped = False
         self.M = None
         self.shape = [SVT.shape[1],*dims]
@@ -131,12 +160,14 @@ class SVDStack(object):
         else:
             self.originalU = self.U.copy()
             if not self.M is None:
-                U = np.stack(runpar(im_apply_transform,self.U.transpose([2,0,1]),
-                                                       M = self.M)).transpose([1,2,0])
+                if self.issparse:
+                    U = np.stack(runpar(im_apply_transform,self.U.transpose([2,0,1]),
+                                    M = self.M)).transpose([1,2,0])
+
                 self.U = U
                 self.warped = True
         self.Uflat = self.U.reshape(-1,self.U.shape[-1])
-        
+        return
     def __len__(self):
         return self.SVT.shape[1]
     def __getitem__(self,*args):
@@ -145,13 +176,13 @@ class SVDStack(object):
             idxz = range(*args[0].indices(self.shape[0]))
         else:
             idxz = args[0]        
-        return reconstruct(self.U,self.SVT[:,idxz])
+        return reconstruct(self.U,self.SVT[:,idxz],dims = self.shape[1:])
     def get_timecourse(xy):
         # TODO: this needs a better interface
         x = int(np.clip(xy[0],0,self.shape[1]))
         y = int(np.clip(yy[1],0,self.shape[2]))
         idx = np.ravel_multi_index((x,y),self.shape[1:])
-        t = np.dot(self.U.reshape([-1,self.U.shape[-1]])[idx,:],self.SVT)
+        t = self.Uflat[idx,:].dot(self.SVT)
         return t
 
 def get_trial_baseline(idx,frames_average,onsets):
