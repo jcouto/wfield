@@ -22,7 +22,8 @@ Here to obtain a [dataset](http://repository.cshl.edu/id/eprint/38599/) that can
   
   - denoised/decomposed data are stored as `npy` arrays <br /> 
   `U.npy` are the spatial components `(H, W, NCOMPONENTS)` <br />
-  `VST.npy` are the temporal components `(NCOMPONENTS, NFRAMES)` <br /> 
+  `SVT.npy` are the temporal components `(NCOMPONENTS, NFRAMES)` <br />
+  `sparse_spatial.npz` are the spatial components from denoised PMD `(H*W,NCOMPONENTS)` these are sparse matrices stored in compressed format. <br />
   
   - `VSTcorr.npy` is the hemodynamic corrected temporal components `(NCOMPONENTS, NFRAMES)`
   
