@@ -345,13 +345,13 @@ class RawDisplayWidget(ImageWidget):
         self.ichan  = 0
         self.warp_im = False
         tmp = self.stack[:np.clip(100,0,len(self.stack))]
-        self.levels = np.nanpercentile(tmp,[5,99])
         self._init_ui()
         self._add_hist()
-        #self.hist.setHistogramRange(*self.levels)
         self.adaptative_histogram = False
         self.allen_show_areas = False
         self.set_image(self.iframe)
+        self.hist.setLevels(*np.percentile(tmp,[1,99]))
+
         self.win.scene().sigMouseClicked.connect(self.mouseMoved) # not ready yet    
         
         if hasattr(self.parent,'allenparwidget'):
@@ -417,7 +417,7 @@ class RawDisplayWidget(ImageWidget):
         
         def uhist(val):
             self.adaptative_histogram = val
-            self.set_image(redo_levels = True)
+            self.set_image()
         def uwarp(val):
             self.warp_im = val
             self.set_image()
@@ -446,18 +446,16 @@ class RawDisplayWidget(ImageWidget):
         self.wchan.valueChanged.connect(uchan)
         self.wallen.stateChanged.connect(uallen)
 
-    def set_image(self,i=None,redo_levels=False):
+    def set_image(self,i=None,):
         if not i is None:
             self.iframe = i
         img = self.stack[np.clip(0,self.stack.shape[0]-1,self.iframe),self.ichan]
         if self.adaptative_histogram:
             img = im_adapt_hist(img)
-        if redo_levels:
-            self.levels = np.nanpercentile(img,[5,99])
         if self.warp_im:
             if hasattr(self.parent,'M'):
                 img = im_apply_transform(img,self.parent.M)
-        self.im.setImage(img,levels = self.levels,autoLevels=False)
+        self.im.setImage(img, autoLevels=False)
         if hasattr(self,'roiwidget'):
             self.roiwidget.line.setPos((self.iframe,0))
             self.roiwidget.update()
@@ -497,15 +495,14 @@ class SVDDisplayWidget(ImageWidget):
         self.roiwidget = self.parent.roiwidget
         self.regions_plot = []
         self.iframe = np.clip(100,0,len(self.stack))
-        tmp = self.stack[:np.clip(100,0,len(self.stack))]
-        self.levels = np.nanpercentile(tmp,[5,99])
+        tmp = self.stack[1:np.clip(100,0,len(self.stack))]
         self._init_ui()
         self._add_hist()
-        #self.hist.setHistogramRange(*self.levels)
         self.allen_show_areas = False
         self.set_image(self.iframe)
         self.win.scene().sigMouseClicked.connect(self.mouseMoved)    
-        
+        self.hist.setLevels(*np.percentile(tmp,[1,99]))
+
     def _init_ui(self):
         w = QWidget()
         l = QHBoxLayout()
@@ -557,7 +554,7 @@ class SVDDisplayWidget(ImageWidget):
         if not i is None:
             self.iframe = i
         img = self.stack[self.iframe]
-        self.im.setImage(img,autoLevels = False, levels = self.levels)
+        self.im.setImage(img, autoLevels = False)
         
     def get_xy(self,x,y):
         x = int(np.clip(x,0,self.stack.shape[1]))
@@ -780,17 +777,20 @@ class LocalCorrelationWidget(ImageWidget):
         pos = np.array([0, 0.5, 1.])
         color = np.array([[0,0,255,255], [255,255,255,255], [255,0,0,255]], dtype=np.ubyte)
         cmap = pg.ColorMap(pos, color)
-        lut = cmap.getLookupTable(0, 1.0, 256)
+        lut = cmap.getLookupTable(0, 1., 256)
 
         self._add_hist()
         self.hist.gradient.setColorMap(cmap)
-        self.hist.setHistogramRange(*self.levels)
+        self.hist.setLevels(*self.levels)
 
-        self.set_image([0,0])
+        self.set_image([100,100])
         self.win.scene().sigMouseMoved.connect(self.mouseMoved)
         
     def set_image(self,xy=[0,0]):
-        img = (self.localcorr.get(*xy)+1)/2.
+        img = self.localcorr.get(*xy)
+        if not img is None:
+            img += 1.
+            img /= 2.
         self.im.setImage(img,autoLevels = False)
 
     def mouseMoved(self,pos):

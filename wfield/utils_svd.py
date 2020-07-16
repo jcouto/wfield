@@ -32,19 +32,20 @@ class svd_pix_correlation():
         if norm_svt:
             # Careful interpreting the results with normalized components...
             from sklearn.preprocessing import normalize
-            normed = normalize(SVT,norm='l2',axis=0)
+            normed = normalize(SVT,norm='l1',axis=1)
         # compute the covariance of the temporal components and estimate the pixelwise variance 
         self.cov_svt = np.cov(normed).astype('float32')
-        #import ipdb
-        #ipdb.set_trace()
-        self.var_pix = np.sum(np.conj((self.U @ self.cov_svt).T)*self.U.T, axis = 0)
+        self.var_pix = np.sum((self.U@self.cov_svt).T.conj()*self.U.T,axis = 0)
                 
     def get(self,x,y):
-        xy=np.ravel_multi_index([x,y],dims=self.dims)
+        try:
+            xy=np.ravel_multi_index([x,y],dims=self.dims)
+        except ValueError:
+            return None
         # Estimate the cov for a pixel from the covariance of the temporal components
-        cov_pix = ((self.U[xy,:] @ self.cov_svt) @ self.U.T)
+        cov_pix = self.U[xy,:] @ self.cov_svt @ (self.U.T)
         # Normalize by the pixelwise
-        std_pix = (self.var_pix[xy]**.5) * self.var_pix**.5
+        std_pix = (self.var_pix[xy]**.5) * (self.var_pix**.5)
         cov_pix[xy] = np.nan
         return (cov_pix/std_pix).reshape(self.dims)
 
