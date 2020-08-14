@@ -43,7 +43,7 @@ def load_dat(filename,
         meta = os.path.splitext(filename)[0].split('_')
     if dtype is None:
         dtype = meta[-1]
-        dt = np.dtype(dtype)
+    dt = np.dtype(dtype)
     if shape is None:
         shape = [int(m) for m in meta[-4:-1]]
     if nframes is None:
