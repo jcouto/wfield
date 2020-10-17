@@ -49,6 +49,7 @@ from PyQt5.QtWidgets import (QApplication,
                              QAbstractItemView,
                              QMenu, QAction)
 
+from PyQt5.QtWebEngineWidgets import QWebEngineView
 from PyQt5 import QtCore
 from PyQt5.QtGui import QStandardItem, QStandardItemModel,QColor
 from PyQt5.QtCore import Qt, QTimer,QMimeData
@@ -223,6 +224,7 @@ class CredentialsManager(QDockWidget):
         ncaasconfig_json = json.dumps(self.ncaasconfig,
                                       indent=4,
                                       sort_keys=True)
+        self.configfile = configfile
         mainw = QWidget()
         self.setWidget(mainw)
         lay = QFormLayout()
@@ -252,23 +254,48 @@ class CredentialsManager(QDockWidget):
         
         self.configedit = QTextEdit(ncaasconfig_json)
         lay.addRow(QLabel('NCAAS settings'),self.configedit)
-        self.save = QPushButton('Save')
-        def save():
+
+        web = QWebEngineView()
+        web.load(QtCore.QUrl("http://www.neurocaas.org/profile/"))
+        lay.addRow(web)
+        self.html = ''
+        def parsehtml():
+            page = web.page()
+            def call(var):
+                self.html = var
+                tt = var.split('\n')
+                values = []
+                extra = '<input class="form-control" type="text" value="'
+                for i,t in enumerate(tt):
+                    if extra in t:
+                        values.append(t.replace(extra,'').strip(' ').split('"')[0])
+                if len(values)>=4:
+                    self.cred_access.setText(values[2])
+                    self.cred_secret.setText(values[3])
+
+            page.toHtml(call)
+        web.loadFinished.connect(parsehtml)
+        #self.getsite = QPushButton('Get credentials from website')
+        def setHtml(self,html):
+            self.html = html
+        #def getsite():
             
-            ncaas_set_aws_keys(**self.awsinfo)
-            print('Saved AWS keys.')
-            try:
-                from io import StringIO
-                pars = json.load(StringIO(self.configedit.toPlainText()))
-            except Exception as E:
-                print('Error in the configuration file, did not save')
-                return
-            with open(configfile,'w') as fd:
-                json.dump(pars,fd,indent=4,sort_keys = True)
-        lay.addRow(self.save)
-        self.save.setStyleSheet("font: bold")
-        self.save.clicked.connect(save)
+        #lay.addRow(self.getsite)
+        #self.getsite.setStyleSheet("font: bold")
+        #self.getsite.clicked.connect(getsite)
         self.show()
+    def closeEvent(self,event):
+        ncaas_set_aws_keys(**self.awsinfo)
+        print('Saved AWS keys.')
+        try:
+            from io import StringIO
+            pars = json.load(StringIO(self.configedit.toPlainText()))
+        except Exception as E:
+            print('Error in the configuration file, did not save')
+            return
+        with open(self.configfile,'w') as fd:
+            json.dump(pars,fd,indent=4,sort_keys = True)
+        event.accept()
         
 class TextEditor(QDockWidget):
     def __init__(self,path,s3=None,bucket=None,
@@ -977,11 +1004,15 @@ def main():
         print('NeuroCAAS credentials not found.')
         cred = CredentialsManager()
         app.exec_()
+    from botocore.exceptions import ClientError
     try:
-        s3_connect()
-    except Exception as E:
+        wind = NCAASwrapper(folder = '.')
+        sys.exit(app.exec_())
+        #s3_connect()
+    except ClientError:
         print('Could not connect to NeuroCAAS, check credentials.')
-        sys.exit()
-        
-    wind = NCAASwrapper(folder = '.')
-    sys.exit(app.exec_())
+        cred = CredentialsManager()
+        app.exec_()
+        awskeys = ncaas_read_aws_keys()
+        wind = NCAASwrapper(folder = '.')
+        sys.exit(app.exec_())

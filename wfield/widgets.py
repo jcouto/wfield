@@ -636,7 +636,7 @@ class SVDViewer(QMainWindow):
         landmarks_file = pjoin(self.folder,reference+'_landmarks.json')
 
         self.stack = stack
-        self.trial_onsets = trial_onsets
+        self.trial_onsets = trial_onsets.astype(np.int32)
         self.raw = raw
         self.trial_mask = np.ones((self.stack.SVT.shape[-1]),dtype=bool)
         if not self.trial_onsets is None:
@@ -712,7 +712,7 @@ class RawViewer(QMainWindow):
         self.referencename = reference
         landmarks_file = pjoin(self.folder,reference+'_landmarks.json')
         
-        self.trial_onsets = trial_onsets
+        self.trial_onsets = trial_onsets.astype(np.int32)
         self.trial_mask = np.ones((self.raw.shape[0]),dtype=bool)
         if not self.trial_onsets is None:
             self.trial_mask[self.trial_onsets[:,1]] = False

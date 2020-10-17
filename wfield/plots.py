@@ -56,10 +56,11 @@ def plot_summary_motion_correction(shifts, localdisk = None,
 
 
 def plot_summary_hemodynamics_dual_colors(rcoeffs,
-                                          SVT,
+                                          SVT_470,
+                                          SVT_405,
                                           U,
                                           T,
-                                          frame_rate=30.,
+                                          frame_rate=15.,
                                           duration_frames = 60,
                                           outputdir=None):
     '''
@@ -70,18 +71,20 @@ def plot_summary_hemodynamics_dual_colors(rcoeffs,
     pidx = np.unravel_index(np.argmax(gaussian(rcoeffs,5)),
                            rcoeffs.shape) + np.array([0,-50])
 
-    k,nframes = SVT.shape
+    k,nframes = SVT_470.shape
     u = U[pidx[0]-2:pidx[0]+2,
           pidx[1]-2:pidx[1]+2,:].reshape([-1,k])
     mcoeff = np.mean(rcoeffs[pidx[0]-2:pidx[0]+2,
           pidx[1]-2:pidx[1]+2].reshape([-1]))
     # gets 60 seconds of data
-    nframes = int(np.clip(duration_frames*frame_rate,0,SVT.shape[1]))
-    SVTa = SVT[:,0:nframes:2] 
-    SVTb = SVT[:,1:nframes:2]
+    nframes = int(np.clip(duration_frames*frame_rate,0,SVT_470.shape[1]))
+    SVTa = SVT_470#SVT[:,0:nframes:2] 
+    SVTb = SVT_405#SVT[:,1:nframes:2]
     # similar proprocessing as for correction
-    SVTa = highpass(SVTa,.1,fs = frame_rate/2)
-    SVTb = highpass(SVTb,.1,fs = frame_rate/2)
+    SVTa = highpass(SVTa,.1,fs = frame_rate)
+    SVTb = highpass(SVTb,.1,fs = frame_rate)
+    SVTb = lowpass(SVTb,10., fs = frame_rate)
+
     # SVTb = lowpass(SVTb,w = 15.,fs = frame_rate/2)
     SVTa = (SVTa.T - np.nanmean(SVTa,axis=1)).T.astype('float32')
     SVTb = (SVTb.T - np.nanmean(SVTb,axis=1)).T.astype('float32')

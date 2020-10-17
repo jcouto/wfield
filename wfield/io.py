@@ -177,11 +177,15 @@ def split_imager_channels(fname_mj2):
     fname_analog = fname_mj2.replace('Frames_','Analog_').replace('.mj2','.dat')
     stack = read_mj2_frames(fname_mj2)
     dat,header = read_imager_analog(fname_analog)
+    stim_onset,stim_offset = analog_ttl_to_onsets(dat[-4,:],time=None)
+    ch1,ch1_ = analog_ttl_to_onsets(dat[-2,:],time=None)
+    ch2,ch2_ = analog_ttl_to_onsets(dat[-1,:],time=None)
     info = dict(baseline = header['baseline'],
-                onset = header['onset'],
-                ch2 = analog_ttl_to_onsets(dat[-1,:],time=None),
-                ch1 = analog_ttl_to_onsets(dat[-2,:],time=None),
-                stim_onset = analog_ttl_to_onsets(dat[-4,:],time=None))
+                ch1 = ch1,
+                ch2 = ch2,
+                stim_onset = stim_onset,
+                stim_offset = stim_offset,
+                onset = header['onset'])
     nframes = stack.shape[0]
     avgnorm = stack.reshape((nframes,-1))
     avgnorm = avgnorm.mean(axis=1)
@@ -223,7 +227,7 @@ def split_imager_channels(fname_mj2):
 
 def parse_imager_mj2_folder(folder, destination, 
                             nchannels = 2,
-                            chunksize = 4,
+                            chunksize = 1,
                             dtype = 'uint16'):
     fnames_mj2 = natsorted(glob(pjoin(folder,'Frames_*.mj2')))
     if not len(fnames_mj2):
@@ -243,24 +247,34 @@ def parse_imager_mj2_folder(folder, destination,
     framesinfo = []
     cnt_trials = 0
     frames_avg = np.zeros((nchannels,w,h),dtype=float).squeeze()
-    fnames_mj2_chunks = [fnames_mj2[a:b] for a,b in chunk_indices(len(fnames_mj2),chunksize)]
+    fnames_mj2_chunks = fnames_mj2
+    if chunksize > 1: 
+        fnames_mj2_chunks = [fnames_mj2[a:b] for a,b in chunk_indices(len(fnames_mj2),chunksize)]
     with open(dat_path,'wb') as dat:
         for itrial,f in tqdm(enumerate(fnames_mj2_chunks),
                              total=len(fnames_mj2_chunks),
                              desc='Collecting imager trials'):
-            res = runpar(split_imager_channels,f)
-            #         ch1,ch2,info = split_imager_channels(f)
+            if chunksize > 1: 
+                res = runpar(split_imager_channels,f)
+            else:
+                res = [split_imager_channels(f)]
             for ch1,ch2,info in res:
                 cnt_trials += 1
                 if ch1 is None:
                     print('Skipped trial {0} (no frames).'.format(f))
                     continue
                 # compute the stimuli onsets
-                if not len(info['stim_onset']):
+                if not len(info['stim_onset']) and not len(info['stim_offset']):
                     print('Trial {0} had no stimulus; skiped trial.'.format(cnt_trials))
                     continue
+                elif not len(info['stim_onset']):
+                    stim_onset_frames = 0 # if there is was an offset but no onset, the stim onset is the first frame (this happens on the visual stim case...) 
                 else:
-                    stim_onset_frames = np.where(info['ch1']<info['stim_onset'])[0][-1]
+                    try:
+                        stim_onset_frames = np.where(info['ch1']<info['stim_onset'])[0][-1]
+                    except:
+                        print('There was an error in the imager: {0}'.format(info['stim_onset']))
+                        stim_onset_frames = 0 # if there is was an offset but no onset, the stim onset is the first frame (this happens on the visual stim case...) 
                 d = np.stack([ch1,ch2]).transpose([1,0,2,3])
                 frames_avg += np.mean(d,axis = 0).squeeze()
                 d = d.reshape([-1,w,h])

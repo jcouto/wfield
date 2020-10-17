@@ -93,8 +93,9 @@ def analog_ttl_to_onsets(dat,time=None, mfilt=3):
     if medfilt:
         dat = medfilt(dat,mfilt)
     tt = np.diff(dat.astype(np.float32))
-    onsets = np.where(tt-np.max(tt)/2 > 0)[0]+1
-    return time[onsets]
+    onsets = np.where(tt-np.max(np.abs(tt))/2 > 0)[0]+1
+    offsets = np.where(tt+np.max(np.abs(tt))/2 < 0)[0]+1
+    return time[onsets],time[offsets]
 
 def chunk_indices(nframes, chunksize = 512, min_chunk_size = 16):
     '''
@@ -177,7 +178,7 @@ class SVDStack(object):
         else:
             idxz = args[0]        
         return reconstruct(self.U,self.SVT[:,idxz],dims = self.shape[1:])
-    def get_timecourse(xy):
+    def get_timecourse(self,xy):
         # TODO: this needs a better interface
         x = int(np.clip(xy[0],0,self.shape[1]))
         y = int(np.clip(yy[1],0,self.shape[2]))

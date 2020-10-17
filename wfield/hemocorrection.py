@@ -25,28 +25,28 @@ def _hemodynamic_find_coeffs(U,SVTa,SVTb):
     eps = 1.e-10 # so we never divide by zero
     return np.nansum(a*b,axis = 1)/(np.nansum(b*b,axis = 1)+eps)
 
-def hemodynamic_correction(U, SVT,
-                           fs=60.,
-                           freq_lowpass = 15.,
+def hemodynamic_correction(U, SVT_470,SVT_405,
+                           fs=30.,
+                           freq_lowpass = 14.,
                            freq_highpass = 0.1,
                            nchunks = 1024,
                            run_parallel = True):
     # split channels and subtract the mean to each
-    SVTa = SVT[:,0::2] 
-    SVTb = SVT[:,1::2]
+    SVTa = SVT_470#[:,0::2]
+    SVTb = SVT_405#[:,1::2]
 
     # reshape U
     dims = U.shape
     U = U.reshape([-1,dims[-1]])
 
     # Single channel sampling rate
-    fs = fs/2.
+    fs = fs
     # Highpass filter
     if not freq_highpass is None:
         SVTa = highpass(SVTa,w = freq_highpass, fs = fs)
         SVTb = highpass(SVTb,w = freq_highpass, fs = fs)
     if not freq_lowpass is None:
-        if freq_lowpass <= fs/2:
+        if freq_lowpass < fs/2:
             SVTb = lowpass(SVTb,freq_lowpass, fs = fs)
         else:
             print('Skipping lowpass on the violet channel.')
@@ -75,7 +75,7 @@ def hemodynamic_correction(U, SVT,
     # find the transformation
     T = np.dot(np.linalg.pinv(U),(U.T*rcoeffs).T)
     # apply correction
-    SVTcorr = SVTa - np.dot(T.T,SVTb)
+    SVTcorr = SVTa - np.dot(T,SVTb)
     # return a zero mean SVT
     SVTcorr = (SVTcorr.T - np.nanmean(SVTcorr,axis=1)).T.astype('float32')
     # put U dims back in case its used sequentially

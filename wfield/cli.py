@@ -130,7 +130,7 @@ The commands are:
         w = SVDViewer(stack,
                       folder = localdisk,
                       raw = dat,
-                      trial_onsets = trial_onsets,
+                      trial_onsets = trial_onsets.astype(int),
                       reference = args.allen_reference,
                       start_correlation = args.correlation)
         sys.exit(app.exec_())
@@ -178,7 +178,7 @@ The commands are:
         app = QApplication(sys.argv)
         w = RawViewer(raw = dat,
                       folder = localdisk,
-                      trial_onsets = trial_onsets,
+                      trial_onsets = trial_onsets.astype(int),
                       reference = args.allen_reference)
         sys.exit(app.exec_())
         del dat
@@ -411,7 +411,7 @@ Skipping trial frame average because there was no trial_onsets.npy in the folder
                 frames_average)
         return frames_average
     frames_average_trials = frames_average_for_trials(dat,
-                                                      trial_onsets['iframe'],
+                                                      trial_onsets[:,1].astype(int),
                                                       nbaseline_frames)
     
     np.save(pjoin(localdisk,'frames_average.npy'),
@@ -424,7 +424,7 @@ def _decompose(localdisk, k):
     frames_average = np.load(pjoin(localdisk,'frames_average.npy'))
     if len(frames_average)>3:
         trial_onsets = np.load(pjoin(localdisk,'trial_onsets.npy'))
-        onsets = trial_onsets['iframe']
+        onsets = trial_onsets[:,1].astype(int)
 
     else:
         onsets = None
@@ -437,12 +437,25 @@ def _hemocorrect(localdisk,fs):
     U = np.load(pjoin(localdisk,'U.npy'))
     SVT = np.load(pjoin(localdisk,'SVT.npy'))
 
-    SVTcorr, rcoeffs, T = hemodynamic_correction(U, SVT, fs=fs)        
+    SVT_470 = SVT[:,0::2]
+    t = np.arange(SVT.shape[1]) # interpolate the violet
+    from scipy.interpolate import interp1d
+    SVT_405 = interp1d(t[1::2],SVT[:,1::2],axis=1,
+                       fill_value='extrapolate')(t[0::2])
+    SVTcorr, rcoeffs, T = hemodynamic_correction(U, SVT_470, SVT_405, fs=fs)  
 
     np.save(pjoin(localdisk,'rcoeffs.npy'),rcoeffs)
     np.save(pjoin(localdisk,'T.npy'),T)
     np.save(pjoin(localdisk,'SVTcorr.npy'),SVTcorr)
-            
+    from .plots import plot_summary_hemodynamics_dual_colors
+    plot_summary_hemodynamics_dual_colors(rcoeffs,
+                                          SVT_470,
+                                          SVT_405,
+                                          U,
+                                          T,
+                                          frame_rate=fs,
+                                          duration_frames = 60,
+                                          outputdir = localdisk)            
     
 def main():
     CLIParser()
