@@ -142,7 +142,7 @@ def dual_color_hemodymamic_correction(U,SVT_470,SVT_405,
                                               U,
                                               T,
                                               frame_rate=frame_rate,
-                                              duration_frames = 60,
+                                              duration = 12,
                                               outputdir = output_folder);
     except Exception as err:
         print('There was an issue plotting.')

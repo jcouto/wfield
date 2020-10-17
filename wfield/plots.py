@@ -61,7 +61,7 @@ def plot_summary_hemodynamics_dual_colors(rcoeffs,
                                           U,
                                           T,
                                           frame_rate=15.,
-                                          duration_frames = 60,
+                                          duration = 6,
                                           outputdir=None):
     '''
     Approximates what was done in the hemodynamics correction.
@@ -77,22 +77,22 @@ def plot_summary_hemodynamics_dual_colors(rcoeffs,
     mcoeff = np.mean(rcoeffs[pidx[0]-2:pidx[0]+2,
           pidx[1]-2:pidx[1]+2].reshape([-1]))
     # gets 60 seconds of data
-    nframes = int(np.clip(duration_frames*frame_rate,0,SVT_470.shape[1]))
+    nframes = int(np.clip(duration*frame_rate,0,SVT_470.shape[1]))
     SVTa = SVT_470#SVT[:,0:nframes:2] 
     SVTb = SVT_405#SVT[:,1:nframes:2]
     # similar proprocessing as for correction
     SVTa = highpass(SVTa,.1,fs = frame_rate)
     SVTb = highpass(SVTb,.1,fs = frame_rate)
-    SVTb = lowpass(SVTb,10., fs = frame_rate)
-
+    # SVTb = lowpass(SVTb,10., fs = frame_rate)
     # SVTb = lowpass(SVTb,w = 15.,fs = frame_rate/2)
     SVTa = (SVTa.T - np.nanmean(SVTa,axis=1)).T.astype('float32')
     SVTb = (SVTb.T - np.nanmean(SVTb,axis=1)).T.astype('float32')
-    SVTb_scaled = np.dot(T.T,SVTb)
-    Ya = np.mean(u@SVTa,axis=0)
-    Yb = np.mean(u@SVTb,axis=0)
-    Ybscaled = np.mean(u@SVTb_scaled,axis=0)
-    Ycorr =  np.mean(u@(SVTa-SVTb_scaled),axis=0)
+    SVTb_scaled = np.dot(T,SVTb)
+    Ya = np.mean(u@SVTa[:,np.arange(1,nframes)],axis=0)
+    Yb = np.mean(u@SVTb[:,np.arange(1,nframes)],axis=0)
+    Ybscaled = np.mean(u@SVTb_scaled[:,np.arange(1,nframes)],axis=0)
+    Ycorr =  np.mean(u@(SVTa[:,np.arange(1,nframes)]
+                        - SVTb_scaled[:,np.arange(1,nframes)]),axis=0)
     
     import pylab as plt
     fig = plt.figure(figsize=[10,4])

@@ -454,7 +454,7 @@ def _hemocorrect(localdisk,fs):
                                           U,
                                           T,
                                           frame_rate=fs,
-                                          duration_frames = 60,
+                                          duration = 12,
                                           outputdir = localdisk)            
     
 def main():
