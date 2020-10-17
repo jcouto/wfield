@@ -95,7 +95,8 @@ Returns:
     return dat
 
 
-def dual_color_hemodymamic_correction(U,SVT, output_folder = None,
+def dual_color_hemodymamic_correction(U,SVT_470,SVT_405,
+                                      output_folder = None,
                                       frame_rate = 30.,
                                       freq_lowpass = 15., 
                                       freq_highpass = 0.1):
@@ -120,7 +121,9 @@ def dual_color_hemodymamic_correction(U,SVT, output_folder = None,
         output_folder = os.path.abspath(os.path.curdir)
         print('Output not specified, using {0}'.format(output_folder))
     
-    SVTcorr, rcoeffs, T = hemodynamic_correction(U, SVT, 
+    SVTcorr, rcoeffs, T = hemodynamic_correction(U,
+                                                 SVT_470,
+                                                 SVT_405, 
                                                  fs=frame_rate,
                                                  freq_lowpass=freq_lowpass,
                                                  freq_highpass = freq_highpass)        
@@ -134,7 +137,8 @@ def dual_color_hemodymamic_correction(U,SVT, output_folder = None,
         plt.matplotlib.style.use('ggplot')
         from wfield import  plot_summary_hemodynamics_dual_colors
         plot_summary_hemodynamics_dual_colors(rcoeffs,
-                                              SVT,
+                                              SVT_470,
+                                              SVT_405,
                                               U,
                                               T,
                                               frame_rate=frame_rate,
