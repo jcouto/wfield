@@ -210,21 +210,38 @@ def read_imager_analog(fname):
                     nchannels=nchannels,
                     nsamples=nsamples)
 
-def split_imager_channels(fname_mj2):
+def _imager_parse_file(fname):
+    stack = mmap_dat(fname)
+    stack = stack.reshape([-1,*stack.shape[-2:]])
+    stack = stack[:,100,:]
+    stacksize = len(stack)
+    _,_,fnum = _parse_binary_fname(fname)
+    folder = os.path.dirname(fname)
+    analog,analogheader = read_imager_analog(pjoin(folder,'Analog_{0}.dat'.format(fnum[0])))
+    idxch1,idxch2,info = _imager_split_channels(stack,analog,analogheader)
+    info['nrecorded'] = len(stack)
+    del stack
+    return idxch1,idxch2,info
+
+def _imager_split_channels(stack,analog,analogheader):
     ''' splits channels from the imager '''
     from .utils import analog_ttl_to_onsets
-    fname_analog = fname_mj2.replace('Frames_','Analog_').replace('.mj2','.dat')
-    stack = read_mj2_frames(fname_mj2)
-    dat,header = read_imager_analog(fname_analog)
-    stim_onset,stim_offset = analog_ttl_to_onsets(dat[-4,:],time=None)
-    ch1,ch1_ = analog_ttl_to_onsets(dat[-2,:],time=None)
-    ch2,ch2_ = analog_ttl_to_onsets(dat[-1,:],time=None)
-    info = dict(baseline = header['baseline'],
+    #fname_analog = fname_mj2.replace('Frames_','Analog_').replace('.mj2','.dat')
+    #stack = read_mj2_frames(fname_mj2)
+    #dat,header = read_imager_analog(fname_analog)
+    ch1,ch1_ = analog_ttl_to_onsets(analog[1,:],time=None) # this is the blue LED
+    ch2,ch2_ = analog_ttl_to_onsets(analog[2,:],time=None) # this is the violet LED
+    ch3_onset,ch3_offset = analog_ttl_to_onsets(analog[3,:],time=None) # this is the stim
+    ch4_onset,ch4_offset = analog_ttl_to_onsets(analog[4,:],time=None) # this is another sync
+    
+    info = dict(baseline = analogheader['baseline'],
                 ch1 = ch1,
                 ch2 = ch2,
-                stim_onset = stim_onset,
-                stim_offset = stim_offset,
-                onset = header['onset'])
+                ch3_onset = ch3_onset,
+                ch3_offset = ch3_offset,
+                ch4_onset = ch4_onset,
+                ch4_offset = ch4_offset,
+                onset = analogheader['onset'])
     nframes = stack.shape[0]
     avgnorm = stack.reshape((nframes,-1))
     avgnorm = avgnorm.mean(axis=1)
@@ -262,7 +279,7 @@ def split_imager_channels(fname_mj2):
         # drop last ch1
         ch1idx = ch1idx[:-1]
         info['ch1'] = info['ch1'][:-1] 
-    return stack[ch1idx],stack[ch2idx],info
+    return ch1idx,ch2idx,info
 
 def parse_imager_mj2_folder(folder, destination, 
                             nchannels = 2,
@@ -336,3 +353,97 @@ def parse_imager_mj2_folder(folder, destination,
     trialinfo.to_csv(pjoin(destination,'trial_info.csv'))
     return mmap_dat(dat_path), frames_avg, trialonsets,trialinfo
 
+
+# CLASSES
+
+class GenericStack():
+    def __init__(self,filenames,extension):
+        self.filenames = filenames
+        self.fileextension = extension
+        self.dims = None
+        self.dtype = None
+        self.frames_offset = []
+        self.files = []
+        self.current_fileidx = None
+        self.current_stack = None
+
+    def _get_frame_index(self,frame):
+        '''
+        Finds out in which file some frames are.
+        '''
+        fileidx = np.where(self.frames_offset <= frame)[0][-1]
+        return fileidx,frame - self.frames_offset[fileidx]
+    
+    def _load_substack(fileidx):
+        pass
+    
+    def _get_frame(self,frame):
+        ''' 
+        Returns a single frame from the stack.
+        '''
+        fileidx,frameidx = self._get_frame_index(frame)
+        if not fileidx == self.current_fileidx:
+            self._load_substack(fileidx)
+        
+        return self.current_stack[frameidx,:,:]
+    
+    def __getitem__(self,*args):
+        index  = args[0]
+        idx1 = None
+        idx2 = None
+        if type(index) is tuple: # then look for 2 channels
+            if type(index[1]) is slice:
+                idx2 = range(index[1].start, index[1].stop, index[1].step)
+            else:
+                idx2 = index[1]
+            index = index[0]
+        print(idx2)
+        if type(index) is slice:
+            idx1 = range(*index.indices(self.nframes))#start, index.stop, index.step)
+        elif type(index) is int: # just a frame
+            idx1 = [index]
+        else: # np.array?
+            idx1 = index
+        img = np.empty((len(idx1),*self.dims),dtype = self.dtype)
+        for i,ind in enumerate(idx1):
+            img[i] = self._get_frame(ind)
+        if not idx2 is None:
+            return np.squeeze(img)[:,idx2]
+        return np.squeeze(img)
+
+
+class ImagerStack(GenericStack):
+    def __init__(self,filenames,extension = '.dat'):
+        if type(filenames) is str:
+            # check if it is a folder
+            if os.path.isdir(filenames):
+                dirname = filenames
+                filenames = natsorted(glob(pjoin(dirname,'Frames*'+extension)))       
+        super(ImagerStack,self).__init__(filenames,extension)
+        
+        from wfield.io import _imager_parse_file
+        self.index_ch1 = []
+        self.index_ch2 = []
+        self.extrainfo = []
+        for f in tqdm(self.filenames,desc='Parsing files to access the stack size'):
+            # Parse all analog files and frames
+            ch1,ch2,info = _imager_parse_file(f)
+            self.index_ch1.append(ch1)
+            self.index_ch2.append(ch2)
+            self.extrainfo.append(info)
+        # offset for each file
+        self.frames_offset = np.hstack([0,np.cumsum([len(x) for x in self.index_ch1])])
+        # get the dims from the first binary file
+        stack = mmap_dat(f)
+        self.dims = stack.shape[1:]
+        self.dtype = stack.dtype
+        self.nframes = self.frames_offset[-1]
+    
+    def _load_substack(self,fileidx,channel = None):
+        tmp = load_dat(self.filenames[fileidx])
+        tmp = tmp.reshape([-1,*tmp.shape[-2:]])
+        # combine the indexes from the 2 channels
+        idx = np.hstack([im.index_ch1[fileidx],im.index_ch2[fileidx]])
+        idx.sort()
+        self.current_stack = tmp[idx]
+        self.current_fileidx = fileidx
