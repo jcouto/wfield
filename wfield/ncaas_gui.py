@@ -35,6 +35,7 @@ from PyQt5.QtWidgets import (QApplication,
                              QTreeWidgetItem,
                              QTreeView,
                              QTextEdit,
+                             QPlainTextEdit,
                              QLineEdit,
                              QCheckBox,
                              QComboBox,
@@ -47,9 +48,14 @@ from PyQt5.QtWidgets import (QApplication,
                              QListWidgetItem,
                              QFileSystemModel,
                              QAbstractItemView,
-                             QMenu, QAction)
+                             QTabWidget,
+                             QMenu,
+                             QAction)
 
-from PyQt5.QtWebEngineWidgets import QWebEngineView
+try:
+    from PyQt5.QtWebEngineWidgets import QWebEngineView
+except:
+    print('Could not load QWebEngineView.')
 from PyQt5 import QtCore
 from PyQt5.QtGui import QStandardItem, QStandardItemModel,QColor
 from PyQt5.QtCore import Qt, QTimer,QMimeData
@@ -218,18 +224,33 @@ class CredentialsManager(QDockWidget):
                  configfile = pjoin(
                      os.path.expanduser('~'),
                      '.wfield','ncaas_config.json')):
+        '''
+        Logs to NeuroCaas to retrieve the keys and 
+allows changing the config parameters and credentials 
+from the GUI.
+        '''
         super(CredentialsManager,self).__init__()
         self.awsinfo = ncaas_read_aws_keys()
         self.ncaasconfig = ncaas_read_analysis_config(configfile)
         ncaasconfig_json = json.dumps(self.ncaasconfig,
                                       indent=4,
                                       sort_keys=True)
+        print(ncaasconfig_json)
         self.configfile = configfile
+        
         mainw = QWidget()
         self.setWidget(mainw)
-        lay = QFormLayout()
-        mainw.setLayout(lay)
+        layout = QGridLayout()
+        mainw.setLayout(layout)
+        
         self.setWindowTitle('NeuroCAAS configuration')
+
+        tabwidget = QTabWidget()
+        layout.addWidget(tabwidget,0,0)
+
+        advancedwid = QWidget()
+        lay = QFormLayout()
+        advancedwid.setLayout(lay)
 
         self.cred_access = QLineEdit(self.awsinfo['access_key'])
         lay.addRow(QLabel('AWS access key'),self.cred_access)
@@ -252,12 +273,14 @@ class CredentialsManager(QDockWidget):
             self.awsinfo['region'] = awsregions[value]    
         self.aws_region.currentIndexChanged.connect(region_call)
         
-        self.configedit = QTextEdit(ncaasconfig_json)
+        self.configedit = QPlainTextEdit(ncaasconfig_json)
         lay.addRow(QLabel('NCAAS settings'),self.configedit)
 
         web = QWebEngineView()
         web.load(QtCore.QUrl("http://www.neurocaas.org/profile/"))
-        lay.addRow(web)
+        tabwidget.addTab(web,'NeuroCAAS login')
+        tabwidget.addTab(advancedwid,'Settings')
+
         self.html = ''
         def parsehtml():
             page = web.page()

@@ -40,17 +40,19 @@ def load_dat(filename,
     if not os.path.isfile(filename):
         raise OSError('File {0} not found.'.format(filename))
     if shape is None or dtype is None: # try to get it from the filename
-        meta = os.path.splitext(filename)[0].split('_')
-    if dtype is None:
-        dtype = meta[-1]
+        dtype,shape,_ = _parse_binary_fname(filename,
+                                            shape = shape,
+                                            dtype = dtype)
+    if type(dtype) is str:
         dt = np.dtype(dtype)
-    if shape is None:
-        shape = [int(m) for m in meta[-4:-1]]
+    else:
+        dt = dtype
+
     if nframes is None:
         # Get the number of samples from the file size
         nframes = int(os.path.getsize(filename)/(np.prod(shape)*dt.itemsize))
     framesize = int(np.prod(shape))
-    dt = np.dtype(dtype)
+
     offset = int(offset)
     with open(filename,'rb') as fd:
         fd.seek(offset*framesize*int(dt.itemsize))
@@ -58,6 +60,42 @@ def load_dat(filename,
     buf = buf.reshape((-1,*shape),
                       order='C')
     return buf
+
+def _parse_binary_fname(fname,lastidx=None, dtype = 'uint16', shape = None, sep = '_'):
+    '''
+    Gets the data type and the shape from the filename 
+    This is a helper function to use in load_dat.
+    
+    out = _parse_binary_fname(fname)
+    
+    With out default to: 
+        out = dict(dtype=dtype, shape = shape, fnum = None)
+    '''
+    fn = os.path.splitext(os.path.basename(fname))[0]
+    fnsplit = fn.split(sep)
+    fnum = None
+    if lastidx is None:
+        # find the datatype first (that is the first dtype string from last)
+        lastidx = -1
+        idx = np.where([not f.isnumeric() for f in fnsplit])[0]
+        for i in idx[::-1]:
+            try:
+                dtype = np.dtype(fnsplit[i])
+                lastidx = i
+            except TypeError:
+                pass
+    if dtype is None:
+        dtype = np.dtype(fnsplit[lastidx])
+    # further split in those before and after lastidx
+    before = [f for f in fnsplit[:lastidx] if f.isdigit()]
+    after = [f for f in fnsplit[lastidx:] if f.isdigit()]
+    if shape is None:
+        # then the shape are the last 3
+        shape = [int(t) for t in before[-3:]]
+    if len(after)>0:
+        fnum = [int(t) for t in after]
+    return dtype,shape,fnum
+
 
 def mmap_dat(filename,
              mode = 'r',
@@ -87,12 +125,13 @@ def mmap_dat(filename,
     if not os.path.isfile(filename):
         raise OSError('File {0} not found.'.format(filename))
     if shape is None or dtype is None: # try to get it from the filename
-        meta = os.path.splitext(filename)[0].split('_')
-        if shape is None:
-            shape = [int(m) for m in meta[-4:-1]]
-        if dtype is None:
-            dtype = meta[-1]
-    dt = np.dtype(dtype)
+        dtype,shape,_ = _parse_binary_fname(filename,
+                                            shape = shape,
+                                            dtype = dtype)
+    if type(dtype) is str:
+        dt = np.dtype(dtype)
+    else:
+        dt = dtype
     if nframes is None:
         # Get the number of samples from the file size
         nframes = int(os.path.getsize(filename)/(np.prod(shape)*dt.itemsize))
