@@ -210,7 +210,7 @@ def read_imager_analog(fname):
                     nchannels=nchannels,
                     nsamples=nsamples)
 
-def _imager_parse_file(fname):
+def _imager_parse_file(fname, version = 2):
     f,ext = os.path.splitext(fname)
     if ext == '.mj2':
         stack = read_mj2_frames(fname)
@@ -223,21 +223,29 @@ def _imager_parse_file(fname):
     _,_,fnum = _parse_binary_fname(fname)
     folder = os.path.dirname(fname)
     analog,analogheader = read_imager_analog(pjoin(folder,'Analog_{0}.dat'.format(fnum[0])))
-    idxch1,idxch2,info = _imager_split_channels(stack,analog,analogheader)
+    idxch1,idxch2,info = _imager_split_channels(stack,analog,analogheader,version = version)
     info['nrecorded'] = len(stack)
     del stack
     return idxch1,idxch2,info
 
-def _imager_split_channels(stack,analog,analogheader):
+def _imager_split_channels(stack,analog,analogheader,version = 2):
     ''' splits channels from the imager '''
     from .utils import analog_ttl_to_onsets
     #fname_analog = fname_mj2.replace('Frames_','Analog_').replace('.mj2','.dat')
     #stack = read_mj2_frames(fname_mj2)
     #dat,header = read_imager_analog(fname_analog)
-    ch1,ch1_ = analog_ttl_to_onsets(analog[1,:],time=None) # this is the blue LED
-    ch2,ch2_ = analog_ttl_to_onsets(analog[2,:],time=None) # this is the violet LED
-    ch3_onset,ch3_offset = analog_ttl_to_onsets(analog[3,:],time=None) # this is the stim
-    ch4_onset,ch4_offset = analog_ttl_to_onsets(analog[4,:],time=None) # this is another sync
+
+    if version == 1:
+        # then the channels are -2 and -1
+        ch1,ch1_ = analog_ttl_to_onsets(analog[-1,:],time=None) # this is the blue LED
+        ch2,ch2_ = analog_ttl_to_onsets(analog[-2,:],time=None) # this is the violet LED
+        ch3_onset,ch3_offset = analog_ttl_to_onsets(analog[3,:],time=None) # this is the stim
+        ch4_onset,ch4_offset = analog_ttl_to_onsets(analog[4,:],time=None) # this is another sync
+    else:
+        ch1,ch1_ = analog_ttl_to_onsets(analog[1,:],time=None) # this is the blue LED
+        ch2,ch2_ = analog_ttl_to_onsets(analog[2,:],time=None) # this is the violet LED
+        ch3_onset,ch3_offset = analog_ttl_to_onsets(analog[3,:],time=None) # this is the stim
+        ch4_onset,ch4_offset = analog_ttl_to_onsets(analog[4,:],time=None) # this is another sync
     
     info = dict(baseline = analogheader['baseline'],
                 ch1 = ch1,
@@ -421,6 +429,7 @@ class GenericStack():
 class ImagerStack(GenericStack):
     def __init__(self,filenames,
                  extension = '.dat',
+                 version = 2,# this is because the triggers number changed between the new and the old version...
                  rotate_array=True):
         '''
         
@@ -428,6 +437,7 @@ class ImagerStack(GenericStack):
         '''
         self.rotate_array = rotate_array
         self.fileformat = 'binary'
+        self.version = version
         self.extension = extension
         if type(filenames) is str:
             # check if it is a folder
@@ -450,7 +460,7 @@ class ImagerStack(GenericStack):
         self.extrainfo = []
         for f in tqdm(self.filenames,desc='Parsing files to access the stack size'):
             # Parse all analog files and frames
-            ch1,ch2,info = _imager_parse_file(f)
+            ch1,ch2,info = _imager_parse_file(f,version = self.version)
             self.index_ch1.append(ch1)
             self.index_ch2.append(ch2)
             self.extrainfo.append(info)
