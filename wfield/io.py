@@ -211,7 +211,12 @@ def read_imager_analog(fname):
                     nsamples=nsamples)
 
 def _imager_parse_file(fname):
-    stack = mmap_dat(fname)
+    f,ext = os.path.splitext(fname)
+    if ext == '.mj2':
+        stack = read_mj2_frames(fname)
+    else:
+        stack = mmap_dat(fname)
+    
     stack = stack.reshape([-1,*stack.shape[-2:]])
     stack = stack[:,100,:]
     stacksize = len(stack)
@@ -414,17 +419,29 @@ class GenericStack():
 
 
 class ImagerStack(GenericStack):
-    def __init__(self,filenames,extension = '.dat',rotate_array=True):
+    def __init__(self,filenames,
+                 extension = '.dat',
+                 rotate_array=True):
         '''
         
         rotate_array=True is for rotating the files saved by the imager...
         '''
         self.rotate_array = rotate_array
+        self.fileformat = 'binary'
+        self.extension = extension
         if type(filenames) is str:
             # check if it is a folder
             if os.path.isdir(filenames):
                 dirname = filenames
-                filenames = natsorted(glob(pjoin(dirname,'Frames*'+extension)))       
+                filenames = natsorted(glob(pjoin(dirname,'Frames*'+self.extension)))
+                if not len(filenames): # try mj2's
+                    self.extension = '.mj2'
+                    filenames = natsorted(glob(pjoin(dirname,'Frames*'+self.extension)))
+                    if len(filenames):
+                        self.fileformat = 'mj2'
+                        self.rotate_array = False # This is not needed for these files...
+                    else:
+                        raise('Could not find files.')
         super(ImagerStack,self).__init__(filenames,extension)
         
         from wfield.io import _imager_parse_file
@@ -440,7 +457,10 @@ class ImagerStack(GenericStack):
         # offset for each file
         self.frames_offset = np.hstack([0,np.cumsum([len(x) for x in self.index_ch1])])
         # get the dims from the first binary file
-        stack = mmap_dat(f)
+        if self.fileformat == 'mj2':
+            stack = read_mj2_frames(f)
+        else:
+            stack = mmap_dat(f)
         if self.rotate_array: # fix imager rotation
             if len(stack.shape) == 3:
                 stack = stack.transpose([0,2,1])
@@ -452,7 +472,10 @@ class ImagerStack(GenericStack):
         self.shape = tuple([self.nframes,*self.dims])
         
     def _load_substack(self,fileidx,channel = None):
-        tmp = load_dat(self.filenames[fileidx])
+        if self.fileformat == 'mj2':
+            tmp = read_mj2_frames(self.filenames[fileidx])
+        else:
+            tmp = load_dat(self.filenames[fileidx])
         if self.rotate_array: # fix imager rotation
             if len(tmp.shape) == 3:
                 tmp = tmp.transpose([0,2,1])

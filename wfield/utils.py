@@ -162,9 +162,14 @@ class SVDStack(object):
             self.originalU = self.U.copy()
             if not self.M is None:
                 if not self.issparse:
+                    U = self.U
+                    U[:,0,:] = 0
+                    U[0,:,:] = 0
+                    U[-1,:,:] = 0
+                    U[:,-1,:] = 0
                     U = np.stack(runpar(im_apply_transform,
-                                        self.U.transpose([2,0,1]),
-                                    M = self.M)).transpose([1,2,0])
+                                        U.transpose([2,0,1]),
+                                        M = self.M)).transpose([1,2,0])
                 self.U = U
                 self.warped = True
         self.Uflat = self.U.reshape(-1,self.U.shape[-1])
