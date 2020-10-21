@@ -56,7 +56,7 @@ def registration_ecc(frame,template,
                                 inputMask=hann, gaussFiltSize=gaussian_filter)
     dst = cv2.warpAffine(frame, M, (w,h),
                          flags=cv2.INTER_LINEAR + cv2.WARP_INVERSE_MAP);
-    return M, np.clip(dst,0,2**16).astype('uint16')
+    return M, np.clip(dst,0,(2**16-1)).astype('uint16')
 
 
 def _xy_rot_from_affine(affines):
@@ -80,7 +80,7 @@ def registration_upsample(frame,template):
     (xs, ys), sf = cv2.phaseCorrelate(template.astype('float32'),dst)    
     M = np.float32([[1,0,xs],[0,1,ys]])
     dst = cv2.warpAffine(dst,M,(w, h))
-    return (xs,ys),np.clip(dst,0,2**16).astype('uint16')
+    return (xs,ys),(np.clip(dst,0,(2**16-1))).astype('uint16')
 
 def _register_multichannel_stack(frames,templates,mode='2d',
                                  niter = 25,
@@ -99,13 +99,13 @@ def _register_multichannel_stack(frames,templates,mode='2d',
     for ichan in range(nchannels):
         chunk = frames[:,ichan].squeeze()
         if mode == '2d':
-            res = runpar(registration_upsample,chunk,
+            res = runpar(registration_upsample, chunk,
                          template = templates[ichan])
             ys[:,ichan] = np.array([r[0][1] for r in res],dtype='float32')
             xs[:,ichan] = np.array([r[0][0] for r in res],dtype='float32')
 
         elif mode == 'ecc':
-            res = runpar(registration_ecc,chunk,
+            res = runpar(registration_ecc, chunk,
                          template = templates[ichan],
                          hann = hann,
                          niter = niter,
@@ -118,7 +118,7 @@ def _register_multichannel_stack(frames,templates,mode='2d',
         stack[:,ichan,:,:] = np.stack([r[1] for r in res])
     return (xs,ys,rot), stack
 
-def motion_correct(dat,chunksize=512, nreference = 60, mode = 'ecc', apply_shifts=True):
+def motion_correct(dat, out = None, chunksize=512, nreference = 60, mode = 'ecc', apply_shifts=True):
     '''
     Motion correction by translation.
     This estimate x and y shifts using phase correlation. 
@@ -134,17 +134,17 @@ def motion_correct(dat,chunksize=512, nreference = 60, mode = 'ecc', apply_shift
         yshifts               : shitfs in y (NFRAMES, NCHANNELS)
         xshifts               : shifts in x
     '''
-    nframes,nchan,w,h = dat.shape
-
+    nframes,nchan,h,w = dat.shape
+    if out is None:
+        out = dat
     chunks = chunk_indices(nframes,chunksize)
     xshifts = []
     yshifts = []
     rshifts = []
-    # reference is from the middle of the file
+    # reference is from the start of the file (nreference frames to nreference*2)
     # (chunksize frames and for each channel independently)
-    ichunk = int(len(chunks)/2)
-    c = chunks[ichunk]
-    chunk = np.array(dat[c[0]:c[0]+nreference])
+    nreference = int(nreference)
+    chunk = np.array(dat[nreference:nreference*2])
     refs = chunk[0].astype('float32')
     # align to the ref of each channel and use the mean
     _,refs = _register_multichannel_stack(chunk,refs,mode=mode)
@@ -163,7 +163,7 @@ def motion_correct(dat,chunksize=512, nreference = 60, mode = 'ecc', apply_shift
             refs,
             mode=mode)
         if apply_shifts:
-            dat[c[0]:c[-1]] = corrected[:]
+            out[c[0]:c[-1]] = corrected[:]
         yshifts.append(ys)
         xshifts.append(xs)
         rshifts.append(rot)

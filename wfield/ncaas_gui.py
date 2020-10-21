@@ -428,7 +428,7 @@ class NCAASwrapper(QMainWindow):
         mainw.setLayout(lay)
         
         # Filesystem browser
-        self.fs_view = FilesystemView(folder,parent=self)
+        self.fs_view = FilesystemView(folder, parent=self)
         self.fs_view.expandToDepth(2)
         # Add the widget with label
         w = QWidget()

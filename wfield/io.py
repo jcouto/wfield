@@ -354,7 +354,9 @@ def parse_imager_mj2_folder(folder, destination,
     return mmap_dat(dat_path), frames_avg, trialonsets,trialinfo
 
 
-# CLASSES
+#######################################################################
+################        For handling file sequences ###################
+#######################################################################
 
 class GenericStack():
     def __init__(self,filenames,extension):
@@ -385,7 +387,7 @@ class GenericStack():
         if not fileidx == self.current_fileidx:
             self._load_substack(fileidx)
         
-        return self.current_stack[frameidx,:,:]
+        return self.current_stack[frameidx]
     
     def __getitem__(self,*args):
         index  = args[0]
@@ -397,7 +399,6 @@ class GenericStack():
             else:
                 idx2 = index[1]
             index = index[0]
-        print(idx2)
         if type(index) is slice:
             idx1 = range(*index.indices(self.nframes))#start, index.stop, index.step)
         elif type(index) is int: # just a frame
@@ -413,7 +414,12 @@ class GenericStack():
 
 
 class ImagerStack(GenericStack):
-    def __init__(self,filenames,extension = '.dat'):
+    def __init__(self,filenames,extension = '.dat',rotate_array=True):
+        '''
+        
+        rotate_array=True is for rotating the files saved by the imager...
+        '''
+        self.rotate_array = rotate_array
         if type(filenames) is str:
             # check if it is a folder
             if os.path.isdir(filenames):
@@ -435,15 +441,26 @@ class ImagerStack(GenericStack):
         self.frames_offset = np.hstack([0,np.cumsum([len(x) for x in self.index_ch1])])
         # get the dims from the first binary file
         stack = mmap_dat(f)
+        if self.rotate_array: # fix imager rotation
+            if len(stack.shape) == 3:
+                stack = stack.transpose([0,2,1])
+            if len(stack.shape) == 4:
+                stack = stack.transpose([0,1,3,2])
         self.dims = stack.shape[1:]
         self.dtype = stack.dtype
         self.nframes = self.frames_offset[-1]
-    
+        self.shape = tuple([self.nframes,*self.dims])
+        
     def _load_substack(self,fileidx,channel = None):
         tmp = load_dat(self.filenames[fileidx])
+        if self.rotate_array: # fix imager rotation
+            if len(tmp.shape) == 3:
+                tmp = tmp.transpose([0,2,1])
+            if len(tmp.shape) == 4:
+                tmp = tmp.transpose([0,1,3,2])
         tmp = tmp.reshape([-1,*tmp.shape[-2:]])
         # combine the indexes from the 2 channels
-        idx = np.hstack([im.index_ch1[fileidx],im.index_ch2[fileidx]])
-        idx.sort()
-        self.current_stack = tmp[idx]
+        idx = np.sort(np.hstack([self.index_ch1[fileidx],self.index_ch2[fileidx]]))
+        self.current_stack = tmp[idx].reshape([-1,*self.dims])
         self.current_fileidx = fileidx
+                    
