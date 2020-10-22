@@ -449,7 +449,7 @@ class RawDisplayWidget(ImageWidget):
     def set_image(self,i=None,):
         if not i is None:
             self.iframe = i
-        img = self.stack[np.clip(0,self.stack.shape[0]-1,self.iframe),self.ichan]
+        img = self.stack[np.clip(self.iframe,0,self.stack.shape[0]-1),self.ichan]
         if self.adaptative_histogram:
             img = im_adapt_hist(img)
         if self.warp_im:
@@ -636,7 +636,7 @@ class SVDViewer(QMainWindow):
         landmarks_file = pjoin(self.folder,reference+'_landmarks.json')
 
         self.stack = stack
-        self.trial_onsets = trial_onsets.astype(np.int32)
+        self.trial_onsets = trial_onsets
         self.raw = raw
         self.trial_mask = np.ones((self.stack.SVT.shape[-1]),dtype=bool)
         if not self.trial_onsets is None:
@@ -712,7 +712,7 @@ class RawViewer(QMainWindow):
         self.referencename = reference
         landmarks_file = pjoin(self.folder,reference+'_landmarks.json')
         
-        self.trial_onsets = trial_onsets.astype(np.int32)
+        self.trial_onsets = trial_onsets
         self.trial_mask = np.ones((self.raw.shape[0]),dtype=bool)
         if not self.trial_onsets is None:
             self.trial_mask[self.trial_onsets[:,1]] = False

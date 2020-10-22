@@ -105,7 +105,7 @@ The commands are:
             # try in a results folder (did it come from ncaas?)
             raise OSError('Could not find: {0} '.format(fname))
             
-        dat_path = glob(pjoin(localdisk,'*.dat'))
+        dat_path = glob(pjoin(localdisk,'*.bin'))
         if len(dat_path):
             dat_path = dat_path[0]
             if os.path.isfile(dat_path):
@@ -120,7 +120,7 @@ The commands are:
 
         trial_onsets = pjoin(localdisk,'trial_onsets.npy')
         if os.path.isfile(trial_onsets):
-            trial_onsets = np.load(trial_onsets)
+            trial_onsets = np.load(trial_onsets).astype(int)
         else:
             trial_onsets = None
         
@@ -130,7 +130,7 @@ The commands are:
         w = SVDViewer(stack,
                       folder = localdisk,
                       raw = dat,
-                      trial_onsets = trial_onsets.astype(int),
+                      trial_onsets = trial_onsets,
                       reference = args.allen_reference,
                       start_correlation = args.correlation)
         sys.exit(app.exec_())
@@ -149,36 +149,42 @@ The commands are:
         args = parser.parse_args(sys.argv[2:])
         localdisk = args.foldername
         from .io import mmap_dat
+        if os.path.isdir(localdisk):
+            dat_path = glob(pjoin(localdisk,'*.bin'))
+            if len(dat_path):
+                dat_path = dat_path[0]
+        else:
+            dat_path = localdisk
+            localdisk = os.path.dirname(localdisk)
+
         if args.napari:
-            print(args.napari)
-            dat_path = glob(pjoin(localdisk,'*.dat'))[0]
             dat = mmap_dat(dat_path)
             from .viz import napari_show
             napari_show(dat)
             del dat
             sys.exit()
-        dat_path = glob(pjoin(localdisk,'*.dat'))
-        if len(dat_path):
-            dat_path = dat_path[0]
-            if os.path.isfile(dat_path):
-                dat = mmap_dat(dat_path)
+
+        if os.path.isfile(dat_path):
+            dat = mmap_dat(dat_path)
         else:
             dat = None
             dat_path = None
+        
             average_path = pjoin(localdisk,'frames_average.npy')
             if os.path.isfile(average_path):
                 dat = np.load(average_path)
             dat = dat.reshape([1,*dat.shape])
+            print('Loading the frames_average instead')
         trial_onsets = pjoin(localdisk,'trial_onsets.npy')
         if os.path.isfile(trial_onsets):
-            trial_onsets = np.load(trial_onsets)
+            trial_onsets = np.load(trial_onsets).astype(int)
         else:
             trial_onsets = None
         from .widgets import QApplication,RawViewer
         app = QApplication(sys.argv)
         w = RawViewer(raw = dat,
                       folder = localdisk,
-                      trial_onsets = trial_onsets.astype(int),
+                      trial_onsets = trial_onsets,
                       reference = args.allen_reference)
         sys.exit(app.exec_())
         del dat
@@ -376,7 +382,7 @@ The commands are:
         _hemocorrect(localdisk,fs=args.fs)
         
 def _motion(localdisk,mode = 'ecc',chunksize=256):
-    dat_path = glob(pjoin(localdisk,'*.dat'))[0]        
+    dat_path = glob(pjoin(localdisk,'*.bin'))[0]        
     dat = mmap_dat(dat_path, mode='r+')
     (yshifts,xshifts),rshifts = motion_correct(dat,
                                                chunksize=256,
@@ -391,10 +397,14 @@ def _motion(localdisk,mode = 'ecc',chunksize=256):
     del shifts
 
 def _baseline(localdisk,nbaseline_frames):
-    dat_path = glob(pjoin(localdisk,'*.dat'))[0]
+    if os.path.isdir(localdisk):
+        dat_path = glob(pjoin(localdisk,'*.bin'))[0]
+    else:
+        dat_path = localdisk
+        localdisk = os.path.dirname(dat_path)
     dat = mmap_dat(dat_path)
     try:
-        trial_onsets = np.load(pjoin(localdisk,'trial_onsets.npy'))
+        trial_onsets = np.load(pjoin(localdisk,'trial_onsets.npy'))[:,1].astype(int)
     except FileNotFoundError:
         print('''
 Skipping trial frame average because there was no trial_onsets.npy in the folder.
@@ -411,7 +421,7 @@ Skipping trial frame average because there was no trial_onsets.npy in the folder
                 frames_average)
         return frames_average
     frames_average_trials = frames_average_for_trials(dat,
-                                                      trial_onsets[:,1].astype(int),
+                                                      trial_onsets,
                                                       nbaseline_frames)
     
     np.save(pjoin(localdisk,'frames_average.npy'),
@@ -420,7 +430,11 @@ Skipping trial frame average because there was no trial_onsets.npy in the folder
     del frames_average_trials
 
 def _decompose(localdisk, k):
-    dat_path = glob(pjoin(localdisk,'*.dat'))[0]
+    if os.path.isdir(localdisk):
+        dat_path = glob(pjoin(localdisk,'*.bin'))[0]
+    else:
+        dat_path = localdisk
+        localdisk = os.path.dirname(dat_path)
     frames_average = np.load(pjoin(localdisk,'frames_average.npy'))
     if len(frames_average)>3:
         trial_onsets = np.load(pjoin(localdisk,'trial_onsets.npy'))
@@ -454,7 +468,7 @@ def _hemocorrect(localdisk,fs):
                                           U,
                                           T,
                                           frame_rate=fs,
-                                          duration_frames = 60,
+                                          duration = 12,
                                           outputdir = localdisk)            
     
 def main():

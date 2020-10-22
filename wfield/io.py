@@ -40,17 +40,19 @@ def load_dat(filename,
     if not os.path.isfile(filename):
         raise OSError('File {0} not found.'.format(filename))
     if shape is None or dtype is None: # try to get it from the filename
-        meta = os.path.splitext(filename)[0].split('_')
-    if dtype is None:
-        dtype = meta[-1]
-    dt = np.dtype(dtype)
-    if shape is None:
-        shape = [int(m) for m in meta[-4:-1]]
+        dtype,shape,_ = _parse_binary_fname(filename,
+                                            shape = shape,
+                                            dtype = dtype)
+    if type(dtype) is str:
+        dt = np.dtype(dtype)
+    else:
+        dt = dtype
+
     if nframes is None:
         # Get the number of samples from the file size
         nframes = int(os.path.getsize(filename)/(np.prod(shape)*dt.itemsize))
     framesize = int(np.prod(shape))
-    dt = np.dtype(dtype)
+
     offset = int(offset)
     with open(filename,'rb') as fd:
         fd.seek(offset*framesize*int(dt.itemsize))
@@ -58,6 +60,42 @@ def load_dat(filename,
     buf = buf.reshape((-1,*shape),
                       order='C')
     return buf
+
+def _parse_binary_fname(fname,lastidx=None, dtype = 'uint16', shape = None, sep = '_'):
+    '''
+    Gets the data type and the shape from the filename 
+    This is a helper function to use in load_dat.
+    
+    out = _parse_binary_fname(fname)
+    
+    With out default to: 
+        out = dict(dtype=dtype, shape = shape, fnum = None)
+    '''
+    fn = os.path.splitext(os.path.basename(fname))[0]
+    fnsplit = fn.split(sep)
+    fnum = None
+    if lastidx is None:
+        # find the datatype first (that is the first dtype string from last)
+        lastidx = -1
+        idx = np.where([not f.isnumeric() for f in fnsplit])[0]
+        for i in idx[::-1]:
+            try:
+                dtype = np.dtype(fnsplit[i])
+                lastidx = i
+            except TypeError:
+                pass
+    if dtype is None:
+        dtype = np.dtype(fnsplit[lastidx])
+    # further split in those before and after lastidx
+    before = [f for f in fnsplit[:lastidx] if f.isdigit()]
+    after = [f for f in fnsplit[lastidx:] if f.isdigit()]
+    if shape is None:
+        # then the shape are the last 3
+        shape = [int(t) for t in before[-3:]]
+    if len(after)>0:
+        fnum = [int(t) for t in after]
+    return dtype,shape,fnum
+
 
 def mmap_dat(filename,
              mode = 'r',
@@ -87,12 +125,13 @@ def mmap_dat(filename,
     if not os.path.isfile(filename):
         raise OSError('File {0} not found.'.format(filename))
     if shape is None or dtype is None: # try to get it from the filename
-        meta = os.path.splitext(filename)[0].split('_')
-        if shape is None:
-            shape = [int(m) for m in meta[-4:-1]]
-        if dtype is None:
-            dtype = meta[-1]
-    dt = np.dtype(dtype)
+        dtype,shape,_ = _parse_binary_fname(filename,
+                                            shape = shape,
+                                            dtype = dtype)
+    if type(dtype) is str:
+        dt = np.dtype(dtype)
+    else:
+        dt = dtype
     if nframes is None:
         # Get the number of samples from the file size
         nframes = int(os.path.getsize(filename)/(np.prod(shape)*dt.itemsize))
@@ -171,21 +210,43 @@ def read_imager_analog(fname):
                     nchannels=nchannels,
                     nsamples=nsamples)
 
-def split_imager_channels(fname_mj2):
+def _imager_parse_file(fname):
+    f,ext = os.path.splitext(fname)
+    if ext == '.mj2':
+        stack = read_mj2_frames(fname)
+    else:
+        stack = mmap_dat(fname)
+    
+    stack = stack.reshape([-1,*stack.shape[-2:]])
+    stack = stack[:,100,:]
+    stacksize = len(stack)
+    _,_,fnum = _parse_binary_fname(fname)
+    folder = os.path.dirname(fname)
+    analog,analogheader = read_imager_analog(pjoin(folder,'Analog_{0}.dat'.format(fnum[0])))
+    idxch1,idxch2,info = _imager_split_channels(stack,analog,analogheader)
+    info['nrecorded'] = len(stack)
+    del stack
+    return idxch1,idxch2,info
+
+def _imager_split_channels(stack,analog,analogheader):
     ''' splits channels from the imager '''
     from .utils import analog_ttl_to_onsets
-    fname_analog = fname_mj2.replace('Frames_','Analog_').replace('.mj2','.dat')
-    stack = read_mj2_frames(fname_mj2)
-    dat,header = read_imager_analog(fname_analog)
-    stim_onset,stim_offset = analog_ttl_to_onsets(dat[-4,:],time=None)
-    ch1,ch1_ = analog_ttl_to_onsets(dat[-2,:],time=None)
-    ch2,ch2_ = analog_ttl_to_onsets(dat[-1,:],time=None)
-    info = dict(baseline = header['baseline'],
+    #fname_analog = fname_mj2.replace('Frames_','Analog_').replace('.mj2','.dat')
+    #stack = read_mj2_frames(fname_mj2)
+    #dat,header = read_imager_analog(fname_analog)
+    ch1,ch1_ = analog_ttl_to_onsets(analog[1,:],time=None) # this is the blue LED
+    ch2,ch2_ = analog_ttl_to_onsets(analog[2,:],time=None) # this is the violet LED
+    ch3_onset,ch3_offset = analog_ttl_to_onsets(analog[3,:],time=None) # this is the stim
+    ch4_onset,ch4_offset = analog_ttl_to_onsets(analog[4,:],time=None) # this is another sync
+    
+    info = dict(baseline = analogheader['baseline'],
                 ch1 = ch1,
                 ch2 = ch2,
-                stim_onset = stim_onset,
-                stim_offset = stim_offset,
-                onset = header['onset'])
+                ch3_onset = ch3_onset,
+                ch3_offset = ch3_offset,
+                ch4_onset = ch4_onset,
+                ch4_offset = ch4_offset,
+                onset = analogheader['onset'])
     nframes = stack.shape[0]
     avgnorm = stack.reshape((nframes,-1))
     avgnorm = avgnorm.mean(axis=1)
@@ -223,7 +284,7 @@ def split_imager_channels(fname_mj2):
         # drop last ch1
         ch1idx = ch1idx[:-1]
         info['ch1'] = info['ch1'][:-1] 
-    return stack[ch1idx],stack[ch2idx],info
+    return ch1idx,ch2idx,info
 
 def parse_imager_mj2_folder(folder, destination, 
                             nchannels = 2,
@@ -297,3 +358,132 @@ def parse_imager_mj2_folder(folder, destination,
     trialinfo.to_csv(pjoin(destination,'trial_info.csv'))
     return mmap_dat(dat_path), frames_avg, trialonsets,trialinfo
 
+
+#######################################################################
+################        For handling file sequences ###################
+#######################################################################
+
+class GenericStack():
+    def __init__(self,filenames,extension):
+        self.filenames = filenames
+        self.fileextension = extension
+        self.dims = None
+        self.dtype = None
+        self.frames_offset = []
+        self.files = []
+        self.current_fileidx = None
+        self.current_stack = None
+
+    def _get_frame_index(self,frame):
+        '''
+        Finds out in which file some frames are.
+        '''
+        fileidx = np.where(self.frames_offset <= frame)[0][-1]
+        return fileidx,frame - self.frames_offset[fileidx]
+    
+    def _load_substack(fileidx):
+        pass
+    
+    def _get_frame(self,frame):
+        ''' 
+        Returns a single frame from the stack.
+        '''
+        fileidx,frameidx = self._get_frame_index(frame)
+        if not fileidx == self.current_fileidx:
+            self._load_substack(fileidx)
+        
+        return self.current_stack[frameidx]
+    
+    def __getitem__(self,*args):
+        index  = args[0]
+        idx1 = None
+        idx2 = None
+        if type(index) is tuple: # then look for 2 channels
+            if type(index[1]) is slice:
+                idx2 = range(index[1].start, index[1].stop, index[1].step)
+            else:
+                idx2 = index[1]
+            index = index[0]
+        if type(index) is slice:
+            idx1 = range(*index.indices(self.nframes))#start, index.stop, index.step)
+        elif type(index) is int: # just a frame
+            idx1 = [index]
+        else: # np.array?
+            idx1 = index
+        img = np.empty((len(idx1),*self.dims),dtype = self.dtype)
+        for i,ind in enumerate(idx1):
+            img[i] = self._get_frame(ind)
+        if not idx2 is None:
+            return np.squeeze(img)[:,idx2]
+        return np.squeeze(img)
+
+
+class ImagerStack(GenericStack):
+    def __init__(self,filenames,
+                 extension = '.dat',
+                 rotate_array=True):
+        '''
+        
+        rotate_array=True is for rotating the files saved by the imager...
+        '''
+        self.rotate_array = rotate_array
+        self.fileformat = 'binary'
+        self.extension = extension
+        if type(filenames) is str:
+            # check if it is a folder
+            if os.path.isdir(filenames):
+                dirname = filenames
+                filenames = natsorted(glob(pjoin(dirname,'Frames*'+self.extension)))
+                if not len(filenames): # try mj2's
+                    self.extension = '.mj2'
+                    filenames = natsorted(glob(pjoin(dirname,'Frames*'+self.extension)))
+                    if len(filenames):
+                        self.fileformat = 'mj2'
+                        self.rotate_array = False # This is not needed for these files...
+                    else:
+                        raise('Could not find files.')
+        super(ImagerStack,self).__init__(filenames,extension)
+        
+        from wfield.io import _imager_parse_file
+        self.index_ch1 = []
+        self.index_ch2 = []
+        self.extrainfo = []
+        for f in tqdm(self.filenames,desc='Parsing files to access the stack size'):
+            # Parse all analog files and frames
+            ch1,ch2,info = _imager_parse_file(f)
+            self.index_ch1.append(ch1)
+            self.index_ch2.append(ch2)
+            self.extrainfo.append(info)
+        # offset for each file
+        self.frames_offset = np.hstack([0,np.cumsum([len(x) for x in self.index_ch1])])
+        # get the dims from the first binary file
+        if self.fileformat == 'mj2':
+            stack = read_mj2_frames(f)
+        else:
+            stack = mmap_dat(f)
+        if self.rotate_array: # fix imager rotation
+            if len(stack.shape) == 3:
+                stack = stack.transpose([0,2,1])
+            if len(stack.shape) == 4:
+                stack = stack.transpose([0,1,3,2])
+        self.dims = stack.shape[1:]
+        self.dtype = stack.dtype
+        self.nframes = self.frames_offset[-1]
+        self.shape = tuple([self.nframes,*self.dims])
+        
+    def _load_substack(self,fileidx,channel = None):
+        if self.fileformat == 'mj2':
+            tmp = read_mj2_frames(self.filenames[fileidx])
+        else:
+            tmp = load_dat(self.filenames[fileidx])
+        if self.rotate_array: # fix imager rotation
+            if len(tmp.shape) == 3:
+                tmp = tmp.transpose([0,2,1])
+            if len(tmp.shape) == 4:
+                tmp = tmp.transpose([0,1,3,2])
+        tmp = tmp.reshape([-1,*tmp.shape[-2:]])
+        # combine the indexes from the 2 channels
+        idx = np.sort(np.hstack([self.index_ch1[fileidx],self.index_ch2[fileidx]]))
+        self.current_stack = tmp[idx].reshape([-1,*self.dims])
+        self.current_fileidx = fileidx
+                    
