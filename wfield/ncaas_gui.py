@@ -852,7 +852,16 @@ class AWSView(QTreeView):
                 else:
                     self.aws_transfer_queue.append(t)
                     self.parent.to_log('Added {name} to transfer queue'.format(**t))
-                    
+                # Select analysis and upload here.
+                import yaml
+                tempfile = pjoin(os.path.expanduser('~'),'.wfield','temp_config.yaml')
+                with open(tempfile,'w') as f: 
+                    yaml.dump(self.config['config'],f)
+                bucket =self.aws_view.s3.Bucket(self.config['analysis'])
+                bucket.upload_file(tempfile,
+                                   os.path.dirname(t['awsdestination'])+'/'+'config.yaml')
+                self.to_log('Uploaded default config to {name}'.format(**t))
+
             self.parent.refresh_queuelist()
         e.ignore() # Dont drop the remote table
         

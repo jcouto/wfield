@@ -400,6 +400,25 @@ def allen_regions_to_atlas(ccf_regions,dims,
             areanames.append([factor*(ireg+1),r['acronym']+'_'+side])
     return atlas,areanames
 
+def atlas_from_landmarks_file(landmarks_file=None,reference='dorsal_cortex',dims = [540,640]):
+    lmarks = load_allen_landmarks(landmarks_file)
+    ccf_regions,proj,brain_outline = allen_load_reference('dorsal_cortex')
+    # transform the regions into the image
+    if not 'transform' in lmarks.keys():
+        lmarks['transform'] = None
+    nccf_regions = allen_transform_regions(lmarks['transform'],
+                                       ccf_regions,
+                                       resolution=lmarks['resolution'],
+                                       bregma_offset=lmarks['bregma_offset'])
+    nbrain_outline = apply_affine_to_points(brain_outline[:,0]/lmarks['resolution'] + lmarks['bregma_offset'][0],
+                                            brain_outline[:,1]/lmarks['resolution'] + lmarks['bregma_offset'][1],
+                                            lmarks['transform'])
+
+
+    atlas,areanames = allen_regions_to_atlas(nccf_regions, dims)
+    brain_mask = contour_to_mask(*nbrain_outline, dims = dims)
+    return atlas, areanames, brain_mask
+
 ########################################################################
 ################HOLOVIEWS PLOTTING FUNCTIONS############################
 ########################################################################
@@ -531,4 +550,5 @@ def hv_show_transformed_overlay(image, M, ccf_regions,
                                     bregma_offset=bregma_offset,
                                     resolution=resolution).options(
         {'Curve': {'color':'white', 'width': w,'height':h}})
+
 
