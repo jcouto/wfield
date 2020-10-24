@@ -37,6 +37,7 @@ from PyQt5.QtWidgets import (QApplication,
                              QTextEdit,
                              QPlainTextEdit,
                              QLineEdit,
+                             QScrollArea,
                              QCheckBox,
                              QComboBox,
                              QListWidget,
@@ -50,7 +51,9 @@ from PyQt5.QtWidgets import (QApplication,
                              QAbstractItemView,
                              QTabWidget,
                              QMenu,
+                             QDialog,
                              QAction)
+from functools import partial
 
 try:
     from PyQt5.QtWebEngineWidgets import QWebEngineView
@@ -71,18 +74,53 @@ except:
 
 tempfile = pjoin(os.path.expanduser('~'),'.wfield','tempfile')
 
-defaultconfig = dict(analysis = 'cshl-wfield-preprocessing',
-                     userfolder = 'ChurchlandLab',
-                     instance_type =  'r5.16xlarge',
-                     analysis_extension = '.dat',
-                     decompress_results = True,  # this will decompress the U matrix when downloading
-                     config = dict(block_height = 90,
-                                   block_width = 80,
-                                   frame_rate = 30,
-                                   max_components = 15,
-                                   num_sims = 64,
-                                   overlapping = True,
-                                   window_length = 7200))
+analysis_extensions = ['.bin','.tiff','.tif','.npy','.json','.dat']
+
+analysis_selection_dict = [dict(acronym = 'motion',
+                                name='Motion correction',
+                                desc = 'Performs the registration of frames to a reference taken from aligning the second 60 frames of the dataset to themselves.',
+                                selected = True),
+                           dict(acronym='compression',
+                                name='Compression and denoising using PMD',
+                                desc = 'Performs Penalized Matrix Decomposition (PMD) to compress and denoise the dataset. This step operates on motion corrected data.',
+                                selected=True),
+                           dict(acronym='hemodynamics_compensation',
+                                name='Hemodynamics compensation',
+                                desc = 'Performs hemodynamics compensation by regressing the second channel (isobestic for the indicator) into the first (indicator fluorescence) and subtracting the result to the first channel. This step requires a compressed dataset with 2 channels.',
+                                selected = True),
+                           dict(acronym='locaNMF',
+                                name='Feature extraction using LocaNMF to isolate activity from individual sources in the data.',
+                                desc = 'Applies locaNMF to the dataset to isolate the activity of individual areas. This step requires a compressed  dataset.',
+                                selected = True)]
+
+
+defaultconfig = {
+    'cshl-wfield-preprocessing': dict(
+        submit = dict(
+            instance_type =  'r5.16xlarge',
+            analysis_extension = '.bin',
+            decompress_results = True),  # this will decompress the U matrix when downloading
+        config = dict(block_height = 90,
+                      block_width = 80,
+                      frame_rate = 60,
+                      number_of_channels = 2,
+                      max_components = 15,
+                      num_sims = 64,
+                      overlapping = True,
+                      window_length = 7200)),
+    'cshl-wfield-locanmf': {
+        'submit':dict(
+            instance_type =  'p2.xlarge',
+            params_filename = 'params.yml',
+            areanames_filename = 'atlas_labels.json',
+            atlas_filename = 'atlas.npy',
+            brainmask_filename = 'brain_mask.npy',
+            temporal_data_filename = 'SVTcorr.npy',
+            spatial_data_filename = 'U.npy'),
+        'config' :dict(maxrank=5,
+                       min_pixels = 100,
+                       loc_thresh = 80,
+                       r2_thresh = 0.99)}}
 
 # Function to add credentials
 awsregions = ['us-east-2',
@@ -174,9 +212,12 @@ def ncaas_read_analysis_config(config):
 def s3_connect():
     return boto3.resource('s3')
 
-def s3_ls(s3,bucketname):
-    bucket = s3.Bucket(bucketname)
-    return [l.key for l in list(bucket.objects.all())]
+def s3_ls(s3,bucketnames):
+    files = []
+    for bucketname in bucketnames:
+        bucket = s3.Bucket(bucketname)
+        files.extend([bucketname+'/'+l.key for l in list(bucket.objects.all())])
+    return files
     
 def make_tree(item, tree):
     if len(item) == 1:
@@ -235,7 +276,6 @@ from the GUI.
         ncaasconfig_json = json.dumps(self.ncaasconfig,
                                       indent=4,
                                       sort_keys=True)
-        print(ncaasconfig_json)
         self.configfile = configfile
         
         mainw = QWidget()
@@ -351,7 +391,7 @@ class TextEditor(QDockWidget):
             if ori == self.original:
                 self.tx.setText(self.original)
         self.timer.timeout.connect(update)
-
+        
         def watch(val):
             if val:
                 self.timer.start(2000)
@@ -376,29 +416,138 @@ multipart_config = TransferConfig(multipart_threshold=int(1*GB),
                                   max_concurrency=10,
                                   multipart_chunksize=int(0.1*GB),
                                   use_threads=True)
-def ncaas_dat_upload_queue(path,
-                           analysis,
-                           userfolder,
-                           subfolder = 'inputs',config = None):
+
+class  AnalysisSelectionWidget(QDialog):
+    def __init__(self, path, config):
+        '''
+        Select analysis from to be ran on NCAAS
+        '''
+        super(AnalysisSelectionWidget,self).__init__()
+        self.config = config
+
+        # there are 2 parameter sets, one for locaNMF and one for PMD
+        
+        layout = QGridLayout()
+        self.setLayout(layout)
+        
+        self.setWindowTitle('NeuroCAAS job parameters')
+        
+        tabwidget = QTabWidget()
+        layout.addWidget(tabwidget,0,0)
+
+        selectwid = QWidget()
+        lay = QFormLayout()
+        selectwid.setLayout(lay)
+        
+        self.selections = analysis_selection_dict
+        def ckchanged(ind,chk):
+            val = self.selections[ind]['run'] = chk.isChecked()
+            
+        for i,k in enumerate(self.selections):
+            self.selections[i]['checkbox'] = QCheckBox()
+            name = QLabel(k['name'])
+            lay.addRow(self.selections[i]['checkbox'],name)
+            self.selections[i]['checkbox'].clicked.connect(partial(ckchanged, i,
+                                                                   self.selections[i]['checkbox']))
+            self.selections[i]['checkbox'].setToolTip(self.selections[i]['desc'])
+            name.setToolTip(self.selections[i]['desc'])
+            self.selections[i]['checkbox'].setChecked(self.selections[i]['selected'])
+        tabwidget.addTab(selectwid,'Select analysis')
+
+        parameterswid = QWidget()
+        lay = QFormLayout()
+        parameterswid.setLayout(lay)
+        def vchanged(analysis,option_name,edit):
+            dtype = type(self.config[analysis]['config'][option_name])
+            self.config[analysis]['config'][option_name] = dtype(edit.text())
+
+        if 'cshl-wfield-preprocessing' in self.config.keys():
+            if 'config' in self.config['cshl-wfield-preprocessing'].keys():
+                lay.addRow(QLabel('Parameters for motion correction, compression, denoising and hemodynamics compensation'))
+
+                for k in self.config['cshl-wfield-preprocessing']['config'].keys():
+                    c = QLineEdit(str(self.config['cshl-wfield-preprocessing']['config'][k]))
+                    name = QLabel(k)
+                    lay.addRow(name,c)
+                    c.textChanged.connect(partial(vchanged,'cshl-wfield-preprocessing' ,k,c))
+        if 'cshl-wfield-locanmf' in self.config.keys():
+            if 'config' in self.config['cshl-wfield-locanmf'].keys():
+                lay.addRow(QLabel('Parameters for feature extraction'))                                  
+                for k in self.config['cshl-wfield-locanmf']['config'].keys():
+                    c = QLineEdit(str(self.config['cshl-wfield-locanmf']['config'][k]))
+                    name = QLabel(k)
+                    lay.addRow(name,c)
+                    c.textChanged.connect(partial(vchanged,'cshl-wfield-locanmf',k,c))
+        tabwidget.addTab(parameterswid,'Parameters')
+
+        files = glob(pjoin(path,'*'))
+
+        fileswid = QWidget()
+        lay = QFormLayout()
+        fileswid.setLayout(lay)
+        
+        def filechanged(f,chk):
+            val = self.files[f]['selected'] = chk.isChecked()
+        files = [dict(fname = f,selected=True) for f in files]
+        self.files = []
+        for i,fname in enumerate(files):
+            if not os.path.isfile(fname['fname']):
+                continue
+            _,ext = os.path.splitext(fname['fname'])
+            if not ext in analysis_extensions:
+                fname['selected'] = False
+            self.files.append(fname)
+            f = QCheckBox()
+            name = QLabel(os.path.basename(fname['fname']))
+            lay.addRow(f,name)
+            f.clicked.connect(partial(filechanged, i,f))
+            f.setChecked(fname['selected'])
+        if not len(self.files):
+            print('This folder {0} contained no files that can be analysed.'.format(path))
+        scroll = QScrollArea()
+        scroll.setWidget(fileswid)
+        tabwidget.addTab(scroll,'File selection')
+
+        submit_button = QPushButton('Submit analysis')
+        layout.addWidget(submit_button,1,0)
+        self.transfer_queue = []
+        self.transfer_config = []
+        def submit():
+            filetransfer = []
+            aws_transfer_queue = []
+            for f in self.files:
+                if f['selected']:
+                    filetransfer.append(f['fname'])
+                    foldername = os.path.basename(path)
+                    aws_transfer_queue.append(
+                        dict(name = os.path.basename(f['fname']),
+                             awsdestination = 'inputs/'+foldername+'/'+os.path.basename(f['fname']),
+                             localpath = f['fname'],
+                             last_status = 'pending_transfer'))
+            if len(aws_transfer_queue):
+                self.transfer_queue = aws_transfer_queue
+                self.transfer_config = dict(self.config,selection=self.selections)
+                self.close()
+        submit_button.clicked.connect(submit)    
+        self.show()
+        
+    def closeEvent(self,event):
+        event.accept()
+
+
+def ncaas_upload_queue(path,
+                       subfolder = 'inputs',config = None):
     # Search and upload dat file, respect folder structure, return path 
     if os.path.isfile(path):
         path = os.path.dirname(path)
-    foldername = os.path.basename(path)
+    print('Selected folder: {0}'.format(path))
+    print('Choose the analysis to run.')
     if sys.platform in ['win32']: # path fix on windows
         if path[0] == '/':
             path = path[1:]
-    filetransfer = []
-    aws_transfer_queue = []
-    for root, dirs, files in os.walk(path):
-        for f in files:
-            if config['analysis_extension'] in f:
-                filetransfer.append(pjoin(path,f))
-                aws_transfer_queue.append(
-                    dict(name = os.path.basename(f),
-                         awsdestination = userfolder+'/inputs/'+foldername+'/'+os.path.basename(f),
-                         localpath = pjoin(root,f),
-                         last_status = 'pending_transfer'))
-    return aws_transfer_queue
+    dlg = AnalysisSelectionWidget(os.path.dirname(path),config)
+    dlg.exec_()
+    return (dlg.transfer_queue,dlg.transfer_config)
     
 class NCAASwrapper(QMainWindow):
     def __init__(self,folder = '.',
@@ -444,7 +593,7 @@ class NCAASwrapper(QMainWindow):
         self.folder.clicked.connect(set_folder)
         self.open_editors = []        
         # AWS browser
-        self.aws_view = AWSView(config,parent=self)
+        self.aws_view = AWSView(config, parent=self)
         self.aws_view.expandToDepth(2)
 
         # Add the widget with label
@@ -454,9 +603,7 @@ class NCAASwrapper(QMainWindow):
         w = QWidget()
         l = QVBoxLayout()
         w.setLayout(l)
-        bucketname = '/'.join([self.config['analysis'],
-                               self.config['userfolder']])
-        l.addWidget(QLabel('<b>' + 'NeuroCAAS - {0}'.format(bucketname) + '<\b>'))
+        l.addWidget(QLabel('<b>' + 'NeuroCAAS - {0}'.format(', '.join(self.aws_view.bucketnames) + '<\b>')))
         l.addWidget(self.aws_view)
         lay.addWidget(w)
 
@@ -509,10 +656,10 @@ class NCAASwrapper(QMainWindow):
         Checks if the data are analyzed and copies the results. 
         '''
         for i,t in enumerate(self.aws_view.aws_transfer_queue):
-            resultsdir = os.path.dirname(t['awsdestination']).replace('{0}/inputs'.format(self.config['userfolder']),
-                                                                      '{0}/results'.format(self.config['userfolder']))
-            logsdir = os.path.dirname(t['awsdestination']).replace('{0}/inputs'.format(self.config['userfolder']),
-                                                                   '{0}/logs'.format(self.config['userfolder']))
+            resultsdir = os.path.dirname(t['awsdestination']).replace('/inputs/',
+                                                                      '/results/')
+            logsdir = os.path.dirname(t['awsdestination']).replace('inputs',
+                                                                   'logs')
             if t['last_status'] == 'submitted':
                 self.aws_view.aws_transfer_queue[i]['last_status'] = 'fetching_results'
                 self.refresh_queuelist()
@@ -771,20 +918,21 @@ class AWSView(QTreeView):
         
         self.config = config
         self.s3 = s3_connect()
-        self.bucketname = self.config['analysis']
+        print('Connected to Amazon Web Services')
+        self.bucketnames = self.config.keys()
+        print('Using buckets: {0}'.format(', '.join(self.bucketnames)))
         self.awsfiles = []
         self.aws_transfer_queue = []
 
         self.model = AWSItemModel()
         self.setModel(self.model)
-        self.model.setHorizontalHeaderLabels([self.config['analysis']])        
         #aws_model.setEditable(False)
         def open_file(value):
             paths = get_tree_path([value])
             extension = os.path.splitext(paths[0])[-1]
             if extension in ['.yaml','.txt','.json']:
-                wid = TextEditor(paths[0],s3=self.s3,bucket = self.bucketname)
-                self.parent.addDockWidget(Qt.RightDockWidgetArea,wid)
+                wid = TextEditor(paths[0], s3=self.s3, bucket = self.bucketnames)
+                self.parent.addDockWidget(Qt.RightDockWidgetArea, wid)
                 wid.setFloating(True)
                 self.parent.open_editors.append(paths[0])
             elif extension == '':
@@ -797,16 +945,16 @@ class AWSView(QTreeView):
         self.timer_update.start(1500)
 
     def update_files(self):
-        awsfiles = s3_ls(self.s3,self.bucketname)
+        awsfiles = s3_ls(self.s3,self.bucketnames)
         if len(awsfiles) == len(self.awsfiles):
             return
         self.awsfiles = awsfiles
         self.model.clear()
-        self.model.setHorizontalHeaderLabels([self.config['analysis']])        
-        root = QStandardItem(self.config['userfolder'])
+        self.model.setHorizontalHeaderLabels([', '.join(self.bucketnames)])
+        root = QStandardItem()
         filetree = {}
         [make_tree(i.split("/"), filetree) for i in self.awsfiles]
-        build_tree(filetree[self.config['userfolder']],root)
+        build_tree(filetree,root)
         self.model.appendRow(root)
         #index = self.aws_model.indexFromItem(root)
         self.expandAll()
@@ -834,11 +982,23 @@ class AWSView(QTreeView):
             p.path())) for p in e.mimeData().urls()]
         for p in e.mimeData().urls():
             path = p.path()
-            tt = ncaas_dat_upload_queue(
+            files,configselection = ncaas_upload_queue(
                 path,
-                analysis = self.config['analysis'],
-                userfolder = self.config['userfolder'],
-                subfolder = 'inputs',config = self.config)
+                subfolder = 'inputs', config = self.config)
+            # this is where we parse the bucket.
+            if len(configselection) == 0:
+                print('Nothing selected')
+                continue
+            selection = configselection['selection']
+            if (selection['selection']['motion']['selected'] or
+                selection['selection']['compression']['selected'] or
+                selection['selection']['hemodynamics_compensation']['selected']):
+                bucketname = 'cshl-preprocessing-wfield' # TODO: this should not be hardcoded
+            elif selection['selection']['locaNMF']:
+                bucketname = 'cshl-preprocessing-locanmf' # TODO: this should not be hardcoded
+            
+            print('Running analysis on {0}'.format(bucketname))
+
             for t in tt:
                 if len(self.aws_transfer_queue):
                     names = [a['name'] for a in self.aws_transfer_queue]
