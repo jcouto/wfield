@@ -63,6 +63,8 @@ from PyQt5 import QtCore
 from PyQt5.QtGui import QStandardItem, QStandardItemModel,QColor
 from PyQt5.QtCore import Qt, QTimer,QMimeData
 
+import yaml
+
 try:
     import boto3
 except:
@@ -99,6 +101,7 @@ defaultconfig = {
         submit = dict(
             instance_type =  'r5.16xlarge',
             analysis_extension = '.bin',
+            userfolder = 'ChurchlandLab',
             decompress_results = True),  # this will decompress the U matrix when downloading
         config = dict(block_height = 90,
                       block_width = 80,
@@ -107,14 +110,15 @@ defaultconfig = {
                       max_components = 15,
                       num_sims = 64,
                       overlapping = True,
-                      window_length = 7200)),
+                      window_length = 1000)), # 7200
     'cshl-wfield-locanmf': {
         'submit':dict(
             instance_type =  'p2.xlarge',
-            params_filename = 'params.yml',
-            areanames_filename = 'atlas_labels.json',
+            userfolder = 'data',
+            params_filename = 'config.yaml',
+            areanames_filename = 'labels.json',
             atlas_filename = 'atlas.npy',
-            brainmask_filename = 'brain_mask.npy',
+            brainmask_filename = 'brainmask.npy',
             temporal_data_filename = 'SVTcorr.npy',
             spatial_data_filename = 'U.npy'),
         'config' :dict(maxrank=5,
@@ -441,8 +445,7 @@ class  AnalysisSelectionWidget(QDialog):
         
         self.selections = analysis_selection_dict
         def ckchanged(ind,chk):
-            val = self.selections[ind]['run'] = chk.isChecked()
-            
+            val = self.selections[ind]['selected'] = chk.isChecked()
         for i,k in enumerate(self.selections):
             self.selections[i]['checkbox'] = QCheckBox()
             name = QLabel(k['name'])
@@ -470,6 +473,7 @@ class  AnalysisSelectionWidget(QDialog):
                     name = QLabel(k)
                     lay.addRow(name,c)
                     c.textChanged.connect(partial(vchanged,'cshl-wfield-preprocessing' ,k,c))
+                    
         if 'cshl-wfield-locanmf' in self.config.keys():
             if 'config' in self.config['cshl-wfield-locanmf'].keys():
                 lay.addRow(QLabel('Parameters for feature extraction'))                                  
@@ -481,7 +485,6 @@ class  AnalysisSelectionWidget(QDialog):
         tabwidget.addTab(parameterswid,'Parameters')
 
         files = glob(pjoin(path,'*'))
-
         fileswid = QWidget()
         lay = QFormLayout()
         fileswid.setLayout(lay)
@@ -500,7 +503,7 @@ class  AnalysisSelectionWidget(QDialog):
             f = QCheckBox()
             name = QLabel(os.path.basename(fname['fname']))
             lay.addRow(f,name)
-            f.clicked.connect(partial(filechanged, i,f))
+            f.clicked.connect(partial(filechanged, len(self.files),f))
             f.setChecked(fname['selected'])
         if not len(self.files):
             print('This folder {0} contained no files that can be analysed.'.format(path))
@@ -508,6 +511,32 @@ class  AnalysisSelectionWidget(QDialog):
         scroll.setWidget(fileswid)
         tabwidget.addTab(scroll,'File selection')
 
+        advancedwid = QWidget()
+        lay = QFormLayout()
+        advancedwid.setLayout(lay)
+        def vschanged(analysis,option_name,edit):
+            dtype = type(self.config[analysis]['submit'][option_name])
+            self.config[analysis]['submit'][option_name] = dtype(edit.text())
+
+        if 'cshl-wfield-preprocessing' in self.config.keys():
+            if 'submit' in self.config['cshl-wfield-preprocessing'].keys():
+                lay.addRow(QLabel('Advanced parameters for motion correction, compression, denoising and hemodynamics compensation'))
+                for k in self.config['cshl-wfield-preprocessing']['submit'].keys():
+                    c = QLineEdit(str(self.config['cshl-wfield-preprocessing']['submit'][k]))
+                    name = QLabel(k)
+                    lay.addRow(name,c)
+                    c.textChanged.connect(partial(vschanged,'cshl-wfield-preprocessing' ,k,c))
+        if 'cshl-wfield-locanmf' in self.config.keys():
+            if 'submit' in self.config['cshl-wfield-locanmf'].keys():
+                lay.addRow(QLabel('Advanced parameters for feature extraction'))                                  
+                for k in self.config['cshl-wfield-locanmf']['submit'].keys():
+                    c = QLineEdit(str(self.config['cshl-wfield-locanmf']['submit'][k]))
+                    name = QLabel(k)
+                    lay.addRow(name,c)
+                    c.textChanged.connect(partial(vschanged,'cshl-wfield-locanmf',k,c))
+        tabwidget.addTab(advancedwid,'Advanced configuration')
+
+        
         submit_button = QPushButton('Submit analysis')
         layout.addWidget(submit_button,1,0)
         self.transfer_queue = []
@@ -518,16 +547,23 @@ class  AnalysisSelectionWidget(QDialog):
             for f in self.files:
                 if f['selected']:
                     filetransfer.append(f['fname'])
-                    foldername = os.path.basename(path)
-                    aws_transfer_queue.append(
-                        dict(name = os.path.basename(f['fname']),
-                             awsdestination = 'inputs/'+foldername+'/'+os.path.basename(f['fname']),
-                             localpath = f['fname'],
-                             last_status = 'pending_transfer'))
+            foldername = os.path.basename(path)
+            if len(filetransfer):
+                aws_transfer_queue.append(
+                    dict(name = foldername, #os.path.basename(filetransfer[0]),
+                         awsdestination = [foldername + '/inputs/'
+                                           +os.path.basename(f) for f in filetransfer],
+                         awssubmit = foldername+'/submit.json',
+                         awsbucket = None,
+                         localpath = filetransfer,
+                         last_status = 'pending_transfer'))
             if len(aws_transfer_queue):
                 self.transfer_queue = aws_transfer_queue
                 self.transfer_config = dict(self.config,selection=self.selections)
-                self.close()
+            else:
+                print('No files selected.')
+            self.close()
+
         submit_button.clicked.connect(submit)    
         self.show()
         
@@ -537,15 +573,15 @@ class  AnalysisSelectionWidget(QDialog):
 
 def ncaas_upload_queue(path,
                        subfolder = 'inputs',config = None):
-    # Search and upload dat file, respect folder structure, return path 
-    if os.path.isfile(path):
-        path = os.path.dirname(path)
-    print('Selected folder: {0}'.format(path))
-    print('Choose the analysis to run.')
+    # Search and upload dat file, respect folder structure, return path
     if sys.platform in ['win32']: # path fix on windows
         if path[0] == '/':
             path = path[1:]
-    dlg = AnalysisSelectionWidget(os.path.dirname(path),config)
+    if not os.path.isdir(path):
+        path = os.path.dirname(path)
+    print('Selected folder: {0}'.format(path))
+    print('Choose the analysis to run.')
+    dlg = AnalysisSelectionWidget(path,config)
     dlg.exec_()
     return (dlg.transfer_queue,dlg.transfer_config)
     
@@ -631,7 +667,7 @@ class NCAASwrapper(QMainWindow):
         self.infomon = QTextEdit()
         self.infomon.insertPlainText(''.join(tail(historypath)))
 
-        self.submitb = QPushButton('Run on NCAAS')
+        self.submitb = QPushButton('Submit to NeuroCAAS')
         self.submitb.setStyleSheet("font: bold")
 
         sl.addWidget(self.queuelist,1,0,2,1)        
@@ -656,26 +692,28 @@ class NCAASwrapper(QMainWindow):
         Checks if the data are analyzed and copies the results. 
         '''
         for i,t in enumerate(self.aws_view.aws_transfer_queue):
-            resultsdir = os.path.dirname(t['awsdestination']).replace('/inputs/',
-                                                                      '/results/')
-            logsdir = os.path.dirname(t['awsdestination']).replace('inputs',
-                                                                   'logs')
+            resultsdir = os.path.dirname(t['awsdestination'][0]).replace('/inputs',
+                                                                         '/results')
+            outputsdir = os.path.dirname(t['awsdestination'][0]).replace('/inputs',
+                                                                         '/outputs')
+            logsdir = os.path.dirname(t['awsdestination'][0]).replace('/inputs',
+                                                                      '/logs')
             if t['last_status'] == 'submitted':
                 self.aws_view.aws_transfer_queue[i]['last_status'] = 'fetching_results'
                 self.refresh_queuelist()
                 resultsfiles = []
                 for a in self.aws_view.awsfiles:
-                    if resultsdir in a:
+                    if resultsdir in a or outputsdir in a:
                         resultsfiles.append(a)
                 if len(resultsfiles):
                     if logsdir in a:
                         resultsfiles.append(a)
                     print('Found results for {name}'.format(**t))
-                    localpath = pjoin(os.path.dirname(t['localpath']),'results')
+                    localpath = pjoin(os.path.dirname(t['localpath'][0]),'results')
                     if not os.path.isdir(localpath):
                         os.makedirs(localpath)
                         self.to_log('Creating {0}'.format(localpath))
-                    bucket = self.aws_view.s3.Bucket(self.config["analysis"])
+                    bucket = self.aws_view.s3.Bucket(t['awsbucket'])
                     self.fetching_results = True
                     for f in resultsfiles:
                         def get():
@@ -687,51 +725,57 @@ class NCAASwrapper(QMainWindow):
                             QApplication.processEvents()
                             time.sleep(0.1)
                     self.to_log('Done fetching results to {0}'.format(localpath))
-                    self.aws_view.aws_transfer_queue[i]['last_status'] = 'got_results'
-                    if self.config['decompress_results']:
-                        try:
-                            for f in resultsfiles:
-                                # read U and decompress this should become a function 
-                                if 'sparse_spatial.npz' in f:
-                                    fname = pjoin(localpath,'sparse_spatial.npz')
-                                    fcfg =  pjoin(localpath,'config.yaml')
-                                    if os.path.isfile(fcfg):
-                                        with open(fcfg,'r') as fc:
-                                            import yaml
-                                            config = yaml.load(fc)
-                                            H,W = (config['fov_height'],config['fov_width'])
-                                        if os.path.isfile(fname):
-                                            from scipy.sparse import load_npz
-                                            Us = load_npz(fname)
-                                            U = np.squeeze(np.asarray(Us.todense()))
-                                            U = U.reshape([H,W,-1])
-                                            # This may overwrite.. prompt
-                                            np.save(fname.replace('sparse_spatial.npz','U.npy'),U)
-                                            self.to_log('Decompressed {0}'.format(f))
-                                        else:
-                                            print('Could not decompress (no file)')
-                                    else:
-                                        print('Could not decompress (no config.yaml?)')
-                        except Exception as err:
-                            self.parent.to_log('ERROR: FAILED TO DECOMPRESS. The error was dumped to the console.')
-                            print(err)
 
+                    self.aws_view.aws_transfer_queue[i]['last_status'] = 'got_results'
+
+                    
                     if self.delete_inputs:
                         # need to delete the remote data
-                        configpath = os.path.dirname(t['awsdestination'])+'/'+'config.yaml' 
-                        submitpath = os.path.dirname(t['awsdestination'])+'/'+'submit.json'
-                        self.aws_view.s3.Object(self.config["analysis"],t['awsdestination']).delete()
-                        self.aws_view.s3.Object(self.config["analysis"],configpath).delete()
-                        self.aws_view.s3.Object(self.config["analysis"],submitpath).delete()
+                        configpath = os.path.dirname(t['awsdestination'][0])+'/'+'config.yaml' 
+                        submitpath = t['awssubmit']#os.path.dirname(t['awsdestination'])+'/'+'submit.json'
+                        for a in t['awsdestination']:
+                            self.aws_view.s3.Object(t['awsbucket'],a).delete()
+                        self.aws_view.s3.Object(t['awsbucket'],configpath).delete()
+                        self.aws_view.s3.Object(t['awsbucket'],submitpath).delete()
                         self.to_log('Remote delete: {0}'.format(t['awsdestination']))
                     if self.delete_results:
                         for f in resultsfiles:
-                            self.aws_view.s3.Object(self.config["analysis"],f).delete()
+                            self.aws_view.s3.Object(t['awsbucket'],f).delete()
                             self.to_log('Remote delete: {0}'.format(f))
                     self.to_log('COMPLETED {0}'.format(t['name']))
+                
                     self.fetching_results = False
                     self.remove_from_queue(self.queuelist.item(i))
                     return # because we removed an item from the queue, restart the loop
+                    
+                    #if self.config['decompress_results']:
+                    #    try:
+                    #        for f in resultsfiles:
+                    #            # read U and decompress this should become a function 
+                    #            if 'sparse_spatial.npz' in f:
+                    #                fname = pjoin(localpath,'sparse_spatial.npz')
+                    #                fcfg =  pjoin(localpath,'config.yaml')
+                    #                if os.path.isfile(fcfg):
+                    #                    with open(fcfg,'r') as fc:
+                    #                        import yaml
+                    #                        config = yaml.load(fc)
+                    #                        H,W = (config['fov_height'],config['fov_width'])
+                    #                    if os.path.isfile(fname):
+                    #                        from scipy.sparse import load_npz
+                    #                        Us = load_npz(fname)
+                    #                        U = np.squeeze(np.asarray(Us.todense()))
+                    #                        U = U.reshape([H,W,-1])
+                                            # This may overwrite.. prompt
+                    #                        np.save(fname.replace('sparse_spatial.npz','U.npy'),U)
+                    # #                      self.to_log('Decompressed {0}'.format(f))
+                    #                    else:
+                    #                        print('Could not decompress (no file)')
+                    #                else:
+                    #                    print('Could not decompress (no config.yaml?)')
+                    #    except Exception as err:
+                    #        self.parent.to_log('ERROR: FAILED TO DECOMPRESS. The error was dumped to the console.')
+                    #        print(err)
+
 
     def remove_from_queue(self,item):
         itemname = item.text()
@@ -749,7 +793,7 @@ class NCAASwrapper(QMainWindow):
 
     def store_transfer_queue(self):
         with open(self.transferqpath,'w') as fp:
-            json.dump(self.aws_view.aws_transfer_queue,fp,indent=4)
+            json.dump(self.aws_view.aws_transfer_queue,fp, indent=4)
 
     def refresh_queuelist(self,store=True):
         if store:
@@ -776,83 +820,96 @@ class NCAASwrapper(QMainWindow):
             print('Upload in progress')
             return
         self.uploading = True
+        self.submitb.setEnabled(False)
+        self.submitb.setText('Transfer in progress')                        
+
         for i,t in enumerate(self.aws_view.aws_transfer_queue):
             print(t)
             if t['last_status'] == 'pending_transfer':
-                if os.path.isfile(t['localpath']):
-                    self.aws_view.aws_transfer_queue[i]['last_status'] = 'in_transfer'
-                    self.refresh_queuelist()
-                    self.pbar.setValue(0)
-                    self.pbar.setMaximum(100)
-                    self.count = 0
-                    class Upload():
-                        def __init__(self,item,config,s3):
-                            self.config = config
-                            self.s3 = s3
-                            self.item = item
-                            statinfo = os.stat(t['localpath'])
-                            self.fsize = statinfo.st_size
-                            self.count = 0
-                            self.isrunning = False
-                        def run(self):
-                            def update(chunk):
-                                self.count += chunk
-                            t = self.item
-                            self.isrunning = True
-                            bucket =self.s3.Bucket(self.config['analysis'])
-                            print('Uploading to {0}'.format(t['awsdestination']))
-                            bucket.upload_file(t['localpath'],
-                                               t['awsdestination'],
-                                               Callback = update)
-                                               #Config=multipart_config)
-                            self.isrunning = False
-                    upload = Upload(t,self.config,self.aws_view.s3)
-                    self.to_log('Transfering {name}'.format(**t))
-                    thread = threading.Thread(target=upload.run)
-                    thread.start()
-                    time.sleep(1)
-                    cnt = 0
-                    while (upload.isrunning):
-                        QApplication.processEvents()
-                        self.pbar.setValue(np.ceil(upload.count*98/upload.fsize))
-                        time.sleep(0.1)
-                        cnt+= 1
-                        if np.mod(cnt,2) == 0:
-                            self.submitb.setStyleSheet("color: red")
-                        else:
-                            self.submitb.setStyleSheet("color: black")
+                for it, fname in enumerate(t['localpath']):
+                    if os.path.isfile(fname):
+                        self.pbar.setValue(0)
+                        self.pbar.setMaximum(100)
+                        self.aws_view.aws_transfer_queue[i]['last_status'] = 'in_transfer'
+                        self.refresh_queuelist()
+                        self.count = 0
+                        class Upload():
+                            def __init__(self,item,config,s3):
+                                self.config = config
+                                self.s3 = s3
+                                self.item = item
+                                statinfo = os.stat(fname)
+                                self.fsize = statinfo.st_size
+                                self.count = 0
+                                self.isrunning = False
+                            def run(self):
+                                def update(chunk):
+                                    self.count += chunk
+                                    t = self.item
+                                    self.isrunning = True
+                                bucket =self.s3.Bucket(t['awsbucket'])
+                                print('Uploading to {0}'.format(t['awsdestination'][it]))
+                                bucket.upload_file(t['localpath'][it],
+                                                   t['awsdestination'][it],
+                                                   Callback = update)
+                                #Config=multipart_config)
+                                self.isrunning = False
+                        upload = Upload(t,self.config,self.aws_view.s3)
+                        self.to_log('Transfering {0}'.format(t['localpath'][it]))
+                        thread = threading.Thread(target=upload.run)
+                        thread.start()
+                        time.sleep(1)
+                        cnt = 0
+                        while (upload.isrunning):
+                            QApplication.processEvents()
+                            self.pbar.setValue(np.ceil(upload.count*98/upload.fsize))
+                            time.sleep(0.1)
+                            cnt+= 1
+                            if np.mod(cnt,2) == 0:
+                                self.submitb.setStyleSheet("color: red")
+                            else:
+                                self.submitb.setStyleSheet("color: black")
                             
-                    self.submitb.setStyleSheet("color: red")
-                    QApplication.processEvents()
-                    self.to_log('Done transfering {name}'.format(**t))
-                    self.aws_view.aws_transfer_queue[i]['last_status'] = 'uploaded'
-                else:
-                    self.to_log('File not found {localpath}'.format(**t))
-                    self.remove_from_queue(self.queuelist.item(i))
-                    return
+                        QApplication.processEvents()
+                        self.to_log('Done transfering {name}'.format(**t))
+                        self.pbar.setMaximum(100)
+                    else:
+                        self.to_log('File not found {localpath}'.format(**t))
+                        self.remove_from_queue(self.queuelist.item(i))
+                        self.submitb.setStyleSheet("color: black")
+                        self.submitb.setEnabled(False)
+                        return
+                self.submitb.setStyleSheet("color: black")
+                self.pbar.setValue(0)
+                self.aws_view.aws_transfer_queue[i]['last_status'] = 'uploaded'
+
             if t['last_status'] == 'uploaded':
                 # add a config file
                 import yaml
-                tempfile = pjoin(os.path.expanduser('~'),'.wfield','temp_config.yaml')
-                with open(tempfile,'w') as f: 
-                    yaml.dump(self.config['config'],f)
-                bucket =self.aws_view.s3.Bucket(self.config['analysis'])
-                bucket.upload_file(tempfile,
-                                   os.path.dirname(t['awsdestination'])+'/'+'config.yaml')
+                temp = pjoin(os.path.expanduser('~'),'.wfield','temp_config.yaml')
+                with open(temp,'w') as f: 
+                    yaml.dump(t['config'],f)
+                bucket =self.aws_view.s3.Bucket(t['awsbucket'])
+                bucket.upload_file(temp,
+                                   os.path.dirname(t['awsdestination'][0])+'/'+'config.yaml')
                 self.to_log('Uploaded default config to {name}'.format(**t))
                 
-                tempfile = pjoin(os.path.expanduser('~'),'.wfield','temp_submit.json')
-                tmp = dict(dataname = os.path.dirname(t['awsdestination']),
-                           instance_type =  self.config["instance_type"])
-                with open(tempfile,'w') as f:
-                    json.dump(tmp,f)
-                bucket =self.aws_view.s3.Bucket(self.config['analysis'])
-                bucket.upload_file(tempfile,
-                                   os.path.dirname(t['awsdestination'])+'/'+'submit.json')
+                temp = pjoin(os.path.expanduser('~'),'.wfield','temp_submit.json')
+                t['submit'] = {k:t['submit'][k] for k in t['submit'] if not k in ['userfolder',
+                                                                                  'analysis_extension',
+                                                                                  'decompress_results']}
+                tmp = dict(t['submit'],
+                           dataname = os.path.dirname(t['awsdestination'][0])+'/')
+                with open(temp,'w') as f:
+                    json.dump(tmp, f, indent=4, sort_keys=True)
+                bucket.upload_file(temp,
+                                   t['awssubmit'])#os.path.dirname(t['awsdestination'][0])+'/'+'submit.json')
                 self.to_log('Submitted analysis {name}'.format(**t))
                 self.aws_view.aws_transfer_queue[i]['last_status'] = 'submitted'
                         
         self.uploading = False
+        self.submitb.setText('Run on NeuroCAAS')                        
+        self.submitb.setEnabled(True)
 
                 
         # for f in filetransfer:
@@ -877,42 +934,64 @@ class AWSView(QTreeView):
             delete = self.menu.addAction("Delete")
             ii = self.indexAt(event)
             item = self.model.index(ii.row(),0,ii.parent())
-            path = get_tree_path([item])[0]
-            if path.endswith('submit.json'):
+            path = get_tree_path([item])
+            if path[-1].endswith('submit.json'):
                 rerun = self.menu.addAction("Re-submit")
             tmp = self.menu.exec_(self.mapToGlobal(event))
             if tmp is not None:
                 if tmp == delete:
-                    path = get_tree_path([item])[0]
-                    self.s3.Object(self.config["analysis"],path).delete()
+                    for p in path:
+                        bucketname = p.strip('/').split('/')[0]
+                        temp = p.replace(bucketname,'').strip('/')
+                        if not self.s3 is None:
+                            self.s3.Object(bucketname,temp).delete()
+                            print(bucketname,temp)
                 elif tmp == rerun:
                     # Download and upload to re-submit. 
                     if not self.s3 is None:
-                        
-                        bucket = self.s3.Bucket(self.bucketname)
-                        bucket.download_file(path,tempfile)
-                        with open(tempfile,'r') as fd:
-                            temp = json.load(fd)
-                        dname = temp['dataname']
-                        for f in self.awsfiles: # find the datfile
-                            if dname in f and f.endswith(self.config['analysis_extension']):
-                                if 'inputs' in f:
-                                    tt = f.split('/')
-                                    localpath = None
-                                    for i,t in enumerate(tt): # todo: re-write
-                                        if t == 'inputs':
-                                            localpath = os.path.abspath(pjoin(os.path.curdir,*tt[i+1:-1]))
-                                    if localpath is None:
-                                        self.to_log('Could not set local folder to re-submit.')
+                        for p in path:
+                            bucketname = p.strip('/').split('/')[0]
+                            fname = p.replace(bucketname,'').strip('/')
+                            
+                            bucket = self.s3.Bucket(bucketname)
+                            bucket.download_file(fname,tempfile)
+                            with open(tempfile,'r') as fd:
+                                temp = json.load(fd)
+                            dname = temp['dataname']
+                            files = []
+                            dicttmp = {}
+                            for f in self.awsfiles: # find the datfile
+                                if dname in f:
+                                    if 'config.yaml' in f:
+                                        bucket.download_file(f.replace(bucketname,'').strip('/'),tempfile)
+                                        with open(tempfile,'r') as fd:
+                                            dicttmp['config'] = yaml.load(fd)
+                                        continue
+                                    if 'submit.json' in f:
+                                        bucket.download_file(f.replace(bucketname,'').strip('/'),tempfile)
+                                        with open(tempfile,'r') as fd:
+                                            dicttmp['submit'] = json.load(fd)
+                                        continue
+                                    files.append(f.replace(bucketname,'').strip('/'))
+                                    if 'inputs' in f:
+                                        tt = f.split('/')
+                                        localpath = None
+                                        for i,t in enumerate(tt): # todo: re-write
+                                            if t == 'inputs':
+                                                localpath = os.path.abspath(pjoin(os.path.curdir,*tt[i+1:-1]))
+                                        if localpath is None:
+                                            self.to_log('Could not set local folder to re-submit.')
                                         localpath = os.path.curdir
-                                    toadd = dict(name = os.path.basename(f),
-                                                 awsdestination = f,
-                                                 localpath = pjoin(localpath,os.path.basename(f)),
-                                                 last_status = "uploaded")
-                                    self.aws_transfer_queue.append(toadd)
-                                    self.parent.refresh_queuelist()
-                                    self.parent.to_log(
-                                        'Re-submitted {0} to the queue, (press "Run on NCAAS" to run).'.format(path))
+                                    
+                            if len(files):
+                                toadd = dict(dicttmp, name = os.path.basename(files[0]),
+                                             awsdestination = files,
+                                             awsbucket=bucketname,
+                                             localpath = [pjoin(localpath,os.path.basename(files[0]))],
+                                             last_status = "uploaded")
+                                self.aws_transfer_queue.append(toadd)
+                                self.parent.refresh_queuelist()
+                                self.parent.to_log('Re-submitted {0} to the queue, (press "Run on NCAAS" to run).'.format(path))
         self.setContextMenuPolicy(Qt.CustomContextMenu)
         self.customContextMenuRequested.connect(menu_here)
         
@@ -931,7 +1010,9 @@ class AWSView(QTreeView):
             paths = get_tree_path([value])
             extension = os.path.splitext(paths[0])[-1]
             if extension in ['.yaml','.txt','.json']:
-                wid = TextEditor(paths[0], s3=self.s3, bucket = self.bucketnames)
+                bucket = paths[0].strip('/').split('/')[0]
+                temp = paths[0].replace(bucket,'').strip('/')
+                wid = TextEditor(temp, s3=self.s3, bucket = bucket)
                 self.parent.addDockWidget(Qt.RightDockWidgetArea, wid)
                 wid.setFloating(True)
                 self.parent.open_editors.append(paths[0])
@@ -977,12 +1058,12 @@ class AWSView(QTreeView):
     def dropEvent(self, e):
         paths = get_tree_path([self.indexAt(e.pos())])
         self.setSelectionMode(3)
-        [print('Goint to  upload from: {1} to aws {0}'.format(
+        [print('Selecting from: {1} to aws {0}'.format(
             paths[0],
             p.path())) for p in e.mimeData().urls()]
         for p in e.mimeData().urls():
             path = p.path()
-            files,configselection = ncaas_upload_queue(
+            transfer, configselection = ncaas_upload_queue(
                 path,
                 subfolder = 'inputs', config = self.config)
             # this is where we parse the bucket.
@@ -990,38 +1071,43 @@ class AWSView(QTreeView):
                 print('Nothing selected')
                 continue
             selection = configselection['selection']
-            if (selection['selection']['motion']['selected'] or
-                selection['selection']['compression']['selected'] or
-                selection['selection']['hemodynamics_compensation']['selected']):
-                bucketname = 'cshl-preprocessing-wfield' # TODO: this should not be hardcoded
-            elif selection['selection']['locaNMF']:
-                bucketname = 'cshl-preprocessing-locanmf' # TODO: this should not be hardcoded
-            
+            if (selection[0]['selected'] or # motion
+                selection[1]['selected'] or # compression
+                selection[2]['selected']):  # hemodynamics
+                bucketname = 'cshl-wfield-preprocessing' # TODO: this should not be hardcoded
+            elif selection[3]['selected']:
+                bucketname = 'cshl-wfield-locanmf' # TODO: this should not be hardcoded
+            else:
+                print('No analysis were selected ? ')
             print('Running analysis on {0}'.format(bucketname))
+            
+            for t in transfer:
+                print('Placing {0} in the transfer queue.'.format(t['name']))
+                t['awsbucket'] = bucketname
+                t['config'] = configselection[bucketname]['config']
+                t['submit'] = configselection[bucketname]['submit']
+                t['awssubmit'] = t['submit']['userfolder']+'/'+t['awssubmit']
+                for i,f in enumerate(t['awsdestination']):
+                    t['awsdestination'][i] = t['submit']['userfolder']+'/'+f
 
-            for t in tt:
-                if len(self.aws_transfer_queue):
+                # Check if it will run locaNMF
+                t['selection'] = [s['acronym'] for s in configselection['selection'] if s['selected']]
+                if 'locanmf' in t['selection']:
+                    t['locanmf_config'] = configselection['cshl-wfield-locanmf']['config'] 
+                    t['locanmf_submit'] = configselection['cshl-wfield-locanmf']['submit'] 
+                added = False
+                if len(self.aws_transfer_queue): # check if it is already there
                     names = [a['name'] for a in self.aws_transfer_queue]
-                    print(names)
-                    print(t['name'])
                     if not t['name'] in names:
+                        added = True
                         self.aws_transfer_queue.append(t)
-                        self.parent.to_log('Added {name} to transfer queue'.format(**t))
                     else:
                         self.parent.to_log('{name} was already in the transfer queue'.format(**t))
                 else:
+                    added = True
                     self.aws_transfer_queue.append(t)
-                    self.parent.to_log('Added {name} to transfer queue'.format(**t))
-                # Select analysis and upload here.
-                import yaml
-                tempfile = pjoin(os.path.expanduser('~'),'.wfield','temp_config.yaml')
-                with open(tempfile,'w') as f: 
-                    yaml.dump(self.config['config'],f)
-                bucket =self.aws_view.s3.Bucket(self.config['analysis'])
-                bucket.upload_file(tempfile,
-                                   os.path.dirname(t['awsdestination'])+'/'+'config.yaml')
-                self.to_log('Uploaded default config to {name}'.format(**t))
-
+            if added:
+                self.parent.to_log('Added {name} to transfer queue'.format(**t))
             self.parent.refresh_queuelist()
         e.ignore() # Dont drop the remote table
         
@@ -1105,8 +1191,12 @@ class FilesystemView(QTreeView):
         if not os.path.isdir(localpath):
             os.makedirs(localpath)
         self.parent.to_log('Fetching to {0}'.format(localpath))
-        bucket = self.parent.aws_view.s3.Bucket(self.parent.config["analysis"])
+
         for f in files:
+
+            bucketname = f.strip('/').split('/')[0]
+            f = f.replace(bucketname,'').strip('/')
+            bucket = self.parent.aws_view.s3.Bucket(bucketname)
             def get():
                 bucket.download_file(f,pjoin(localpath,os.path.basename(f)))
             thread = threading.Thread(target=get)
@@ -1116,33 +1206,32 @@ class FilesystemView(QTreeView):
                 QApplication.processEvents()
                 time.sleep(0.1)
         self.parent.to_log('Done fetching results to {0}'.format(localpath))
-        if self.parent.config['decompress_results']:
-            try:
-                for f in files:
+        #if self.parent.config['decompress_results']:
+            #try:
+            #    for f in files:
                     # read U and decompress
                     # this should become a function 
-                    if 'sparse_spatial.npz' in f:
-                        fname = pjoin(localpath,'sparse_spatial.npz')
-                        fcfg =  pjoin(localpath,'config.yaml')
-                        if os.path.isfile(fcfg):
-                            with open(fcfg,'r') as fc:
-                                import yaml
-                                config = yaml.load(fc)
-                                H,W = (config['fov_height'],config['fov_width'])
-                            if os.path.isfile(fname):
-                                from scipy.sparse import load_npz
-                                Us = load_npz(fname)
-                                U = np.squeeze(np.asarray(Us.todense()))
-                                U = U.reshape([H,W,-1])
-                                np.save(fname.replace('sparse_spatial.npz','U.npy'),U)
-                                self.parent.to_log('Decompressed {0}'.format(f))
-                            else:
-                                print('Could not decompress (no file)')
-                        else:
-                            print('Could not decompress (no config.yaml?)')
-            except Exception as err:
-                self.parent.to_log('ERROR: FAILED TO DECOMPRESS. The error was dumped to the console.')
-                print(err)
+                    #if 'sparse_spatial.npz' in f:
+                    #    fname = pjoin(localpath,'sparse_spatial.npz')
+                    #    fcfg =  pjoin(localpath,'config.yaml')
+                    #    if os.path.isfile(fcfg):
+                    #        with open(fcfg,'r') as fc:
+                    #            config = yaml.load(fc)
+                    #            H,W = (config['fov_height'],config['fov_width'])
+                    #        if os.path.isfile(fname):
+                    #            from scipy.sparse import load_npz
+                    #            Us = load_npz(fname)
+                    #            U = np.squeeze(np.asarray(Us.todense()))
+                    #            U = U.reshape([H,W,-1])
+                    #            np.save(fname.replace('sparse_spatial.npz','U.npy'),U)
+                    #            self.parent.to_log('Decompressed {0}'.format(f))
+                    #        else:
+                    #            print('Could not decompress (no file)')
+                    #    else:
+                    #        print('Could not decompress (no config.yaml?)')
+            #except Exception as err:
+            #    self.parent.to_log('ERROR: FAILED TO DECOMPRESS. The error was dumped to the console.')
+            #    print(err)
         msg = QMessageBox()
         msg.setIcon(QMessageBox.Critical)
         msg.setText("Do you want to delete the remote files?")
@@ -1163,7 +1252,7 @@ class FilesystemView(QTreeView):
         if delete_files:
             # need to delete the remote data
             for f in files:
-                self.parent.aws_view.s3.Object(self.parent.config["analysis"],f).delete()
+                self.parent.aws_view.s3.Object(bucketname,f).delete()
                 self.parent.to_log('Remote delete: {0}'.format(f))
 
         self.parent.to_log('FINISHED MANUAL COPY {0}'.format(to_fetch))
@@ -1181,10 +1270,11 @@ def get_tree_path(items,root = ''):
             index = index.parent()
             level += 1
             paths[-1].append(index.data())
-    for i,p in enumerate(paths):
-        if None in p:
-            paths[i] = ['']
-    return ['/'.join(p[::-1]) for p in paths]
+        for i,p in enumerate(paths[-1]):
+            if p is None :
+                paths[-1][i] = ''
+        paths[-1] = '/'.join(paths[-1][::-1])
+    return paths
 
 def main():
     if QApplication.instance() != None:
