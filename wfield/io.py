@@ -425,7 +425,26 @@ class GenericStack():
             return np.squeeze(img)[:,idx2]
         return np.squeeze(img)
 
-
+    def export_binary(self, foldername, basename = 'frames', chunksize = 512):
+        '''
+        Exports a binary file.
+        '''
+        nframes,nchan,h,w = self.shape
+        chunks = chunk_indices(nframes,chunksize)
+        
+        fname = pjoin('{0}'.format(foldername),'{4}_{0}_{1}_{2}_{3}.bin'.format(
+            *self.shape[1:],self.dtype,basename))
+        if not os.path.isdir(os.path.dirname(fname)):
+            os.makedirs(os.path.dirname(fname))
+        out = np.memmap(fname,
+                        dtype = self.dtype,
+                        mode = 'w+',
+                        shape=self.shape)
+        for c in tqdm(chunks, desc='Exporting binary'):
+            out[c[0]:c[1]] = self[c[0]:c[1]]
+            out.flush()
+        del out
+            
 class ImagerStack(GenericStack):
     def __init__(self,filenames,
                  extension = '.dat',
