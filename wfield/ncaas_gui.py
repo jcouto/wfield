@@ -110,10 +110,10 @@ defaultconfig = {
                       max_components = 15,
                       num_sims = 64,
                       overlapping = True,
-                      window_length = 1000)), # 7200
+                      window_length = 7200)), # 7200
     'cshl-wfield-locanmf': {
         'submit':dict(
-            instance_type =  'p2.xlarge',
+            instance_type =  'p3.2xlarge',
             userfolder = 'data',
             params_filename = 'config.yaml',
             areanames_filename = 'labels.json',
@@ -121,10 +121,14 @@ defaultconfig = {
             brainmask_filename = 'brainmask.npy',
             temporal_data_filename = 'SVTcorr.npy',
             spatial_data_filename = 'U.npy'),
-        'config' :dict(maxrank=5,
-                       min_pixels = 100,
-                       loc_thresh = 80,
-                       r2_thresh = 0.99)}}
+        'config' :{"maxrank": 3,
+                   "loc_thresh": 80,
+                   "min_pixels": 100,
+                   "r2_thresh": 0.99,
+	           "maxiter_hals":20,
+	           "maxiter_lambda":300,
+	           "lambda_step":1.35,
+	           "lambda_init":0.000001}}}
 
 # Function to add credentials
 awsregions = ['us-east-2',
@@ -599,7 +603,7 @@ class NCAASwrapper(QMainWindow):
         self.uploading = False
         self.fetching_results = False
         
-        self.delete_inputs=False
+        self.delete_inputs=True
         self.delete_results=True
         
         awskeys = ncaas_read_aws_keys()
@@ -706,8 +710,9 @@ class NCAASwrapper(QMainWindow):
                         resultsfiles.append(a)
                 if len(resultsfiles):
                     self.aws_view.aws_transfer_queue[i]['last_status'] = 'fetching_results'
-                    if logsdir in a:
-                        resultsfiles.append(a)
+                    for a in self.aws_view.awsfiles:
+                        if logsdir in a:
+                            resultsfiles.append(a)
                     print('Found results for {name}'.format(**t))
                     localpath = pjoin(os.path.dirname(t['localpath'][0]),'results')
                     if not os.path.isdir(localpath):
@@ -717,7 +722,18 @@ class NCAASwrapper(QMainWindow):
                     self.fetching_results = True
                     for f in resultsfiles:
                         def get():
-                            bucket.download_file(f,pjoin(localpath,os.path.basename(f)))
+                            # drop the bucket name
+                            fn = f.replace(t['awsbucket']+'/','')
+                            if outputsdir in f:
+                                lf = fn.replace(outputsdir,localpath)
+                            if resultsdir in f:
+                                lf = fn.replace(resultsdir,localpath)
+                            if logsdir in f:
+                                lf = fn.replace(logsdir,localpath)
+                            if not os.path.isdir(os.path.dirname(lf)):
+                                os.makedirs(os.path.dirname(lf))
+                            print(fn,lf)
+                            bucket.download_file(fn,lf)
                         thread = threading.Thread(target=get)
                         thread.start()
                         self.to_log('Fetching {0}'.format(f))
@@ -740,6 +756,7 @@ class NCAASwrapper(QMainWindow):
                         self.to_log('Remote delete: {0}'.format(t['awsdestination']))
                     if self.delete_results:
                         for f in resultsfiles:
+                            f = f.replace(t['awsbucket']+'/','')
                             self.aws_view.s3.Object(t['awsbucket'],f).delete()
                             self.to_log('Remote delete: {0}'.format(f))
                     self.to_log('COMPLETED {0}'.format(t['name']))
@@ -780,7 +797,13 @@ class NCAASwrapper(QMainWindow):
     def remove_from_queue(self,item):
         itemname = item.text()
         names = [t['name'] for t in self.aws_view.aws_transfer_queue]
-        ii = names.index(itemname)
+        #itemname = itemname..strip('Dataset ')split('-')[0].strip(' ')
+        ii = None
+        for i in range(len(names)):
+            if names[i] in itemname:
+                ii = i
+                break
+        #ii = names.index(itemname)
         tt = self.aws_view.aws_transfer_queue.pop(ii)
         self.to_log('Removed {name} from the tranfer queue'.format(**tt))
         self.queuelist.takeItem(self.queuelist.row(item))

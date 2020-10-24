@@ -444,7 +444,24 @@ class GenericStack():
             out[c[0]:c[1]] = self[c[0]:c[1]]
             out.flush()
         del out
-            
+
+    def export_tiffs(self, foldername, basename = 'frames', chunksize = 512):
+        '''
+        Exports tifffiles.
+        '''
+        nframes,nchan,h,w = self.shape
+        chunks = chunk_indices(nframes,chunksize)
+        file_no = 0
+        fname = pjoin('{0}'.format(foldername),'{0}_{1:05d}.tif')
+        if not os.path.isdir(os.path.dirname(fname)):
+            os.makedirs(os.path.dirname(fname))
+        from tifffile import imsave
+        
+        for c in tqdm(chunks, desc='Exporting tiffs'):
+            imsave(fname.format(basename,file_no),self[c[0]:c[1]])
+            file_no += 1
+
+        
 class ImagerStack(GenericStack):
     def __init__(self,filenames,
                  extension = '.dat',
@@ -473,7 +490,6 @@ class ImagerStack(GenericStack):
                         raise('Could not find files.')
         super(ImagerStack,self).__init__(filenames,extension)
         
-        from wfield.io import _imager_parse_file
         self.index_ch1 = []
         self.index_ch2 = []
         self.extrainfo = []
@@ -516,3 +532,92 @@ class ImagerStack(GenericStack):
         self.current_stack = tmp[idx].reshape([-1,*self.dims])
         self.current_fileidx = fileidx
                     
+class BinaryStack(GenericStack):
+    def __init__(self,filenames,
+                 extension = '.bin'): # this will try this extension first and then .dat
+                
+        '''
+        Select a stack from a binary file or mutliple binary files
+        The file name format needs to ends in _NCHANNELS_H_W_DTYPE.extension
+
+        '''
+        self.fileformat = 'binary'
+        self.extension = extension
+        if type(filenames) is str:
+            # check if it is a folder
+            if os.path.isdir(filenames):
+                dirname = filenames
+                filenames = []
+                filenames = natsorted(glob(pjoin(dirname,'*'+self.extension)))
+                if not len(filenames): # try .dat
+                    self.extension = '.dat'
+                    filenames = natsorted(glob(pjoin(dirname,'*'+self.extension)))
+        if not len(filenames):
+            raise(OSError('Could not find files.'))
+                
+        super(BinaryStack,self).__init__(filenames,extension)
+        offsets = [0]
+        for f in tqdm(self.filenames, desc='Parsing files to know the stack size'):
+            # Parse all binary files
+            print(f)
+            tmp =  mmap_dat(f)
+            dims = tmp.shape[1:]
+            dtype = tmp.dtype
+            offsets.append(tmp.shape[0])
+            del tmp
+        # offset for each file
+        self.frames_offset = np.cumsum(offsets)
+
+        self.dims = dims
+        self.dtype = dtype
+        self.nframes = self.frames_offset[-1]
+        self.shape = tuple([self.nframes,*self.dims])
+        
+    def _load_substack(self,fileidx,channel = None):
+        self.current_stack = mmap_dat(self.filenames[fileidx])
+        self.current_fileidx = fileidx
+
+        
+class TiffStack(GenericStack):
+    def __init__(self,filenames,
+                 extension = '.tiff'): # this will try this extension first and then .tif, .TIFF and .TIF):
+        '''
+        Select a stack from a sequence of TIFF stack files
+
+        '''
+        self.extension = extension
+        if type(filenames) is str:
+            # check if it is a folder
+            if os.path.isdir(filenames):
+                dirname = filenames
+                filenames = []
+                for extension in [self.extension,'.tif','.TIFF','.TIF']:
+                    if not len(filenames): # try other
+                        self.extension = extension
+                        filenames = natsorted(glob(pjoin(dirname,'*'+self.extension)))
+        if not len(filenames):
+            raise(OSError('Could not find files.'))
+                
+        super(TiffStack,self).__init__(filenames,extension)
+
+        from tifffile import imread, TiffFile
+        self.imread = imread
+        offsets = [0]
+        for f in tqdm(self.filenames, desc='Parsing tiffs'):
+            # Parse all files in the stack
+            tmp =  TiffFile(f)
+            dims = tmp.f.series[0].shape
+            dtype = tmp.dtype
+            offsets.append(dims[0])
+            del tmp
+        # offset for each file
+        self.frames_offset = np.cumsum(offsets)
+
+        self.dims = dims[1:]
+        self.dtype = dtype
+        self.nframes = self.frames_offset[-1]
+        self.shape = tuple([self.nframes,*self.dims])
+        
+    def _load_substack(self,fileidx,channel = None):
+        self.current_stack = self.imread(self.filenames[fileidx])
+        self.current_fileidx = fileidx
