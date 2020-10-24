@@ -106,11 +106,10 @@ defaultconfig = {
         config = dict(block_height = 90,
                       block_width = 80,
                       frame_rate = 60,
-                      number_of_channels = 2,
                       max_components = 15,
                       num_sims = 64,
                       overlapping = True,
-                      window_length = 7200)), # 7200
+                      window_length = 200)), # 7200    
     'cshl-wfield-locanmf': {
         'submit':dict(
             instance_type =  'p3.2xlarge',
@@ -703,13 +702,13 @@ class NCAASwrapper(QMainWindow):
             logsdir = os.path.dirname(t['awsdestination'][0]).replace('/inputs',
                                                                       '/logs')
             if t['last_status'] == 'submitted':
-                self.refresh_queuelist()
                 resultsfiles = []
                 for a in self.aws_view.awsfiles:
                     if resultsdir in a or outputsdir in a:
                         resultsfiles.append(a)
                 if len(resultsfiles):
                     self.aws_view.aws_transfer_queue[i]['last_status'] = 'fetching_results'
+                    self.refresh_queuelist()
                     for a in self.aws_view.awsfiles:
                         if logsdir in a:
                             resultsfiles.append(a)
