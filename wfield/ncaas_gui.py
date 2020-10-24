@@ -699,13 +699,13 @@ class NCAASwrapper(QMainWindow):
             logsdir = os.path.dirname(t['awsdestination'][0]).replace('/inputs',
                                                                       '/logs')
             if t['last_status'] == 'submitted':
-                self.aws_view.aws_transfer_queue[i]['last_status'] = 'fetching_results'
                 self.refresh_queuelist()
                 resultsfiles = []
                 for a in self.aws_view.awsfiles:
                     if resultsdir in a or outputsdir in a:
                         resultsfiles.append(a)
                 if len(resultsfiles):
+                    self.aws_view.aws_transfer_queue[i]['last_status'] = 'fetching_results'
                     if logsdir in a:
                         resultsfiles.append(a)
                     print('Found results for {name}'.format(**t))
@@ -803,6 +803,7 @@ class NCAASwrapper(QMainWindow):
                 it = QListWidgetItem(itt['name'])
                 self.queuelist.insertItem(self.queuelist.count(),it)
             item = self.queuelist.item(i)
+            item.setText('Dataset {0} - state {1}'.format(itt['name'],itt['last_status']))
             if itt['last_status'] == 'pending_transfer':
                 item.setForeground(QColor(204,102,0))
             elif itt['last_status'] in ['in_transfer','fetching_results']:
