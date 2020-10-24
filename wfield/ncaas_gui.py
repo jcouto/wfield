@@ -82,7 +82,7 @@ defaultconfig = dict(analysis = 'cshl-wfield-preprocessing',
                                    max_components = 15,
                                    num_sims = 64,
                                    overlapping = True,
-                                   window_length = 7200))
+                                   window_length = 1000))
 
 # Function to add credentials
 awsregions = ['us-east-2',
@@ -381,12 +381,12 @@ def ncaas_dat_upload_queue(path,
                            userfolder,
                            subfolder = 'inputs',config = None):
     # Search and upload dat file, respect folder structure, return path 
-    if os.path.isfile(path):
-        path = os.path.dirname(path)
-    foldername = os.path.basename(path)
     if sys.platform in ['win32']: # path fix on windows
         if path[0] == '/':
             path = path[1:]
+    if os.path.isfile(path):
+        path = os.path.dirname(path)
+    foldername = os.path.basename(path)
     filetransfer = []
     aws_transfer_queue = []
     for root, dirs, files in os.walk(path):
@@ -834,6 +834,7 @@ class AWSView(QTreeView):
             p.path())) for p in e.mimeData().urls()]
         for p in e.mimeData().urls():
             path = p.path()
+
             tt = ncaas_dat_upload_queue(
                 path,
                 analysis = self.config['analysis'],
@@ -857,10 +858,10 @@ class AWSView(QTreeView):
                 tempfile = pjoin(os.path.expanduser('~'),'.wfield','temp_config.yaml')
                 with open(tempfile,'w') as f: 
                     yaml.dump(self.config['config'],f)
-                bucket =self.aws_view.s3.Bucket(self.config['analysis'])
+                bucket =self.s3.Bucket(self.config['analysis'])
                 bucket.upload_file(tempfile,
                                    os.path.dirname(t['awsdestination'])+'/'+'config.yaml')
-                self.to_log('Uploaded default config to {name}'.format(**t))
+                self.parent.to_log('Uploaded default config to {name}'.format(**t))
 
             self.parent.refresh_queuelist()
         e.ignore() # Dont drop the remote table
