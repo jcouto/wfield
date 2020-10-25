@@ -40,9 +40,13 @@ def approximate_svd(dat, frames_average,
         dat_path = None
     dims = dat.shape[1:]
 
+    # the number of bins needs to be larger than k because of the number of components.
+    if nbinned_frames < k:
+        nframes_per_bin = np.clip(int(np.floor(len(dat)/(k))),1,nframes_per_bin)
+
     nbinned_frames = np.min([nbinned_frames,
                              int(np.floor(len(dat)/nframes_per_bin))])
-
+    
     idx = np.arange(0,nbinned_frames*nframes_per_bin,nframes_per_bin,
                     dtype='int')
     if not idx[-1] == len(dat):
@@ -62,10 +66,10 @@ def approximate_svd(dat, frames_average,
     # Get U from the single value decomposition 
     cov = np.dot(binned,binned.T)/binned.shape[1]
     cov = cov.astype('float32')
-    
+
     u,s,v = svd(cov)
     U = normalize(np.dot(u[:,:k].T, binned),norm='l2',axis=1)
-
+    k = U.shape[0]     # in case the k was smaller (low var)
     # if trials are defined, then use them to chunck data so that the baseline is correct
     if onsets is None:
         idx = np.arange(0,len(dat),nframes_per_chunk,dtype='int')
@@ -84,7 +88,8 @@ def approximate_svd(dat, frames_average,
         avg = get_trial_baseline(idx[i],frames_average,onsets).astype('float32')
         blk = (blk-avg+np.float32(1e-5))/(avg+np.float32(1e-5))
         V[:,idx[i]:idx[i+1],:] = np.dot(
-            U,blk.reshape([-1,np.multiply(*dims[1:])]).T).reshape((k,-1,2))   
+            U, blk.reshape([-1,np.multiply(*dims[1:])]).T).reshape((k,-1,dat.shape[1]))  
+
 
     SVT = V.reshape((k,-1))
     U = U.T.reshape([*dims[-2:],-1])

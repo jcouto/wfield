@@ -649,19 +649,22 @@ def load_stack(foldername,order = ['binary','tiff','imager'], nchannels=None):
     # First check whats in the folder
     if os.path.isfile(foldername):
         if foldername.endswith('.bin') or  foldername.endswith('.dat'): 
-            return mmap_load(foldername)
+            return mmap_dat(foldername)
     # Check binary sequence.
     files = natsorted(glob(pjoin(foldername,'*.bin')))
     if len(files):
-        print('Loading binary stack.')
         # these don't need channel number because it is written with the filename
+        if len(files) == 1:
+            return mmap_dat(files[0])
+        print('Loading binary stack.')
         return BinaryStack(files) 
     # check tiff sequence
     for ext in ['.TIFF','.TIF','.tif','.tiff']:
         files = natsorted(glob(pjoin(foldername,'*'+ext)))
         if len(files):
             return TiffStack(files, nchannels = nchannels)
-        
+    # check for avi and mov
+    
     # check imager
     files = natsorted(glob(pjoin(foldername,'Analog*.dat')))
     if len(files):
@@ -669,4 +672,6 @@ def load_stack(foldername,order = ['binary','tiff','imager'], nchannels=None):
     # check for dat
     files = natsorted(glob(pjoin(foldername,'*.dat')))
     if len(files):
-        return ImagerStack(foldername)
+        if len(files) == 1:
+            return mmap_dat(files[0])
+        return BinaryStack(foldername)

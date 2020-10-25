@@ -130,8 +130,10 @@ class AllenMatchTable(QWidget):
         # save transform
         self.wsave = QPushButton('Save points')
         l.addRow(self.wsave)
-        
-        self.wsave.clicked.connect(self.usave)    
+        def usave():
+            print('Saving points and landmarks to the _landmarks.json file.')
+            self.usave()
+        self.wsave.clicked.connect(usave)    
         lay.addRow(self.table,w)
 
     def usave(self):
@@ -155,7 +157,6 @@ class AllenMatchTable(QWidget):
                              bregma_offset = self.bregma_offset,
                              landmarks_match = landmarks_match,
                              transform = self.M)
-        print('Saving points and landmarks to {0}'.format(fname))
         self.parent.M = self.M
 
 class AllenArea(pg.PlotCurveItem):
