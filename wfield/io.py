@@ -425,27 +425,32 @@ class GenericStack():
             return np.squeeze(img)[:,idx2]
         return np.squeeze(img)
 
-    def export_binary(self, foldername, basename = 'frames', chunksize = 512):
+    def export_binary(self, foldername, basename = 'frames', chunksize = 512, channel = None):
         '''
         Exports a binary file.
         '''
         nframes,nchan,h,w = self.shape
         chunks = chunk_indices(nframes,chunksize)
-        
+        shape = [*self.shape]
+        if not channel is None:
+            shape[1] = 1
         fname = pjoin('{0}'.format(foldername),'{4}_{0}_{1}_{2}_{3}.bin'.format(
-            *self.shape[1:],self.dtype,basename))
+            *shape[1:],self.dtype,basename))
         if not os.path.isdir(os.path.dirname(fname)):
             os.makedirs(os.path.dirname(fname))
         out = np.memmap(fname,
                         dtype = self.dtype,
                         mode = 'w+',
-                        shape=self.shape)
+                        shape=tuple(shape))
         for c in tqdm(chunks, desc='Exporting binary'):
-            out[c[0]:c[1]] = self[c[0]:c[1]]
+            if channel is None:
+                out[c[0]:c[1]] = self[c[0]:c[1]]
+            else:
+                out[c[0]:c[1],0] = self[c[0]:c[1],channel]
             out.flush()
         del out
 
-    def export_tiffs(self, foldername, basename = 'frames', chunksize = 512):
+    def export_tiffs(self, foldername, basename = 'frames', chunksize = 512, channel = None):
         '''
         Exports tifffiles.
         '''
@@ -456,9 +461,11 @@ class GenericStack():
         if not os.path.isdir(os.path.dirname(fname)):
             os.makedirs(os.path.dirname(fname))
         from tifffile import imsave
-        
         for c in tqdm(chunks, desc='Exporting tiffs'):
-            imsave(fname.format(basename,file_no),self[c[0]:c[1]])
+            if channel is None:
+                imsave(fname.format(basename,file_no),self[c[0]:c[1]].reshape((-1,*self.dims[1:])))
+            else:
+                imsave(fname.format(basename,file_no),self[c[0]:c[1],channel].squeeze())
             file_no += 1
 
         
@@ -559,7 +566,6 @@ class BinaryStack(GenericStack):
         offsets = [0]
         for f in tqdm(self.filenames, desc='Parsing files to know the stack size'):
             # Parse all binary files
-            print(f)
             tmp =  mmap_dat(f)
             dims = tmp.shape[1:]
             dtype = tmp.dtype
@@ -580,7 +586,8 @@ class BinaryStack(GenericStack):
         
 class TiffStack(GenericStack):
     def __init__(self,filenames,
-                 extension = '.tiff'): # this will try this extension first and then .tif, .TIFF and .TIF):
+                 extension = '.tiff', # this will try this extension first and then .tif, .TIFF and .TIF
+                 nchannels = 2): 
         '''
         Select a stack from a sequence of TIFF stack files
 
@@ -597,27 +604,28 @@ class TiffStack(GenericStack):
                         filenames = natsorted(glob(pjoin(dirname,'*'+self.extension)))
         if not len(filenames):
             raise(OSError('Could not find files.'))
-                
         super(TiffStack,self).__init__(filenames,extension)
-
         from tifffile import imread, TiffFile
         self.imread = imread
         offsets = [0]
         for f in tqdm(self.filenames, desc='Parsing tiffs'):
             # Parse all files in the stack
             tmp =  TiffFile(f)
-            dims = tmp.f.series[0].shape
-            dtype = tmp.dtype
+            dims = [*tmp.series[0].shape]
+            dtype = tmp.series[0].dtype
             offsets.append(dims[0])
             del tmp
         # offset for each file
         self.frames_offset = np.cumsum(offsets)
-
+        self.frames_offset = (self.frames_offset/nchannels).astype(int)
         self.dims = dims[1:]
+        if len(self.dims) == 2:
+            self.dims = [nchannels,*self.dims]
+        self.dims[0] = nchannels
         self.dtype = dtype
         self.nframes = self.frames_offset[-1]
         self.shape = tuple([self.nframes,*self.dims])
         
     def _load_substack(self,fileidx,channel = None):
-        self.current_stack = self.imread(self.filenames[fileidx])
+        self.current_stack = self.imread(self.filenames[fileidx]).reshape([-1,*self.dims])
         self.current_fileidx = fileidx

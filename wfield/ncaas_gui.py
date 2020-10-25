@@ -905,6 +905,7 @@ class NCAASwrapper(QMainWindow):
                 self.submitb.setStyleSheet("color: black")
                 self.pbar.setValue(0)
                 self.aws_view.aws_transfer_queue[i]['last_status'] = 'uploaded'
+                self.refresh_queuelist()
 
             if t['last_status'] == 'uploaded':
                 # add a config file
