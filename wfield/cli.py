@@ -22,7 +22,7 @@ import subprocess
 import shlex
 import platform
 from .utils import *
-from .io import parse_imager_mj2_folder,mmap_dat
+from .io import load_stack
 from .io import frames_average_for_trials
 from .registration import motion_correct
 from .decomposition import approximate_svd
@@ -65,7 +65,8 @@ The commands are:
         parser.add_argument('foldername', action='store',default=None,type=str)
         parser.add_argument('--allen-reference', action='store',default='dorsal_cortex',type=str)
         parser.add_argument('--no-ncaas', action='store_true',default=False)
-        parser.add_argument('--correlation', action='store_true',default=False,help = 'Show the correlation window - dont do this with sparse matrices.')        
+        parser.add_argument('--correlation', action='store_true',default=False,help = 'Show the correlation window - dont do this with sparse matrices.')
+        parser.add_argument('--nchannels', action='store', default=None, type=int)
         parser.add_argument('--before-corr', action='store_true',
                             default=False,
                             help= 'Load SVT before hemodynamics correction.')
@@ -101,13 +102,14 @@ The commands are:
         else:
             # try in a results folder (did it come from ncaas?)
             raise OSError('Could not find: {0} '.format(fname))
-            
-        dat_path = glob(pjoin(localdisk,'*.bin'))
-        if len(dat_path):
-            dat_path = dat_path[0]
-            if os.path.isfile(dat_path):
-                dat = mmap_dat(dat_path)
-        else:
+
+        dat = load_stack(args.foldername, nchannels = args.nchannels)
+        #dat_path = glob(pjoin(localdisk,'*.bin'))
+        #if len(dat_path):
+        #    dat_path = dat_path[0]
+        #    if os.path.isfile(dat_path):
+        #        dat = mmap_dat(dat_path)
+        if dat is None:
             dat = None
             dat_path = None
             average_path = pjoin(localdisk,'frames_average.npy')
@@ -139,13 +141,15 @@ The commands are:
         parser.add_argument('foldername', action='store',
                             default=None, type=str,
                             help='Folder where to search for files.')
+        parser.add_argument('--nchannels', action='store', default=None, type=int)
         parser.add_argument('--allen-reference', action='store',default='dorsal_cortex',type=str)
         parser.add_argument('--napari', action='store_true',
                             default=False,
                             help='Show with napari')
         args = parser.parse_args(sys.argv[2:])
         localdisk = args.foldername
-        from .io import mmap_dat
+        dat = load_stack(args.foldername, nchannels = args.nchannels)
+
         if os.path.isdir(localdisk):
             dat_path = glob(pjoin(localdisk,'*.bin'))
             if len(dat_path):
@@ -155,18 +159,12 @@ The commands are:
             localdisk = os.path.dirname(localdisk)
 
         if args.napari:
-            dat = mmap_dat(dat_path)
             from .viz import napari_show
             napari_show(dat)
             del dat
             sys.exit()
 
-        if os.path.isfile(dat_path):
-            dat = mmap_dat(dat_path)
-        else:
-            dat = None
-            dat_path = None
-        
+        if dat is None:
             average_path = pjoin(localdisk,'frames_average.npy')
             if os.path.isfile(average_path):
                 dat = np.load(average_path)

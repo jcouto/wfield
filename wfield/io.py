@@ -401,8 +401,11 @@ class GenericStack():
             self._load_substack(fileidx)
         
         return self.current_stack[frameidx]
-    
-    def __getitem__(self,*args):
+
+    def __len__(self):
+        return self.shape[0
+        ]
+    def __getitem__(self, *args, squeeze = False):
         index  = args[0]
         idx1 = None
         idx2 = None
@@ -414,7 +417,7 @@ class GenericStack():
             index = index[0]
         if type(index) is slice:
             idx1 = range(*index.indices(self.nframes))#start, index.stop, index.step)
-        elif type(index) is int: # just a frame
+        elif type(index) in [int,np.int32, np.int64]: # just a frame
             idx1 = [index]
         else: # np.array?
             idx1 = index
@@ -422,8 +425,14 @@ class GenericStack():
         for i,ind in enumerate(idx1):
             img[i] = self._get_frame(ind)
         if not idx2 is None:
-            return np.squeeze(img)[:,idx2]
-        return np.squeeze(img)
+            if squeeze:
+                return img[:,idx2].squeeze()
+            else:
+                return img[:,idx2]
+        if squeeze:
+            return img.squeeze()
+        else:
+            return img
 
     def export_binary(self, foldername, basename = 'frames', chunksize = 512, channel = None):
         '''
@@ -617,6 +626,8 @@ class TiffStack(GenericStack):
             del tmp
         # offset for each file
         self.frames_offset = np.cumsum(offsets)
+        if nchannels is None:
+            nchannels = 1
         self.frames_offset = (self.frames_offset/nchannels).astype(int)
         self.dims = dims[1:]
         if len(self.dims) == 2:
@@ -629,3 +640,33 @@ class TiffStack(GenericStack):
     def _load_substack(self,fileidx,channel = None):
         self.current_stack = self.imread(self.filenames[fileidx]).reshape([-1,*self.dims])
         self.current_fileidx = fileidx
+
+
+def load_stack(foldername,order = ['binary','tiff','imager'], nchannels=None):
+    ''' 
+    Searches the correct format to load from a folder.
+    '''
+    # First check whats in the folder
+    if os.path.isfile(foldername):
+        if foldername.endswith('.bin') or  foldername.endswith('.dat'): 
+            return mmap_load(foldername)
+    # Check binary sequence.
+    files = natsorted(glob(pjoin(foldername,'*.bin')))
+    if len(files):
+        print('Loading binary stack.')
+        # these don't need channel number because it is written with the filename
+        return BinaryStack(files) 
+    # check tiff sequence
+    for ext in ['.TIFF','.TIF','.tif','.tiff']:
+        files = natsorted(glob(pjoin(foldername,'*'+ext)))
+        if len(files):
+            return TiffStack(files, nchannels = nchannels)
+        
+    # check imager
+    files = natsorted(glob(pjoin(foldername,'Analog*.dat')))
+    if len(files):
+        return ImagerStack(foldername)
+    # check for dat
+    files = natsorted(glob(pjoin(foldername,'*.dat')))
+    if len(files):
+        return ImagerStack(foldername)
