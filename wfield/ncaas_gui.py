@@ -979,11 +979,13 @@ class AWSView(QTreeView):
                             
                             bucket = self.s3.Bucket(bucketname)
                             bucket.download_file(fname,tempfile)
+                            dicttmp = {}
+                            dicttmp['awssubmit'] = fname
                             with open(tempfile,'r') as fd:
                                 temp = json.load(fd)
+                                dicttmp['submit'] = temp
                             dname = temp['dataname']
                             files = []
-                            dicttmp = {}
                             for f in self.awsfiles: # find the datfile
                                 if dname in f:
                                     if 'config.yaml' in f:
