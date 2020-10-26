@@ -31,26 +31,31 @@ A [dataset](http://repository.cshl.edu/id/eprint/38599/) that can be used to dem
     
 ### Installation
 
-To install start by getting [Anaconda](https://www.anaconda.com/distribution/#download-section) or [Miniconda](https://docs.conda.io/en/latest/miniconda.html). Install for all users and set as system python (this is not essential if you know what you are doing). 
+To install start by getting [Anaconda](https://www.anaconda.com/distribution/#download-section) or [Miniconda](https://docs.conda.io/en/latest/miniconda.html).
 
-If you are using Windows, get a terminal like [git bash](https://git-scm.com/downloads) [optional] Run ``conda init bash``
+1. Go to the folder where you want to install and clone the repository: ``git clone https://github.com/jcouto/wfield.git``. This creates a directory; go inside that directory: ``cd wfield``.
 
-- Go to the folder where you want to install and clone the repository: ``git clone https://github.com/jcouto/wfield.git``. This creates a directory; go inside that directory: ``cd wfield``.
+2. Use anaconda to install all dependencies: ``conda env create -f env.yml`` the file env.yml is inside the ``wfield`` directory.
 
-- Use anaconda to install all dependencies: ``conda env create -f env.yml`` the file env.yml is inside the ``wfield`` directory.
+3. Enter the environment ``conda activate wfield`` and install wfield using the command ``python setup.py install``
 
-- Enter the environment ``conda activate wfield`` and install wfield using the command ``python setup.py install``
+4. You will need to run `conda activate wfield` to activate the environment before running the software every time you start a terminal.
 
+5. You are all set. <br /> Type ``wfield -h`` to see the available commands. <br /> Go here for [instructions](https://github.com/jcouto/wfield/tree/master/usecases.md) on how to use NeuroCAAS.
 
-*Note:* You will need to run `conda activate wfield` to activate the environment before running the software every time you start a terminal.
-
-*Note:* In some cases you may want to make changes to the software, if you need this run ``python setup.py develop`` (you can not move the folder after this - the installation will point to that directory).
 
 *Note:* Some reference files used to match to the Allen Common Coordinate Framework are copied from the folder [references](https://github.com/jcouto/wfield/tree/master/references) to ``$HOME/.wfield`` during installation. 
 
-The software has been tested on Windows, Linux and MacOS. Installation takes less than 5 minutes on a standard computer with fast access to internet and a previous anaconda installation.
+*Note for Windows users:*
 
-Support for motion correction for OpenCV 4.2 is broken and will be added in the future. 
+   - Install for all users and set as system python (this is not essential if you know what you are doing).
+
+   - Get a terminal like [git bash](https://git-scm.com/downloads) [optional] Run ``conda init bash``
+
+*Note for developers:* In some cases you may want to make changes to the software, if you need this run ``python setup.py develop`` (you can not move the folder after this - the installation will point to that directory).
+
+
+The software was tested on Windows, Linux and MacOS Catalina. Installation takes less than 5 minutes on a standard computer with fast access to internet and a previous anaconda installation.
 
 
 ### Tutorial
