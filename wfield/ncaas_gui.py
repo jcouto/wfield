@@ -620,13 +620,23 @@ class NCAASwrapper(QMainWindow):
         self.fs_view.expandToDepth(2)
         # Add the widget with label
         w = QWidget()
-        l = QVBoxLayout()
+        l = QFormLayout()
         w.setLayout(l)
         self.folder = QPushButton(folder)
-        self.folder.setStyleSheet("font: bold")
-        l.addWidget(self.folder)
-        l.addWidget(self.fs_view)
-        lay.addWidget(w)
+        #self.folder.setStyleSheet("font: bold")
+        lab = QLabel('Select local folder:')
+        l.addRow(lab, self.folder)
+        lab.setStyleSheet("font: bold")
+        lab = QLabel('Local folder view - drag to remote:')
+        l.addRow(lab)
+        lab.setStyleSheet("font: bold")
+        ww = QWidget()
+        ll = QVBoxLayout()
+        ww.setLayout(ll)
+        ll.addWidget(w)
+        ll.addWidget(self.fs_view)
+        lay.addWidget(ww)
+        
         def set_folder():
             self.fs_view.query_root()
         self.folder.clicked.connect(set_folder)
@@ -642,7 +652,7 @@ class NCAASwrapper(QMainWindow):
         w = QWidget()
         l = QVBoxLayout()
         w.setLayout(l)
-        l.addWidget(QLabel('<b>' + 'NeuroCAAS - {0}'.format(', '.join(self.aws_view.bucketnames) + '<\b>')))
+        l.addWidget(QLabel('<b>' + 'NeuroCAAS - {0}'.format(', '.join(self.aws_view.bucketnames) + ' - drop below to upload to the cloud <\b>')))
         l.addWidget(self.aws_view)
         lay.addWidget(w)
 
@@ -662,8 +672,9 @@ class NCAASwrapper(QMainWindow):
                 self.aws_view.aws_transfer_queue[i]['last_status'] = 'submitted'
         
         sw = QWidget()
-        sl = QGridLayout()
+        sl = QVBoxLayout()
         sw.setLayout(sl)
+
         self.queuelist = QListWidget()
         self.pbar = QProgressBar()
 
@@ -672,11 +683,20 @@ class NCAASwrapper(QMainWindow):
 
         self.submitb = QPushButton('Submit to NeuroCAAS')
         self.submitb.setStyleSheet("font: bold")
-
-        sl.addWidget(self.queuelist,1,0,2,1)        
-        sl.addWidget(self.infomon,0,0,1,2)        
-        sl.addWidget(self.submitb,1,1,1,1)
-        sl.addWidget(self.pbar,2,1,1,1)
+        
+        lab = QLabel('History and neurocaas information:')
+        lab.setStyleSheet("font: bold")
+        sl.addWidget(lab)
+        sl.addWidget(self.infomon)
+        lab = QLabel('Job submission queue:')
+        lab.setStyleSheet("font: bold")
+        sl.addWidget(lab)
+        sl.addWidget(self.queuelist)
+        sl.addWidget(self.submitb)
+        lab = QLabel('Transfer progress:')
+        lab.setStyleSheet("font: bold")
+        sl.addWidget(lab)
+        sl.addWidget(self.pbar)
         l.addWidget(sw)
 
         self.queuelist.itemDoubleClicked.connect(self.remove_from_queue)
@@ -1302,7 +1322,7 @@ def get_tree_path(items,root = ''):
         paths[-1] = '/'.join(paths[-1][::-1])
     return paths
 
-def main():
+def main(folder = '.'):
     if QApplication.instance() != None:
         app = QApplication.instance()
     else:
@@ -1314,7 +1334,7 @@ def main():
         app.exec_()
     from botocore.exceptions import ClientError
     try:
-        wind = NCAASwrapper(folder = '.')
+        wind = NCAASwrapper(folder = folder)
         sys.exit(app.exec_())
         #s3_connect()
     except ClientError:
@@ -1322,5 +1342,5 @@ def main():
         cred = CredentialsManager()
         app.exec_()
         awskeys = ncaas_read_aws_keys()
-        wind = NCAASwrapper(folder = '.')
+        wind = NCAASwrapper(folder = folder)
         sys.exit(app.exec_())

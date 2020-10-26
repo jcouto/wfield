@@ -35,6 +35,7 @@ class CLIParser(object):
             usage='''wfield <command> [<args>]
 
 The commands are:
+    ncaas               Opens a gui to launch data on the neuroCAAS platform
     open                Opens a gui to look at the preprocessed data        
     open_raw            Opens a gui to look at the raw frames
     preprocess          Preprocess data in binary fornat
@@ -52,7 +53,23 @@ The commands are:
             parser.print_help()
             exit(1)
         getattr(self, args.command)()
-    
+
+    def ncaas(self):
+        parser = argparse.ArgumentParser(
+            description='Open the GUI to interact with neuroCAAS.org',
+            usage = '''
+You'll need credentials from neurocaas.org before you are able to use this.
+
+Type wfield ncaas <foldername> to open on a specific folder.
+            ''')
+        parser.add_argument('foldername', action='store',default='.',type=str)
+        args = parser.parse_args(sys.argv[2:])
+        
+        from wfield.ncaas_gui import main as ncaas_gui
+
+        ncaas_gui(args.foldername)
+        
+        
     def open(self):
         parser = argparse.ArgumentParser(
             description='Open the GUI to look at preprocessed data',
