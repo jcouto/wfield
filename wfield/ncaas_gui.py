@@ -52,6 +52,7 @@ from PyQt5.QtWidgets import (QApplication,
                              QTabWidget,
                              QMenu,
                              QDialog,
+                             QDialogButtonBox,
                              QAction)
 from functools import partial
 
@@ -347,7 +348,10 @@ from the GUI.
                     dlg.setWindowTitle('Got credentials.')
                     but = QDialogButtonBox(QDialogButtonBox.Ok)
                     but.accepted.connect(dlg.accept)
-                    l = QVboxLayout()
+                    l = QVBoxLayout()
+                    lab = QLabel('Got the credentials from the website, you can now close this window to continue.')
+                    lab.setStyleSheet("font: bold")
+                    l.addWidget(lab)
                     l.addWidget(but)
                     dlg.setLayout(l)
                     dlg.exec_()
@@ -1341,6 +1345,7 @@ def main(folder = '.'):
         print('NeuroCAAS credentials not found.')
         cred = CredentialsManager()
         app.exec_()
+        awskeys = ncaas_read_aws_keys()
     from botocore.exceptions import ClientError
     try:
         wind = NCAASwrapper(folder = folder)
