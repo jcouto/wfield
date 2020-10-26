@@ -323,10 +323,15 @@ from the GUI.
         
         self.configedit = QPlainTextEdit(ncaasconfig_json)
         lay.addRow(QLabel('NCAAS settings'),self.configedit)
-
+        w = QWidget()
+        l = QVBoxLayout()
+        w.setLayout(l)
+        lab = QLabel('Log to neurocaas.org and go to the user settings page to get the credentials.')
+        l.addWidget(lab)
         web = QWebEngineView()
+        l.addWidget(web)
         web.load(QtCore.QUrl("http://www.neurocaas.org/profile/"))
-        tabwidget.addTab(web,'NeuroCAAS login')
+        tabwidget.addTab(w,'NeuroCAAS login')
         tabwidget.addTab(advancedwid,'Settings')
 
         self.html = ''
@@ -345,11 +350,11 @@ from the GUI.
                     self.cred_secret.setText(values[3])
                     print('Got credentials from the website, you can close this window.')
                     dlg = QDialog()
-                    dlg.setWindowTitle('Got credentials.')
+                    dlg.setWindowTitle('Good job!')
                     but = QDialogButtonBox(QDialogButtonBox.Ok)
                     but.accepted.connect(dlg.accept)
                     l = QVBoxLayout()
-                    lab = QLabel('Got the credentials from the website, you can now close this window to continue.')
+                    lab = QLabel('Got the credentials from the website, you can now close this window to continue. Or adjust defaults in the Advanced tab')
                     lab.setStyleSheet("font: bold")
                     l.addWidget(lab)
                     l.addWidget(but)
