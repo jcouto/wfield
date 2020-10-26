@@ -14,7 +14,10 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import cv2 # OpenCV needs to be imported before numpy for some seg faulted reason...
+try:
+    import cv2 # OpenCV needs to be imported before numpy for some seg faulted reason...
+except:
+    print('Some functionality might be broken: install opencv-python or opencv-python-headless')
 import numpy as np
 from tqdm import tqdm
 import pandas as pd

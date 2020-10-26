@@ -46,11 +46,16 @@ To install start by getting [Anaconda](https://www.anaconda.com/distribution/#do
 
 *Note:* Some reference files used to match to the Allen Common Coordinate Framework are copied from the folder [references](https://github.com/jcouto/wfield/tree/master/references) to ``$HOME/.wfield`` during installation. 
 
+*Note for Mac users:*
+
+   - ``git`` when you try the instructions you will be asked to install git, if that fails you can run ``conda install git`` to install using anaconda. 
+
 *Note for Windows users:*
 
-   - Install for all users and set as system python (this is not essential if you know what you are doing).
+   - Get a terminal like [git bash](https://git-scm.com/downloads) [optional] <br />
+   Run ``conda init bash`` to activate conda on ``git bash``
+   - When you install Anaconda,  set the option to install as system python (this makes that it is visible from the terminal without having to run the Anaconda Prompt).
 
-   - Get a terminal like [git bash](https://git-scm.com/downloads) [optional] Run ``conda init bash``
 
 *Note for developers:* In some cases you may want to make changes to the software, if you need this run ``python setup.py develop`` (you can not move the folder after this - the installation will point to that directory).
 
