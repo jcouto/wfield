@@ -342,7 +342,16 @@ from the GUI.
                 if len(values)>=4:
                     self.cred_access.setText(values[2])
                     self.cred_secret.setText(values[3])
-
+                    print('Got credentials from the website, you can close this window.')
+                    dlg = QDialog()
+                    dlg.setWindowTitle('Got credentials.')
+                    but = QDialogButtonBox(QDialogButtonBox.Ok)
+                    but.accepted.connect(dlg.accept)
+                    l = QVboxLayout()
+                    l.addWidget(but)
+                    dlg.setLayout(l)
+                    dlg.exec_()
+                    
             page.toHtml(call)
         web.loadFinished.connect(parsehtml)
         #self.getsite = QPushButton('Get credentials from website')
