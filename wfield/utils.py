@@ -54,7 +54,7 @@ def im_adapt_hist(im,clip_limit = .1, grid_size=(8,8)):
         eqim = im_adapt_hist(im,.1)
     '''
     clahe = cv2.createCLAHE(clipLimit=clip_limit, tileGridSize=grid_size)
-    return clahe.apply(im)
+    return clahe.apply(im.squeeze())
 
 def im_apply_transform(im,M,dims = None):
     if issparse(im):

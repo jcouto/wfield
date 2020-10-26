@@ -130,32 +130,34 @@ class AllenMatchTable(QWidget):
         # save transform
         self.wsave = QPushButton('Save points')
         l.addRow(self.wsave)
-        
         def usave():
-            if self.parent.folder is None:
-                print('Folder is not defined..')
-            if self.landmarks_file is None: # then it is the dorsal_cortex
-                fname = self.reference+'_landmarks.json'
-            else:
-                fname = os.path.basename(self.landmarks_file)
-            fname = pjoin(self.parent.folder, fname)
-            landmarks_match = self.landmarks.copy()
-            landmarks_match.x = self.landmarks_im.nx
-            landmarks_match.y = self.landmarks_im.ny
-            landmarks_im = allen_landmarks_to_image_space(
-                self.landmarks.copy(), 
-                self.bregma_offset,
-                self.resolution)
-            self.M = allen_transform_from_landmarks(landmarks_im,landmarks_match)
-            save_allen_landmarks(self.landmarks,filename = fname,
-                                 resolution = self.resolution,
-                                 bregma_offset = self.bregma_offset,
-                                 landmarks_match = landmarks_match,
-                                 transform = self.M)
-            print('Saving points and landmarks to {0}'.format(fname))
-            self.parent.M = self.M
+            print('Saving points and landmarks to the _landmarks.json file.')
+            self.usave()
         self.wsave.clicked.connect(usave)    
         lay.addRow(self.table,w)
+
+    def usave(self):
+        if self.parent.folder is None:
+            print('Folder is not defined..')
+        if self.landmarks_file is None: # then it is the dorsal_cortex
+            fname = self.reference+'_landmarks.json'
+        else:
+            fname = os.path.basename(self.landmarks_file)
+        fname = pjoin(self.parent.folder, fname)
+        landmarks_match = self.landmarks.copy()
+        landmarks_match.x = self.landmarks_im.nx
+        landmarks_match.y = self.landmarks_im.ny
+        landmarks_im = allen_landmarks_to_image_space(
+            self.landmarks.copy(), 
+            self.bregma_offset,
+            self.resolution)
+        self.M = allen_transform_from_landmarks(landmarks_im,landmarks_match)
+        save_allen_landmarks(self.landmarks,filename = fname,
+                             resolution = self.resolution,
+                             bregma_offset = self.bregma_offset,
+                             landmarks_match = landmarks_match,
+                             transform = self.M)
+        self.parent.M = self.M
 
 class AllenArea(pg.PlotCurveItem):
     def __init__(self,area, side, *args,**kwargs):
@@ -375,10 +377,15 @@ class RawDisplayWidget(ImageWidget):
                 for i,(x,y) in enumerate(zip(nx,ny)):
                     self.allenwidget.table.item(i,4).setText(str(x))
                     self.allenwidget.table.item(i,5).setText(str(y))
+                self.allenwidget.usave()
+                if self.wallen.isChecked():
+                    self.allenplot.update()
+                else:
+                    self.allenplot.remove()
+
             self.points.scatter.sigPlotChanged.connect(update_table)
             self.allenplot = QAllenAreasPlot(plot=self.pl,parent = self,
                                              reference = self.referencename)
-
 
     def _init_ui(self):
         widget = QWidget()
@@ -454,8 +461,8 @@ class RawDisplayWidget(ImageWidget):
             img = im_adapt_hist(img)
         if self.warp_im:
             if hasattr(self.parent,'M'):
-                img = im_apply_transform(img,self.parent.M)
-        self.im.setImage(img, autoLevels=False)
+                img = im_apply_transform(img.squeeze(),self.parent.M)
+        self.im.setImage(img.squeeze(), autoLevels=False)
         if hasattr(self,'roiwidget'):
             self.roiwidget.line.setPos((self.iframe,0))
             self.roiwidget.update()
@@ -554,7 +561,7 @@ class SVDDisplayWidget(ImageWidget):
         if not i is None:
             self.iframe = i
         img = self.stack[self.iframe]
-        self.im.setImage(img, autoLevels = False)
+        self.im.setImage(img.squeeze(), autoLevels = False)
         
     def get_xy(self,x,y):
         x = int(np.clip(x,0,self.stack.shape[1]))
@@ -744,7 +751,7 @@ class RawViewer(QMainWindow):
             self.allenpartab.setWidget(self.allenparwidget)
             self.addDockWidget(Qt.BottomDockWidgetArea,self.allenpartab)
             if hasattr(self,'roitab'):
-                self.tabifyDockWidget(self.allenpartab,self.roitab)        
+                self.tabifyDockWidget(self.roitab,self.allenpartab)        
         self.show()
 
     def set_dock(self,dock,floating=False):
@@ -791,7 +798,7 @@ class LocalCorrelationWidget(ImageWidget):
         if not img is None:
             img += 1.
             img /= 2.
-        self.im.setImage(img,autoLevels = False)
+        self.im.setImage(img.squeeze(),autoLevels = False)
 
     def mouseMoved(self,pos):
         modifiers = QApplication.keyboardModifiers()

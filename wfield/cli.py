@@ -22,7 +22,7 @@ import subprocess
 import shlex
 import platform
 from .utils import *
-from .io import parse_imager_mj2_folder,mmap_dat
+from .io import load_stack, mmap_dat
 from .io import frames_average_for_trials
 from .registration import motion_correct
 from .decomposition import approximate_svd
@@ -35,6 +35,7 @@ class CLIParser(object):
             usage='''wfield <command> [<args>]
 
 The commands are:
+    ncaas               Opens a gui to launch data on the neuroCAAS platform
     open                Opens a gui to look at the preprocessed data        
     open_raw            Opens a gui to look at the raw frames
     preprocess          Preprocess data in binary fornat
@@ -43,19 +44,32 @@ The commands are:
     correct             Performs hemodynamic correction on dual channel data
     imager              
     imager_preprocess   Preprocesses data recorded with the WidefieldImager
-    imager_ncaas        [Not implemented] Concatenates trials recorded with the WidefieldImager and uploads
 ''')
         parser.add_argument('command', help='type wfieldtools <command> -h for help')
-        # parse_args defaults to [1:] for args, but you need to
-        # exclude the rest of the args too, or validation will fail
+
         args = parser.parse_args(sys.argv[1:2])
         if not hasattr(self, args.command):
             print('Command {0} not recognized.'.format(args.command))
             parser.print_help()
             exit(1)
-        # use dispatch pattern to invoke method with same name
         getattr(self, args.command)()
-    
+
+    def ncaas(self):
+        parser = argparse.ArgumentParser(
+            description='Open the GUI to interact with neuroCAAS.org',
+            usage = '''
+You'll need credentials from neurocaas.org before you are able to use this.
+
+Type wfield ncaas <foldername> to open on a specific folder.
+            ''')
+        parser.add_argument('foldername', action='store',default='.',type=str)
+        args = parser.parse_args(sys.argv[2:])
+        
+        from wfield.ncaas_gui import main as ncaas_gui
+
+        ncaas_gui(args.foldername)
+        
+        
     def open(self):
         parser = argparse.ArgumentParser(
             description='Open the GUI to look at preprocessed data',
@@ -68,7 +82,8 @@ The commands are:
         parser.add_argument('foldername', action='store',default=None,type=str)
         parser.add_argument('--allen-reference', action='store',default='dorsal_cortex',type=str)
         parser.add_argument('--no-ncaas', action='store_true',default=False)
-        parser.add_argument('--correlation', action='store_true',default=False,help = 'Show the correlation window - dont do this with sparse matrices.')        
+        parser.add_argument('--correlation', action='store_true',default=False,help = 'Show the correlation window - dont do this with sparse matrices.')
+        parser.add_argument('--nchannels', action='store', default=None, type=int)
         parser.add_argument('--before-corr', action='store_true',
                             default=False,
                             help= 'Load SVT before hemodynamics correction.')
@@ -104,13 +119,14 @@ The commands are:
         else:
             # try in a results folder (did it come from ncaas?)
             raise OSError('Could not find: {0} '.format(fname))
-            
-        dat_path = glob(pjoin(localdisk,'*.bin'))
-        if len(dat_path):
-            dat_path = dat_path[0]
-            if os.path.isfile(dat_path):
-                dat = mmap_dat(dat_path)
-        else:
+
+        dat = load_stack(args.foldername, nchannels = args.nchannels)
+        #dat_path = glob(pjoin(localdisk,'*.bin'))
+        #if len(dat_path):
+        #    dat_path = dat_path[0]
+        #    if os.path.isfile(dat_path):
+        #        dat = mmap_dat(dat_path)
+        if dat is None:
             dat = None
             dat_path = None
             average_path = pjoin(localdisk,'frames_average.npy')
@@ -142,13 +158,15 @@ The commands are:
         parser.add_argument('foldername', action='store',
                             default=None, type=str,
                             help='Folder where to search for files.')
+        parser.add_argument('--nchannels', action='store', default=None, type=int)
         parser.add_argument('--allen-reference', action='store',default='dorsal_cortex',type=str)
         parser.add_argument('--napari', action='store_true',
                             default=False,
                             help='Show with napari')
         args = parser.parse_args(sys.argv[2:])
         localdisk = args.foldername
-        from .io import mmap_dat
+        dat = load_stack(args.foldername, nchannels = args.nchannels)
+
         if os.path.isdir(localdisk):
             dat_path = glob(pjoin(localdisk,'*.bin'))
             if len(dat_path):
@@ -158,18 +176,12 @@ The commands are:
             localdisk = os.path.dirname(localdisk)
 
         if args.napari:
-            dat = mmap_dat(dat_path)
             from .viz import napari_show
             napari_show(dat)
             del dat
             sys.exit()
 
-        if os.path.isfile(dat_path):
-            dat = mmap_dat(dat_path)
-        else:
-            dat = None
-            dat_path = None
-        
+        if dat is None:
             average_path = pjoin(localdisk,'frames_average.npy')
             if os.path.isfile(average_path):
                 dat = np.load(average_path)
@@ -305,6 +317,7 @@ The commands are:
                             help = 'Number of components for SVD')
         #parser.add_argument('--mask-edge', action='store',default=30,type=int,
         #                    help = 'Size of the mask used on the edges during motion correction ') 
+        parser.add_argument('--nchannels', action='store', default=None, type=int)
         parser.add_argument('--nbaseline-frames', action='store',
                             default=30, type=int,
                             help='Number of frames to compute the  baseline')
@@ -329,7 +342,12 @@ The commands are:
         # DATA REDUCTION
         _decompose(localdisk,k=args.k)
         # HEMODYNAMIC CORRECTION
-        _hemocorrect(localdisk,fs=args.fs)
+        # check if it is 2 channel
+        dat = load_stack(localdisk, nchannels = args.nchannels)
+        if dat.shape[1] == 2:
+            del dat
+            _hemocorrect(localdisk,fs=args.fs)
+            
         tproc = (time.time() - tproc)/60.
         print('Done  pre-processing ({0} min)'.format(tproc))
         exit(0)
@@ -340,6 +358,7 @@ The commands are:
         parser.add_argument('foldername', action='store',
                             default=None, type=str,
                             help='Folder with dat file.')
+        parser.add_argument('--nchannels', action='store', default=None, type=int)
         parser.add_argument('--mode', choices=('ecc','2d'),default='ecc',
                             help = 'Algorithm for  motion correction ') 
         parser.add_argument('--chunksize', default=256,
@@ -347,7 +366,8 @@ The commands are:
         
         args = parser.parse_args(sys.argv[2:])
         localdisk = args.foldername 
-        _motion(localdisk,mode = args.mode,chunksize = args.chunksize)
+        _motion(localdisk,nchannels = args.nchannels, mode = args.mode,chunksize = args.chunksize)
+
     def decompose(self):
         parser = argparse.ArgumentParser(
             description='Performs single value decomposition')
@@ -356,6 +376,7 @@ The commands are:
                             help='Folder with dat file.')
         parser.add_argument('-k', action='store',default=200,type=int,
                             help = 'Number of components for SVD ') 
+        parser.add_argument('--nchannels', action='store', default=None, type=int)
         parser.add_argument('--no-baseline',
                             action='store_true', default=False,
                             help = 'Skip baseline ') 
@@ -365,11 +386,12 @@ The commands are:
         args = parser.parse_args(sys.argv[2:])
         localdisk = args.foldername
         if not args.no_baseline:
-            _baseline(localdisk,args.nbaseline_frames)
-        _decompose(localdisk,k=args.k)
+            _baseline(localdisk,args.nbaseline_frames, nchannels = args.nchannels)
+        _decompose(localdisk,k=args.k, nchannels = args.nchannels)
+
     def correct(self):
         parser = argparse.ArgumentParser(
-            description='Performs hemodynamics correction')
+            description='Performs hemodynamics correction (needs 2 channel compressed data)')
         parser.add_argument('foldername', action='store',
                             default=None, type=str,
                             help='Folder with U and SVT files.')
@@ -381,14 +403,29 @@ The commands are:
 
         _hemocorrect(localdisk,fs=args.fs)
         
-def _motion(localdisk,mode = 'ecc',chunksize=256):
-    dat_path = glob(pjoin(localdisk,'*.bin'))[0]        
-    dat = mmap_dat(dat_path, mode='r+')
+def _motion(localdisk, nchannels = None, mode = 'ecc',chunksize=256, in_place = True):
+
+    # if a single binary file try in-place
+    dat_path = glob(pjoin(localdisk,'*.bin'))
+    if not len(dat_path):
+        dat_path = glob(pjoin(localdisk,'*.dat'))
+    if len(dat_path) == 1:
+        dat = mmap_dat(dat_path[0], mode='r+')
+        if in_place:
+            out = dat
+    else:
+        # else do else
+        dat = load_stack(localdisk, nchannels = nchannels)
+        out = np.memmap(pjoin(localdisk,'motioncorrect_{0}_{1}_{2}_{3}.bin'.format(*dat.shape[1:],dat.dtype)),
+                        mode='w+',
+                        dtype=dat.dtype,
+                        shape = dat.shape)
     (yshifts,xshifts),rshifts = motion_correct(dat,
+                                               out=out,
                                                chunksize=256,
                                                mode = mode,
-                                     apply_shifts=True)
-    del dat # close and finish writing
+                                               apply_shifts=True)
+    del out # close and finish writing
     shifts = np.rec.array([yshifts,xshifts],dtype=[('y','float32'),('x','float32')])
     np.save(pjoin(localdisk,'motion_correction_shifts.npy'),shifts)
     np.save(pjoin(localdisk,'motion_correction_rotation.npy'),rshifts)
@@ -396,13 +433,9 @@ def _motion(localdisk,mode = 'ecc',chunksize=256):
     plot_summary_motion_correction(shifts,localdisk)
     del shifts
 
-def _baseline(localdisk,nbaseline_frames):
-    if os.path.isdir(localdisk):
-        dat_path = glob(pjoin(localdisk,'*.bin'))[0]
-    else:
-        dat_path = localdisk
-        localdisk = os.path.dirname(dat_path)
-    dat = mmap_dat(dat_path)
+def _baseline(localdisk, nbaseline_frames, nchannels = None):
+
+    dat = load_stack(localdisk,nchannels = nchannels)
     try:
         trial_onsets = np.load(pjoin(localdisk,'trial_onsets.npy'))[:,1].astype(int)
     except FileNotFoundError:
@@ -429,12 +462,9 @@ Skipping trial frame average because there was no trial_onsets.npy in the folder
     del dat
     del frames_average_trials
 
-def _decompose(localdisk, k):
-    if os.path.isdir(localdisk):
-        dat_path = glob(pjoin(localdisk,'*.bin'))[0]
-    else:
-        dat_path = localdisk
-        localdisk = os.path.dirname(dat_path)
+def _decompose(localdisk, k, nchannels = None):
+    dat = load_stack(localdisk,nchannels = nchannels)
+
     frames_average = np.load(pjoin(localdisk,'frames_average.npy'))
     if len(frames_average)>3:
         trial_onsets = np.load(pjoin(localdisk,'trial_onsets.npy'))
@@ -442,7 +472,6 @@ def _decompose(localdisk, k):
 
     else:
         onsets = None
-    dat = mmap_dat(dat_path)
     U,SVT = approximate_svd(dat, frames_average, onsets = onsets, k = k)
     np.save(pjoin(localdisk,'U.npy'),U)
     np.save(pjoin(localdisk,'SVT.npy'),SVT)
@@ -450,7 +479,7 @@ def _decompose(localdisk, k):
 def _hemocorrect(localdisk,fs):
     U = np.load(pjoin(localdisk,'U.npy'))
     SVT = np.load(pjoin(localdisk,'SVT.npy'))
-
+    
     SVT_470 = SVT[:,0::2]
     t = np.arange(SVT.shape[1]) # interpolate the violet
     from scipy.interpolate import interp1d

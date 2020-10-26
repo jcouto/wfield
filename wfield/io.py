@@ -210,7 +210,7 @@ def read_imager_analog(fname):
                     nchannels=nchannels,
                     nsamples=nsamples)
 
-def _imager_parse_file(fname):
+def _imager_parse_file(fname, version = 2):
     f,ext = os.path.splitext(fname)
     if ext == '.mj2':
         stack = read_mj2_frames(fname)
@@ -223,21 +223,29 @@ def _imager_parse_file(fname):
     _,_,fnum = _parse_binary_fname(fname)
     folder = os.path.dirname(fname)
     analog,analogheader = read_imager_analog(pjoin(folder,'Analog_{0}.dat'.format(fnum[0])))
-    idxch1,idxch2,info = _imager_split_channels(stack,analog,analogheader)
+    idxch1,idxch2,info = _imager_split_channels(stack,analog,analogheader,version = version)
     info['nrecorded'] = len(stack)
     del stack
     return idxch1,idxch2,info
 
-def _imager_split_channels(stack,analog,analogheader):
+def _imager_split_channels(stack,analog,analogheader,version = 2):
     ''' splits channels from the imager '''
     from .utils import analog_ttl_to_onsets
     #fname_analog = fname_mj2.replace('Frames_','Analog_').replace('.mj2','.dat')
     #stack = read_mj2_frames(fname_mj2)
     #dat,header = read_imager_analog(fname_analog)
-    ch1,ch1_ = analog_ttl_to_onsets(analog[1,:],time=None) # this is the blue LED
-    ch2,ch2_ = analog_ttl_to_onsets(analog[2,:],time=None) # this is the violet LED
-    ch3_onset,ch3_offset = analog_ttl_to_onsets(analog[3,:],time=None) # this is the stim
-    ch4_onset,ch4_offset = analog_ttl_to_onsets(analog[4,:],time=None) # this is another sync
+
+    if version == 1:
+        # then the channels are -2 and -1
+        ch1,ch1_ = analog_ttl_to_onsets(analog[-1,:],time=None) # this is the blue LED
+        ch2,ch2_ = analog_ttl_to_onsets(analog[-2,:],time=None) # this is the violet LED
+        ch3_onset,ch3_offset = analog_ttl_to_onsets(analog[3,:],time=None) # this is the stim
+        ch4_onset,ch4_offset = analog_ttl_to_onsets(analog[4,:],time=None) # this is another sync
+    else:
+        ch1,ch1_ = analog_ttl_to_onsets(analog[1,:],time=None) # this is the blue LED
+        ch2,ch2_ = analog_ttl_to_onsets(analog[2,:],time=None) # this is the violet LED
+        ch3_onset,ch3_offset = analog_ttl_to_onsets(analog[3,:],time=None) # this is the stim
+        ch4_onset,ch4_offset = analog_ttl_to_onsets(analog[4,:],time=None) # this is another sync
     
     info = dict(baseline = analogheader['baseline'],
                 ch1 = ch1,
@@ -393,8 +401,11 @@ class GenericStack():
             self._load_substack(fileidx)
         
         return self.current_stack[frameidx]
-    
-    def __getitem__(self,*args):
+
+    def __len__(self):
+        return self.shape[0
+        ]
+    def __getitem__(self, *args, squeeze = False):
         index  = args[0]
         idx1 = None
         idx2 = None
@@ -406,7 +417,7 @@ class GenericStack():
             index = index[0]
         if type(index) is slice:
             idx1 = range(*index.indices(self.nframes))#start, index.stop, index.step)
-        elif type(index) is int: # just a frame
+        elif type(index) in [int,np.int32, np.int64]: # just a frame
             idx1 = [index]
         else: # np.array?
             idx1 = index
@@ -414,13 +425,63 @@ class GenericStack():
         for i,ind in enumerate(idx1):
             img[i] = self._get_frame(ind)
         if not idx2 is None:
-            return np.squeeze(img)[:,idx2]
-        return np.squeeze(img)
+            if squeeze:
+                return img[:,idx2].squeeze()
+            else:
+                return img[:,idx2]
+        if squeeze:
+            return img.squeeze()
+        else:
+            return img
 
+    def export_binary(self, foldername, basename = 'frames', chunksize = 512, channel = None):
+        '''
+        Exports a binary file.
+        '''
+        nframes,nchan,h,w = self.shape
+        chunks = chunk_indices(nframes,chunksize)
+        shape = [*self.shape]
+        if not channel is None:
+            shape[1] = 1
+        fname = pjoin('{0}'.format(foldername),'{4}_{0}_{1}_{2}_{3}.bin'.format(
+            *shape[1:],self.dtype,basename))
+        if not os.path.isdir(os.path.dirname(fname)):
+            os.makedirs(os.path.dirname(fname))
+        out = np.memmap(fname,
+                        dtype = self.dtype,
+                        mode = 'w+',
+                        shape=tuple(shape))
+        for c in tqdm(chunks, desc='Exporting binary'):
+            if channel is None:
+                out[c[0]:c[1]] = self[c[0]:c[1]]
+            else:
+                out[c[0]:c[1],0] = self[c[0]:c[1],channel]
+            out.flush()
+        del out
 
+    def export_tiffs(self, foldername, basename = 'frames', chunksize = 512, channel = None):
+        '''
+        Exports tifffiles.
+        '''
+        nframes,nchan,h,w = self.shape
+        chunks = chunk_indices(nframes,chunksize)
+        file_no = 0
+        fname = pjoin('{0}'.format(foldername),'{0}_{1:05d}.tif')
+        if not os.path.isdir(os.path.dirname(fname)):
+            os.makedirs(os.path.dirname(fname))
+        from tifffile import imsave
+        for c in tqdm(chunks, desc='Exporting tiffs'):
+            if channel is None:
+                imsave(fname.format(basename,file_no),self[c[0]:c[1]].reshape((-1,*self.dims[1:])))
+            else:
+                imsave(fname.format(basename,file_no),self[c[0]:c[1],channel].squeeze())
+            file_no += 1
+
+        
 class ImagerStack(GenericStack):
     def __init__(self,filenames,
                  extension = '.dat',
+                 version = 2,# this is because the triggers number changed between the new and the old version...
                  rotate_array=True):
         '''
         
@@ -428,6 +489,7 @@ class ImagerStack(GenericStack):
         '''
         self.rotate_array = rotate_array
         self.fileformat = 'binary'
+        self.version = version
         self.extension = extension
         if type(filenames) is str:
             # check if it is a folder
@@ -444,13 +506,12 @@ class ImagerStack(GenericStack):
                         raise('Could not find files.')
         super(ImagerStack,self).__init__(filenames,extension)
         
-        from wfield.io import _imager_parse_file
         self.index_ch1 = []
         self.index_ch2 = []
         self.extrainfo = []
         for f in tqdm(self.filenames,desc='Parsing files to access the stack size'):
             # Parse all analog files and frames
-            ch1,ch2,info = _imager_parse_file(f)
+            ch1,ch2,info = _imager_parse_file(f,version = self.version)
             self.index_ch1.append(ch1)
             self.index_ch2.append(ch2)
             self.extrainfo.append(info)
@@ -487,3 +548,130 @@ class ImagerStack(GenericStack):
         self.current_stack = tmp[idx].reshape([-1,*self.dims])
         self.current_fileidx = fileidx
                     
+class BinaryStack(GenericStack):
+    def __init__(self,filenames,
+                 extension = '.bin'): # this will try this extension first and then .dat
+                
+        '''
+        Select a stack from a binary file or mutliple binary files
+        The file name format needs to ends in _NCHANNELS_H_W_DTYPE.extension
+
+        '''
+        self.fileformat = 'binary'
+        self.extension = extension
+        if type(filenames) is str:
+            # check if it is a folder
+            if os.path.isdir(filenames):
+                dirname = filenames
+                filenames = []
+                filenames = natsorted(glob(pjoin(dirname,'*'+self.extension)))
+                if not len(filenames): # try .dat
+                    self.extension = '.dat'
+                    filenames = natsorted(glob(pjoin(dirname,'*'+self.extension)))
+        if not len(filenames):
+            raise(OSError('Could not find files.'))
+                
+        super(BinaryStack,self).__init__(filenames,extension)
+        offsets = [0]
+        for f in tqdm(self.filenames, desc='Parsing files to know the stack size'):
+            # Parse all binary files
+            tmp =  mmap_dat(f)
+            dims = tmp.shape[1:]
+            dtype = tmp.dtype
+            offsets.append(tmp.shape[0])
+            del tmp
+        # offset for each file
+        self.frames_offset = np.cumsum(offsets)
+
+        self.dims = dims
+        self.dtype = dtype
+        self.nframes = self.frames_offset[-1]
+        self.shape = tuple([self.nframes,*self.dims])
+        
+    def _load_substack(self,fileidx,channel = None):
+        self.current_stack = mmap_dat(self.filenames[fileidx])
+        self.current_fileidx = fileidx
+
+        
+class TiffStack(GenericStack):
+    def __init__(self,filenames,
+                 extension = '.tiff', # this will try this extension first and then .tif, .TIFF and .TIF
+                 nchannels = 2): 
+        '''
+        Select a stack from a sequence of TIFF stack files
+
+        '''
+        self.extension = extension
+        if type(filenames) is str:
+            # check if it is a folder
+            if os.path.isdir(filenames):
+                dirname = filenames
+                filenames = []
+                for extension in [self.extension,'.tif','.TIFF','.TIF']:
+                    if not len(filenames): # try other
+                        self.extension = extension
+                        filenames = natsorted(glob(pjoin(dirname,'*'+self.extension)))
+        if not len(filenames):
+            raise(OSError('Could not find files.'))
+        super(TiffStack,self).__init__(filenames,extension)
+        from tifffile import imread, TiffFile
+        self.imread = imread
+        offsets = [0]
+        for f in tqdm(self.filenames, desc='Parsing tiffs'):
+            # Parse all files in the stack
+            tmp =  TiffFile(f)
+            dims = [*tmp.series[0].shape]
+            dtype = tmp.series[0].dtype
+            offsets.append(dims[0])
+            del tmp
+        # offset for each file
+        self.frames_offset = np.cumsum(offsets)
+        if nchannels is None:
+            nchannels = 1
+        self.frames_offset = (self.frames_offset/nchannels).astype(int)
+        self.dims = dims[1:]
+        if len(self.dims) == 2:
+            self.dims = [nchannels,*self.dims]
+        self.dims[0] = nchannels
+        self.dtype = dtype
+        self.nframes = self.frames_offset[-1]
+        self.shape = tuple([self.nframes,*self.dims])
+        
+    def _load_substack(self,fileidx,channel = None):
+        self.current_stack = self.imread(self.filenames[fileidx]).reshape([-1,*self.dims])
+        self.current_fileidx = fileidx
+
+
+def load_stack(foldername,order = ['binary','tiff','imager'], nchannels=None):
+    ''' 
+    Searches the correct format to load from a folder.
+    '''
+    # First check whats in the folder
+    if os.path.isfile(foldername):
+        if foldername.endswith('.bin') or  foldername.endswith('.dat'): 
+            return mmap_dat(foldername)
+    # Check binary sequence.
+    files = natsorted(glob(pjoin(foldername,'*.bin')))
+    if len(files):
+        # these don't need channel number because it is written with the filename
+        if len(files) == 1:
+            return mmap_dat(files[0])
+        print('Loading binary stack.')
+        return BinaryStack(files) 
+    # check tiff sequence
+    for ext in ['.TIFF','.TIF','.tif','.tiff']:
+        files = natsorted(glob(pjoin(foldername,'*'+ext)))
+        if len(files):
+            return TiffStack(files, nchannels = nchannels)
+    # check for avi and mov
+    
+    # check imager
+    files = natsorted(glob(pjoin(foldername,'Analog*.dat')))
+    if len(files):
+        return ImagerStack(foldername)
+    # check for dat
+    files = natsorted(glob(pjoin(foldername,'*.dat')))
+    if len(files):
+        if len(files) == 1:
+            return mmap_dat(files[0])
+        return BinaryStack(foldername)
