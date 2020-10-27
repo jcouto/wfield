@@ -1215,7 +1215,7 @@ class FilesystemView(QTreeView):
             self.parent.folder.setText('{0}'.format(folder))
 
     def dragEnterEvent(self, e):
-        print(e)
+
         item = self.indexAt(e.pos())
         if e.mimeData().hasText():
             self.setSelectionMode(1)
@@ -1241,7 +1241,7 @@ class FilesystemView(QTreeView):
         
         files = []
         for a in self.parent.aws_view.awsfiles:
-            if to_fetch in a:
+            if to_fetch.strip('/') in a:
                 files.append(a)
         if not len(files):
             print('No files listed.')
@@ -1261,7 +1261,6 @@ class FilesystemView(QTreeView):
         self.parent.to_log('Fetching to {0}'.format(localpath))
 
         for f in files:
-
             bucketname = f.strip('/').split('/')[0]
             f = f.replace(bucketname,'').strip('/')
             bucket = self.parent.aws_view.s3.Bucket(bucketname)
@@ -1320,7 +1319,12 @@ class FilesystemView(QTreeView):
         if delete_files:
             # need to delete the remote data
             for f in files:
-                self.parent.aws_view.s3.Object(bucketname,f).delete()
+                f = f.replace(bucketname,'').strip('/')
+                try:
+                    self.parent.aws_view.s3.Object(bucketname,f).delete()
+                except:
+                    # If it was already deleted.
+                    pass
                 self.parent.to_log('Remote delete: {0}'.format(f))
 
         self.parent.to_log('FINISHED MANUAL COPY {0}'.format(to_fetch))
