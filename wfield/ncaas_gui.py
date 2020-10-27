@@ -785,21 +785,31 @@ class NCAASwrapper(QMainWindow):
 
                     self.aws_view.aws_transfer_queue[i]['last_status'] = 'got_results'
 
-                    
-                    if self.delete_inputs:
-                        # need to delete the remote data
-                        configpath = os.path.dirname(t['awsdestination'][0])+'/'+'config.yaml' 
-                        submitpath = t['awssubmit']#os.path.dirname(t['awsdestination'])+'/'+'submit.json'
-                        for a in t['awsdestination']:
-                            self.aws_view.s3.Object(t['awsbucket'],a).delete()
-                        self.aws_view.s3.Object(t['awsbucket'],configpath).delete()
-                        self.aws_view.s3.Object(t['awsbucket'],submitpath).delete()
-                        self.to_log('Remote delete: {0}'.format(t['awsdestination']))
+                    self.to_log('Remote delete: {0}'.format(f))
                     if self.delete_results:
                         for f in resultsfiles:
                             f = f.replace(t['awsbucket']+'/','')
-                            self.aws_view.s3.Object(t['awsbucket'],f).delete()
-                            self.to_log('Remote delete: {0}'.format(f))
+                            try:
+                                self.aws_view.s3.Object(t['awsbucket'],f).delete()
+                            except: # delete already happened?
+                                pass
+                    if self.delete_inputs:
+                        # need to delete the remote data
+                        self.to_log('Remote delete: {0}'.format(t['awsdestination']))
+                        configpath = os.path.dirname(t['awsdestination'][0])+'/'+'config.yaml' 
+                        submitpath = t['awssubmit']#os.path.dirname(t['awsdestination'])+'/'+'submit.json'
+                        
+                        for a in t['awsdestination']:
+                            try:
+                                self.aws_view.s3.Object(t['awsbucket'],a).delete()
+                            except:
+                                pass
+                            try:
+                                self.aws_view.s3.Object(t['awsbucket'],configpath).delete()
+                                self.aws_view.s3.Object(t['awsbucket'],submitpath).delete()
+                            except:
+                                pass
+
                     self.to_log('COMPLETED {0}'.format(t['name']))
                 
                     self.fetching_results = False
@@ -928,9 +938,9 @@ class NCAASwrapper(QMainWindow):
                         while (upload.isrunning):
                             QApplication.processEvents()
                             self.pbar.setValue(np.ceil(upload.count*98/upload.fsize))
-                            time.sleep(0.1)
+                            time.sleep(0.033)
                             cnt+= 1
-                            if np.mod(cnt,2) == 0:
+                            if np.mod(cnt,3) == 0:
                                 self.submitb.setStyleSheet("color: red")
                             else:
                                 self.submitb.setStyleSheet("color: black")
@@ -1247,7 +1257,7 @@ class FilesystemView(QTreeView):
             print('No files listed.')
             e.ignore()
             return
-        path = [pjoin(self.folder,p) for p in paths][0]
+        path = [pjoin(self.folder,os.path.basename(p)) for p in paths][0]
         path = os.path.abspath(path)
         if os.path.isfile(path):
             path = os.path.dirname(path)
@@ -1262,10 +1272,14 @@ class FilesystemView(QTreeView):
 
         for f in files:
             bucketname = f.strip('/').split('/')[0]
-            f = f.replace(bucketname,'').strip('/')
+            fn = f.replace(bucketname,'').strip('/')
             bucket = self.parent.aws_view.s3.Bucket(bucketname)
             def get():
-                bucket.download_file(f,pjoin(localpath,os.path.basename(f)))
+                t = pjoin(f.replace(to_fetch.strip('/'),str(localpath)))
+                if not os.path.isdir(os.path.dirname(t)):
+                    if os.makedirs(os.path.dirname(t)):
+                        os.makedirs(os.path.dirname(t))
+                bucket.download_file(fn,t)
             thread = threading.Thread(target=get)
             thread.start()
             self.parent.to_log('MANUAL COPY {0}'.format(f))
