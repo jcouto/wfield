@@ -400,19 +400,22 @@ def allen_regions_to_atlas(ccf_regions,dims,
             areanames.append([factor*(ireg+1),r['acronym']+'_'+side])
     return atlas,areanames
 
-def atlas_from_landmarks_file(landmarks_file=None,reference='dorsal_cortex',dims = [540,640]):
+def atlas_from_landmarks_file(landmarks_file=None, reference='dorsal_cortex', dims = [540,640], do_transform = None):
     lmarks = load_allen_landmarks(landmarks_file)
     ccf_regions,proj,brain_outline = allen_load_reference('dorsal_cortex')
     # transform the regions into the image
     if not 'transform' in lmarks.keys():
         lmarks['transform'] = None
-    nccf_regions = allen_transform_regions(lmarks['transform'],
-                                       ccf_regions,
-                                       resolution=lmarks['resolution'],
-                                       bregma_offset=lmarks['bregma_offset'])
+    transform = lmarks['transform']
+    if not do_transform:
+        transform = None
+    nccf_regions = allen_transform_regions(transform,
+                                           ccf_regions,
+                                           resolution=lmarks['resolution'],
+                                           bregma_offset=lmarks['bregma_offset'])
     nbrain_outline = apply_affine_to_points(brain_outline[:,0]/lmarks['resolution'] + lmarks['bregma_offset'][0],
                                             brain_outline[:,1]/lmarks['resolution'] + lmarks['bregma_offset'][1],
-                                            lmarks['transform'])
+                                            transform)
 
 
     atlas,areanames = allen_regions_to_atlas(nccf_regions, dims)

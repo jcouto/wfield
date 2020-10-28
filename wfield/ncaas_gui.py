@@ -576,9 +576,9 @@ class  AnalysisSelectionWidget(QDialog):
             if len(filetransfer):
                 aws_transfer_queue.append(
                     dict(name = foldername, #os.path.basename(filetransfer[0]),
-                         awsdestination = [foldername + '/inputs/'
+                         awsdestination = ['{0}' + foldername + '{1}'
                                            +os.path.basename(f) for f in filetransfer],
-                         awssubmit = foldername+'/submit.json',
+                         awssubmit = '{0}'+foldername+'{1}/submit.json',
                          awsbucket = None,
                          localpath = filetransfer,
                          last_status = 'pending_transfer'))
@@ -596,8 +596,7 @@ class  AnalysisSelectionWidget(QDialog):
         event.accept()
 
 
-def ncaas_upload_queue(path,
-                       subfolder = 'inputs',config = None):
+def ncaas_upload_queue(path,config = None):
     # Search and upload dat file, respect folder structure, return path
     if sys.platform in ['win32']: # path fix on windows
         if path[0] == '/':
@@ -736,6 +735,9 @@ class NCAASwrapper(QMainWindow):
         '''
         Checks if the data are analyzed and copies the results. 
         '''
+        if self.uploading:
+            return
+        
         for i,t in enumerate(self.aws_view.aws_transfer_queue):
             resultsdir = os.path.dirname(t['awsdestination'][0]).replace('/inputs',
                                                                          '/results')
@@ -748,7 +750,11 @@ class NCAASwrapper(QMainWindow):
                 for a in self.aws_view.awsfiles:
                     if resultsdir in a or outputsdir in a:
                         resultsfiles.append(a)
+                    
                 if len(resultsfiles):
+                    self.submitb.setEnabled(False)
+                    self.submitb.setText('Downloading result files')                        
+
                     self.aws_view.aws_transfer_queue[i]['last_status'] = 'fetching_results'
                     self.refresh_queuelist()
                     for a in self.aws_view.awsfiles:
@@ -756,13 +762,16 @@ class NCAASwrapper(QMainWindow):
                             resultsfiles.append(a)
                     print('Found results for {name}'.format(**t))
                     localpath = pjoin(os.path.dirname(t['localpath'][0]),'results')
+                    localpath = os.path.abspath(localpath)
                     if not os.path.isdir(localpath):
                         os.makedirs(localpath)
                         self.to_log('Creating {0}'.format(localpath))
                     bucket = self.aws_view.s3.Bucket(t['awsbucket'])
                     self.fetching_results = True
-                    for f in resultsfiles:
-                        def get():
+                    safe_delete = True
+                    t['downloaded'] = []
+                    def get():
+                        for f in resultsfiles:
                             # drop the bucket name
                             fn = f.replace(t['awsbucket']+'/','')
                             if outputsdir in f:
@@ -771,23 +780,35 @@ class NCAASwrapper(QMainWindow):
                                 lf = fn.replace(resultsdir,localpath)
                             if logsdir in f:
                                 lf = fn.replace(logsdir,localpath)
+                            lf = lf.split('/')
+                            lf = pjoin(*lf)
                             if not os.path.isdir(os.path.dirname(lf)):
                                 os.makedirs(os.path.dirname(lf))
                             print(fn,lf)
-                            bucket.download_file(fn,lf)
-                        thread = threading.Thread(target=get)
-                        thread.start()
-                        self.to_log('Fetching {0}'.format(f))
-                        while thread.is_alive():
-                            QApplication.processEvents()
-                            time.sleep(0.1)
+                            t['downloaded'].append(lf)
+                            if not os.path.isdir(lf):
+                                bucket.download_file(fn,lf)
+                            self.to_log('Fetching {0}'.format(lf))
+                    safe_delete=True
+                    thread = threading.Thread(target=get)
+                    thread.start()
+                    time.sleep(0.5)
+                    while thread.is_alive():
+                        QApplication.processEvents()
+                        time.sleep(0.02)
+                        
+                    if not safe_delete:
+                        self.to_log('Could not fetch results.')
+                        self.submitb.setEnabled(True)
+                        self.submitb.setText('Submit to NeuroCAAS')
+                        return
                     self.to_log('Done fetching results to {0}'.format(localpath))
 
                     self.aws_view.aws_transfer_queue[i]['last_status'] = 'got_results'
 
-                    self.to_log('Remote delete: {0}'.format(f))
                     if self.delete_results:
                         for f in resultsfiles:
+                            self.to_log('Remote delete: {0}'.format(f))
                             f = f.replace(t['awsbucket']+'/','')
                             try:
                                 self.aws_view.s3.Object(t['awsbucket'],f).delete()
@@ -812,38 +833,125 @@ class NCAASwrapper(QMainWindow):
 
                     self.to_log('COMPLETED {0}'.format(t['name']))
                 
+                    if 'analysis_selection' in t['config'].keys():
+                        if not 'locanmf' in t['awsbucket']:
+                            if 'locaNMF' in t['config']['analysis_selection']:
+                                print('Got results, submitting locaNMF analysis')
+                                nt = dict(**t)
+                                nt['name'] = nt['name'] + '_locanmf'
+                                awsfolder = os.path.dirname(nt['awsdestination'][0])
+                                foldername = awsfolder.split('/')[-1]
+                                print(nt['downloaded'])
+                                nt['config'] = t['locanmf_config']
+                                nt['submit'] = t['locanmf_submit']
+                                nt['awsbucket'] = 'cshl-wfield-locanmf'
+                                
+                                nt['awssubmit'] = ('{0}/'+foldername+'{1}/submit.json').format(
+                                    nt['submit']['userfolder'],'/')
+                                
+                                # Which files: labels.json,atlas.npy,brainmask.npy,SVTcorr.npy,U.npy
+                                #t['awsdestination'][i] = f.format(t['submit']['userfolder'],'/inputs/')
+                                # Check for the landmarks file in the original folder
+                                localfolder = os.path.dirname(nt['localpath'][0])
+                                landmarksfile = glob(pjoin(localfolder,'*_landmarks.json'))
+                                if len(landmarksfile):
+                                    landmarksfile = landmarksfile[0]
+                                else:
+                                    landmarksfile = None
+                                if landmarksfile is None:
+                                    print('Need to do the alignment first using ncaas open_raw')
+                                for d in t['downloaded']:
+                                    if 'reduced_spatial' in d:
+                                        print('Found reduced spatial.')
+                                        U = np.load(d)
+                                    if 'config.yaml' in d:
+                                        with open(d,'r') as fd:
+                                            import yaml
+                                            config = yaml.load(fd)
+                                            dims = [config['fov_height'],config['fov_width']]
+                                            
+                                if 'dims' in dir():
+                                    
+                                    print('Creating the atlas.')
+                                    from .allen import atlas_from_landmarks_file,load_allen_landmarks
+                                    atlas, areanames, brain_mask = atlas_from_landmarks_file(landmarksfile,
+                                                                                             dims = dims,
+                                                                                             do_transform = False)
+                                    nt['localpath'] = []
+                                    nt['awsdestination'] = []
+                                    U = U.reshape([*dims,-1])
+                                    print('Warping the U matrix.')
+                                    from .utils import runpar, im_apply_transform
+                                    U[:,0,:] = 0
+                                    U[0,:,:] = 0
+                                    U[-1,:,:] = 0
+                                    U[:,-1,:] = 0
+                                    lmarks = load_allen_landmarks(landmarksfile)
+                                    U = np.stack(runpar(im_apply_transform,
+                                                        U.transpose([2,0,1]),
+                                                        M = lmarks['transform'])).transpose([1,2,0])
+                                    # spatial
+                                    fname = pjoin(localfolder,'results','U_atlas.npy')
+                                    np.save(fname,U)
+                                    nt['submit']['spatial_data_filename'] = os.path.basename(fname)
+                                    f = '{0}/' + foldername + '{1}'+'U_atlas.npy'
+                                    nt['localpath'].append(fname)
+                                    nt['awsdestination'].append(f.format(nt['submit']['userfolder'],'/inputs/'))
+                                    # temporal
+                                    if os.path.isfile(pjoin(localfolder,'results','SVTcorr.npy')):
+                                        fname = pjoin(localfolder,'results','SVTcorr.npy')
+                                    elif os.path.isfile(pjoin(localfolder,'results','primary_temporal.npy')):
+                                        fname = pjoin(localfolder,'results','primary_temporal.npy')
+                                        print('Using primary temporal for locaNMF temporal!!')
+                                    else:
+                                        print('No temporal components?')
+                                        break
+                                    nt['submit']['temporal_data_filename'] = os.path.basename(fname)
+                                    f = '{0}/' + foldername + '{1}'+os.path.basename(fname)
+                                    nt['localpath'].append(fname)
+                                    nt['awsdestination'].append(f.format(nt['submit']['userfolder'],'/inputs/'))
+
+                                    # brainmask
+                                    fname = pjoin(localfolder,'results','labels.json')
+                                    with open(fname,'w+') as fd:
+                                        json.dump(areanames,fd)
+                                    nt['submit']['areanames_filename'] = os.path.basename(fname)
+                                    f = '{0}/' + foldername + '{1}'+'labels.json'
+                                    nt['localpath'].append(fname)
+                                    nt['awsdestination'].append(f.format(nt['submit']['userfolder'],'/inputs/'))
+                                    
+                                    # brainmask
+                                    fname = pjoin(localfolder,'results','brainmask.npy')
+                                    np.save(fname,brain_mask)
+                                    nt['submit']['brainmask_filename'] = os.path.basename(fname)
+                                    f = '{0}/' + foldername + '{1}'+'brainmask.npy'
+                                    nt['localpath'].append(fname)
+                                    nt['awsdestination'].append(f.format(nt['submit']['userfolder'],'/inputs/'))
+
+                                    #atlas
+                                    fname = pjoin(localfolder,'results','atlas.npy')
+                                    np.save(fname,atlas)
+                                    nt['submit']['atlas_filename'] = os.path.basename(fname)
+                                    f = '{0}/' + foldername + '{1}'+'atlas.npy'
+                                    nt['localpath'].append(fname)
+                                    nt['awsdestination'].append(f.format(nt['submit']['userfolder'],'/inputs/'))
+                                    
+                                    nt['last_status'] = 'pending_transfer'
+                                    self.aws_view.aws_transfer_queue.append(nt)
+                                    #print(nt)
+                                    self.refresh_queuelist()
+                                    while self.uploading:
+                                        QApplication.processEvents()
+                                        time.sleep(0.02)
+                                    self.process_aws_transfer()
+                                    self.aws_view.aws_transfer_queue[-1]['last_status'] = 'submitted'
                     self.fetching_results = False
                     self.remove_from_queue(self.queuelist.item(i))
+                    
+                    self.submitb.setEnabled(True)
+                    self.submitb.setText('Submit to NeuroCAAS')
                     return # because we removed an item from the queue, restart the loop
                     
-                    #if self.config['decompress_results']:
-                    #    try:
-                    #        for f in resultsfiles:
-                    #            # read U and decompress this should become a function 
-                    #            if 'sparse_spatial.npz' in f:
-                    #                fname = pjoin(localpath,'sparse_spatial.npz')
-                    #                fcfg =  pjoin(localpath,'config.yaml')
-                    #                if os.path.isfile(fcfg):
-                    #                    with open(fcfg,'r') as fc:
-                    #                        import yaml
-                    #                        config = yaml.load(fc)
-                    #                        H,W = (config['fov_height'],config['fov_width'])
-                    #                    if os.path.isfile(fname):
-                    #                        from scipy.sparse import load_npz
-                    #                        Us = load_npz(fname)
-                    #                        U = np.squeeze(np.asarray(Us.todense()))
-                    #                        U = U.reshape([H,W,-1])
-                                            # This may overwrite.. prompt
-                    #                        np.save(fname.replace('sparse_spatial.npz','U.npy'),U)
-                    # #                      self.to_log('Decompressed {0}'.format(f))
-                    #                    else:
-                    #                        print('Could not decompress (no file)')
-                    #                else:
-                    #                    print('Could not decompress (no config.yaml?)')
-                    #    except Exception as err:
-                    #        self.parent.to_log('ERROR: FAILED TO DECOMPRESS. The error was dumped to the console.')
-                    #        print(err)
-
 
     def remove_from_queue(self,item):
         itemname = item.text()
@@ -930,14 +1038,14 @@ class NCAASwrapper(QMainWindow):
                                 #Config=multipart_config)
                                 self.isrunning = False
                         upload = Upload(t,self.config,self.aws_view.s3)
-                        self.to_log('Transfering {0}'.format(t['localpath'][it]))
+                        self.to_log('Transfering {0} {1}'.format(t['localpath'][it],t['awsdestination'][it]))
                         thread = threading.Thread(target=upload.run)
                         thread.start()
                         time.sleep(1)
                         cnt = 0
                         while (upload.isrunning):
                             QApplication.processEvents()
-                            self.pbar.setValue(np.ceil(upload.count*98/upload.fsize))
+                            self.pbar.setValue(np.ceil(upload.count*99/upload.fsize))
                             time.sleep(0.033)
                             cnt+= 1
                             if np.mod(cnt,3) == 0:
@@ -980,7 +1088,7 @@ class NCAASwrapper(QMainWindow):
                     json.dump(tmp, f, indent=4, sort_keys=True)
                 bucket.upload_file(temp,
                                    t['awssubmit'])#os.path.dirname(t['awsdestination'][0])+'/'+'submit.json')
-                self.to_log('Submitted analysis {name}'.format(**t))
+                self.to_log('Submitted analysis {name} to {awssubmit}'.format(**t))
                 self.aws_view.aws_transfer_queue[i]['last_status'] = 'submitted'
                         
         self.uploading = False
@@ -1142,8 +1250,7 @@ class AWSView(QTreeView):
         for p in e.mimeData().urls():
             path = p.path()
             transfer, configselection = ncaas_upload_queue(
-                path,
-                subfolder = 'inputs', config = self.config)
+                path, config = self.config)
             # this is where we parse the bucket.
             if len(configselection) == 0:
                 print('Nothing selected')
@@ -1157,20 +1264,29 @@ class AWSView(QTreeView):
                 bucketname = 'cshl-wfield-locanmf' # TODO: this should not be hardcoded
             else:
                 print('No analysis were selected ? ')
+                return e.accept()
             print('Running analysis on {0}'.format(bucketname))
             
             for t in transfer:
                 print('Placing {0} in the transfer queue.'.format(t['name']))
                 t['awsbucket'] = bucketname
                 t['config'] = configselection[bucketname]['config']
+                t['config']['analysis_selection'] = [s['acronym'] for s in selection if s['selected']]
                 t['submit'] = configselection[bucketname]['submit']
-                t['awssubmit'] = t['submit']['userfolder']+'/'+t['awssubmit']
+                if bucketname == 'cshl-wfield-preprocessing':
+                    t['awssubmit'] = t['awssubmit'].format(t['submit']['userfolder']+'/inputs/','/')
+                else:
+                    t['awssubmit'] = t['awssubmit'].format(t['submit']['userfolder'],'/inputs/')
+
                 for i,f in enumerate(t['awsdestination']):
-                    t['awsdestination'][i] = t['submit']['userfolder']+'/'+f
+                    if bucketname == 'cshl-wfield-preprocessing':
+                        t['awsdestination'][i] = f.format(t['submit']['userfolder']+'/inputs/','/')
+                    else:
+                        t['awsdestination'][i] = f.format(t['submit']['userfolder'],'/inputs/')
 
                 # Check if it will run locaNMF
                 t['selection'] = [s['acronym'] for s in configselection['selection'] if s['selected']]
-                if 'locanmf' in t['selection']:
+                if 'locaNMF' in t['selection']:
                     t['locanmf_config'] = configselection['cshl-wfield-locanmf']['config'] 
                     t['locanmf_submit'] = configselection['cshl-wfield-locanmf']['submit'] 
                 added = False
