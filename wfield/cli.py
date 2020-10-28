@@ -62,7 +62,7 @@ You'll need credentials from neurocaas.org before you are able to use this.
 
 Type wfield ncaas <foldername> to open on a specific folder.
             ''')
-        parser.add_argument('foldername', action='store',default='.',type=str)
+        parser.add_argument('--foldername', action='store',default='.',type=str)
         args = parser.parse_args(sys.argv[2:])
         
         from wfield.ncaas_gui import main as ncaas_gui

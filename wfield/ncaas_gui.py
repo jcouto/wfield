@@ -846,7 +846,7 @@ class NCAASwrapper(QMainWindow):
                                 nt['submit'] = t['locanmf_submit']
                                 nt['awsbucket'] = 'cshl-wfield-locanmf'
                                 
-                                nt['awssubmit'] = ('{0}/'+foldername+'{1}/submit.json').format(
+                                nt['awssubmit'] = ('{0}/'+foldername+'{1}submit.json').format(
                                     nt['submit']['userfolder'],'/')
                                 
                                 # Which files: labels.json,atlas.npy,brainmask.npy,SVTcorr.npy,U.npy
