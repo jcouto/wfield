@@ -1488,16 +1488,18 @@ def main(folder = '.'):
         print('NeuroCAAS credentials not found.')
         cred = CredentialsManager()
         app.exec_()
-        awskeys = ncaas_read_aws_keys()
     from botocore.exceptions import ClientError
     try:
+        awskeys = ncaas_read_aws_keys()
+        s3_connect()
         wind = NCAASwrapper(folder = folder)
         sys.exit(app.exec_())
-        #s3_connect()
     except ClientError:
         print('Could not connect to NeuroCAAS, check credentials.')
         cred = CredentialsManager()
         app.exec_()
         awskeys = ncaas_read_aws_keys()
+        s3_connect()
         wind = NCAASwrapper(folder = folder)
         sys.exit(app.exec_())
+    
