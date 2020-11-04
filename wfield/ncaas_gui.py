@@ -840,7 +840,7 @@ class NCAASwrapper(QMainWindow):
                                 nt = dict(**t)
                                 nt['name'] = nt['name'] + '_locanmf'
                                 awsfolder = os.path.dirname(nt['awsdestination'][0])
-                                foldername = awsfolder.split('/')[-1]
+                                foldername = awsfolder.strip('/').split('/')[-1]
                                 print(nt['downloaded'])
                                 nt['config'] = t['locanmf_config']
                                 nt['submit'] = t['locanmf_submit']
@@ -848,7 +848,7 @@ class NCAASwrapper(QMainWindow):
                                 
                                 nt['awssubmit'] = ('{0}/'+foldername+'{1}submit.json').format(
                                     nt['submit']['userfolder'],'/')
-                                
+                                print(nt['awssubmit'])
                                 # Which files: labels.json,atlas.npy,brainmask.npy,SVTcorr.npy,U.npy
                                 #t['awsdestination'][i] = f.format(t['submit']['userfolder'],'/inputs/')
                                 # Check for the landmarks file in the original folder
@@ -1088,6 +1088,8 @@ class NCAASwrapper(QMainWindow):
                     json.dump(tmp, f, indent=4, sort_keys=True)
                 bucket.upload_file(temp,
                                    t['awssubmit'])#os.path.dirname(t['awsdestination'][0])+'/'+'submit.json')
+                print(t['awssubmit'])
+
                 self.to_log('Submitted analysis {name} to {awssubmit}'.format(**t))
                 self.aws_view.aws_transfer_queue[i]['last_status'] = 'submitted'
                         

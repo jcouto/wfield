@@ -434,13 +434,22 @@ class GenericStack():
         else:
             return img
 
-    def export_binary(self, foldername, basename = 'frames', chunksize = 512, channel = None):
+    def export_binary(self, foldername,
+                      basename = 'frames',
+                      chunksize = 512,
+                      start_frame = 0,
+                      end_frame = None,
+                      channel = None):
         '''
         Exports a binary file.
         '''
         nframes,nchan,h,w = self.shape
-        chunks = chunk_indices(nframes,chunksize)
-        shape = [*self.shape]
+        if end_frame is None :
+            end_frame = nframes
+        nframes = end_frame - start_frame
+        chunks = chunk_indices(nframes,chunksize)    
+        chunks = [[c[0]+start_frame,c[1]+start_frame] for c in chunks]
+        shape = [nframes,*self.shape[1:]]
         if not channel is None:
             shape[1] = 1
         fname = pjoin('{0}'.format(foldername),'{4}_{0}_{1}_{2}_{3}.bin'.format(
@@ -453,18 +462,31 @@ class GenericStack():
                         shape=tuple(shape))
         for c in tqdm(chunks, desc='Exporting binary'):
             if channel is None:
-                out[c[0]:c[1]] = self[c[0]:c[1]]
+                out[c[0] - start_frame:c[1] - start_frame] = self[c[0]:c[1]]
             else:
-                out[c[0]:c[1],0] = self[c[0]:c[1],channel]
-            out.flush()
+                out[c[0] - start_frame:c[1] - start_frame,0] = self[c[0]:c[1],channel]
+        out.flush()
         del out
 
-    def export_tiffs(self, foldername, basename = 'frames', chunksize = 512, channel = None):
+    def export_tiffs(self, foldername,
+                     basename = 'frames',
+                     chunksize = 512,
+                     start_frame = 0,
+                     end_frame = None,
+                     channel = None):
         '''
         Exports tifffiles.
         '''
         nframes,nchan,h,w = self.shape
-        chunks = chunk_indices(nframes,chunksize)
+        if end_frame is None :
+            end_frame = nframes
+        nframes = end_frame - start_frame
+        chunks = chunk_indices(nframes,chunksize)    
+        chunks = [[c[0]+start_frame,c[1]+start_frame] for c in chunks]
+        shape = [nframes,*self.shape[1:]]
+        if not channel is None:
+            shape[1] = 1
+
         file_no = 0
         fname = pjoin('{0}'.format(foldername),'{0}_{1:05d}.tif')
         if not os.path.isdir(os.path.dirname(fname)):
@@ -544,8 +566,13 @@ class ImagerStack(GenericStack):
                 tmp = tmp.transpose([0,1,3,2])
         tmp = tmp.reshape([-1,*tmp.shape[-2:]])
         # combine the indexes from the 2 channels
-        idx = np.sort(np.hstack([self.index_ch1[fileidx],self.index_ch2[fileidx]]))
-        self.current_stack = tmp[idx].reshape([-1,*self.dims])
+        idx = np.sort(np.hstack([self.index_ch1[fileidx],
+                                 self.index_ch2[fileidx]]))
+        try:
+            self.current_stack = tmp[idx].reshape([-1,*self.dims])
+        except:
+            raise OSError('There is a chance that file {0} is corrupt.'.format(
+                self.filenames[fileidx]))
         self.current_fileidx = fileidx
                     
 class BinaryStack(GenericStack):
@@ -621,6 +648,8 @@ class TiffStack(GenericStack):
             # Parse all files in the stack
             tmp =  TiffFile(f)
             dims = [*tmp.series[0].shape]
+            if len(dims) == 2: # then these are single page tiffs
+                dims = [1,*dims]
             dtype = tmp.series[0].dtype
             offsets.append(dims[0])
             del tmp
@@ -641,6 +670,9 @@ class TiffStack(GenericStack):
         self.current_stack = self.imread(self.filenames[fileidx]).reshape([-1,*self.dims])
         self.current_fileidx = fileidx
 
+
+
+        
 
 def load_stack(foldername,order = ['binary','tiff','imager'], nchannels=None):
     ''' 
@@ -675,3 +707,4 @@ def load_stack(foldername,order = ['binary','tiff','imager'], nchannels=None):
         if len(files) == 1:
             return mmap_dat(files[0])
         return BinaryStack(foldername)
+

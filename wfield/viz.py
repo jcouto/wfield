@@ -61,7 +61,7 @@ def nb_play_movie(data,interval=30,shape = None,**kwargs):
     from IPython.display import display
 
     i = _handle_sparse(data[0],shape = shape)
-    im = plt.imshow(i,**kwargs)
+    im = plt.imshow(i.squeeze(),**kwargs)
     slider = IntSlider(0,min = 0,max = data.shape[0]-1,step = 1,description='Frame')
     play = Play(interval=interval,
                 value=0,
@@ -74,7 +74,7 @@ def nb_play_movie(data,interval=30,shape = None,**kwargs):
     display(HBox([play, slider]))
     def updateImage(change):
         i = _handle_sparse(data[change['new']],shape=shape)
-        im.set_data(i)
+        im.set_data(i.squeeze())
     slider.observe(updateImage, names='value')
     return dict(fig = plt.gcf(),
                 ax=plt.gca(),
@@ -100,11 +100,11 @@ def nb_save_movie(data,filename,interval = 100,dpi = 90,shape=None,**kwargs):
         global pbar
         pbar.update(1)
         i = _handle_sparse(data[frame],shape = shape)
-        im.set_data(i)        
+        im.set_data(i.squeeze())        
         return im,
     fig = plt.gcf()
     i = _handle_sparse(data[0],shape = shape)
-    im = plt.imshow(i,**kwargs)
+    im = plt.imshow(i.squeeze(),**kwargs)
     animation = FuncAnimation(
         fig,
         animate,
