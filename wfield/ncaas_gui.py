@@ -15,13 +15,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # 
 
-from .utils import *
-import sys
-from glob import glob
-import json
-from datetime import datetime
-import time
-import threading
+from .ncaas_utils import *
 from PyQt5.QtWidgets import (QApplication,
                              QWidget,
                              QMainWindow,
@@ -55,7 +49,7 @@ from PyQt5.QtWidgets import (QApplication,
                              QDialogButtonBox,
                              QAction)
 from functools import partial
-
+print(time.time()-t)
 try:
     from PyQt5.QtWebEngineWidgets import QWebEngineView
 except:
@@ -64,20 +58,13 @@ from PyQt5 import QtCore
 from PyQt5.QtGui import QStandardItem, QStandardItemModel,QColor
 from PyQt5.QtCore import Qt, QTimer,QMimeData
 
-import yaml
-
-try:
-    import boto3
-except:
-    print('boto3 not installed, installing with pip ')
-    from subprocess import call
-    call('pip install boto3',shell = True)
-    import boto3
-
+PMD_BUCKET = 'cshl-wfield-preprocessing'
+NMF_BUCKET = 'cshl-wfield-locanmf'
 
 tempfile = pjoin(os.path.expanduser('~'),'.wfield','tempfile')
 
 analysis_extensions = ['.bin','.tiff','.tif','.npy','.json','.dat']
+ZIP_PMD = True
 
 analysis_selection_dict = [dict(acronym = 'motion',
                                 name='Motion correction',
@@ -97,135 +84,8 @@ analysis_selection_dict = [dict(acronym = 'motion',
                                 selected = True)]
 
 
-defaultconfig = {
-    'cshl-wfield-preprocessing': dict(
-        submit = dict(
-            instance_type =  'r5.16xlarge',
-            analysis_extension = '.bin',
-            userfolder = 'ChurchlandLab',
-            decompress_results = True),  # this will decompress the U matrix when downloading
-        config = dict(block_height = 90,
-                      block_width = 80,
-                      frame_rate = 60,
-                      max_components = 15,
-                      num_sims = 64,
-                      overlapping = True,
-                      window_length = 200)), # 7200    
-    'cshl-wfield-locanmf': {
-        'submit':dict(
-            instance_type =  'p3.2xlarge',
-            userfolder = 'data',
-            params_filename = 'config.yaml',
-            areanames_filename = 'labels.json',
-            atlas_filename = 'atlas.npy',
-            brainmask_filename = 'brainmask.npy',
-            temporal_data_filename = 'SVTcorr.npy',
-            spatial_data_filename = 'U.npy'),
-        'config' :{"maxrank": 3,
-                   "loc_thresh": 80,
-                   "min_pixels": 100,
-                   "r2_thresh": 0.99,
-	           "maxiter_hals":20,
-	           "maxiter_lambda":300,
-	           "lambda_step":1.35,
-	           "lambda_init":0.000001}}}
 
 # Function to add credentials
-awsregions = ['us-east-2',
-              'us-east-1',
-              'us-west-1',
-              'us-west-2',
-              'af-south-1',
-              'ap-east-1',
-              'ap-south-1',
-              'ap-northeast-3',
-              'ap-northeast-2',
-              'ap-southeast-1',
-              'ap-southeast-2',
-              'ap-northeast-1',
-              'ca-central-1',
-              'cn-north-1',
-              'cn-northwest-1',
-              'eu-central-1',
-              'eu-west-1',
-              'eu-west-2',
-              'eu-south-1',
-              'eu-west-3',
-              'eu-north-1',
-              'me-south-1',
-              'sa-east-1']
-
-def ncaas_set_aws_keys(access_key,secret_key,region='us-east-1'):
-    fname = pjoin(os.path.expanduser('~'),'.aws','credentials')
-    cred = '''[default]
-aws_access_key_id = {access_key}
-aws_secret_access_key = {secret_key}
-'''
-    dirname = os.path.dirname(fname)
-    if not os.path.isdir(dirname):
-        os.makedirs(dirname)    
-    with open(fname,'w') as fd:
-        fd.write(cred.format(access_key=access_key,secret_key = secret_key))
-    fname = pjoin(os.path.expanduser('~'),'.aws','config')
-    if not region is None:
-        conf = '''[default]
-region={region}'''
-        with open(fname,'w') as fd:
-            fd.write(conf.format(region=region))
-
-def ncaas_read_aws_keys():
-    awsfolder = pjoin(os.path.expanduser('~'),'.aws')
-    awscredfile = pjoin(awsfolder,'credentials')
-    awsconfig = pjoin(awsfolder,'credentials')
-    access_key = ''
-    secret_key = ''
-    region = 'us-east-1'
-    if os.path.isfile(awscredfile):
-        with open(awscredfile,'r') as fd:
-            for ln in fd:
-                if 'aws_access_key_id' in ln:
-                    ln = ln.split('=')
-                    if len(ln)>1:
-                        access_key = ln[-1].strip(' ').strip('\n')
-                if 'aws_secret_access_key' in ln:
-                    ln = ln.split('=')
-                    if len(ln)>1:
-                        secret_key = ln[-1].strip(' ').strip('\n')
-    if os.path.isfile(awsconfig):
-        with open(awsconfig,'r') as fd:
-            for ln in fd:
-                if 'region' in ln:
-                    ln = ln.split('=')
-                    region = ln[-1].strip(' ')
-    return dict(access_key = access_key,
-                secret_key = secret_key,
-                region = region)    
-
-def ncaas_read_analysis_config(config):
-    if not os.path.exists(os.path.dirname(config)):
-        os.makedirs(os.path.dirname(config))
-    if not os.path.exists(config):
-        with open(config,'w') as f:
-            print('Creating config from defaults [{0}]'.format(config))
-            json.dump(defaultconfig,f,
-                      indent = 4,
-                      sort_keys = True)
-    with open(config,'r') as f:
-        config = json.load(f)
-        for k in defaultconfig.keys():
-            if not k in config.keys(): # Use default
-                config[k] = defaultconfig[k]
-    return config
-
-def s3_connect():
-    return boto3.resource('s3')
-
-def s3_ls(s3,bucketnames):
-    files = []
-    for bucketname in bucketnames:
-        bucket = s3.Bucket(bucketname)
-        files.extend([bucketname+'/'+l.key for l in list(bucket.objects.all())])
-    return files
     
 def make_tree(item, tree):
     if len(item) == 1:
@@ -438,18 +298,12 @@ class TextEditor(QDockWidget):
             with open(tempfile,'r') as f:
                 return f.read()
 
-from boto3.s3.transfer import TransferConfig
-GB = 1024 ** 3
-# Not being used now.
-multipart_config = TransferConfig(multipart_threshold=int(1*GB),
-                                  max_concurrency=10,
-                                  multipart_chunksize=int(0.1*GB),
-                                  use_threads=True)
 
 class  AnalysisSelectionWidget(QDialog):
     def __init__(self, path, config):
         '''
-        Select analysis from to be ran on NCAAS
+        Select analysis from to be ran on NCAAS.
+
         '''
         super(AnalysisSelectionWidget,self).__init__()
         self.config = config
@@ -489,24 +343,24 @@ class  AnalysisSelectionWidget(QDialog):
             dtype = type(self.config[analysis]['config'][option_name])
             self.config[analysis]['config'][option_name] = dtype(edit.text())
 
-        if 'cshl-wfield-preprocessing' in self.config.keys():
-            if 'config' in self.config['cshl-wfield-preprocessing'].keys():
+        if PMD_BUCKET in self.config.keys():
+            if 'config' in self.config[PMD_BUCKET].keys():
                 lay.addRow(QLabel('Parameters for motion correction, compression, denoising and hemodynamics compensation'))
 
-                for k in self.config['cshl-wfield-preprocessing']['config'].keys():
-                    c = QLineEdit(str(self.config['cshl-wfield-preprocessing']['config'][k]))
+                for k in self.config[PMD_BUCKET]['config'].keys():
+                    c = QLineEdit(str(self.config[PMD_BUCKET]['config'][k]))
                     name = QLabel(k)
                     lay.addRow(name,c)
-                    c.textChanged.connect(partial(vchanged,'cshl-wfield-preprocessing' ,k,c))
+                    c.textChanged.connect(partial(vchanged,PMD_BUCKET ,k,c))
                     
-        if 'cshl-wfield-locanmf' in self.config.keys():
-            if 'config' in self.config['cshl-wfield-locanmf'].keys():
+        if NMF_BUCKET in self.config.keys():
+            if 'config' in self.config[NMF_BUCKET].keys():
                 lay.addRow(QLabel('Parameters for feature extraction'))                                  
-                for k in self.config['cshl-wfield-locanmf']['config'].keys():
-                    c = QLineEdit(str(self.config['cshl-wfield-locanmf']['config'][k]))
+                for k in self.config[NMF_BUCKET]['config'].keys():
+                    c = QLineEdit(str(self.config[NMF_BUCKET]['config'][k]))
                     name = QLabel(k)
                     lay.addRow(name,c)
-                    c.textChanged.connect(partial(vchanged,'cshl-wfield-locanmf',k,c))
+                    c.textChanged.connect(partial(vchanged,NMF_BUCKET,k,c))
         tabwidget.addTab(parameterswid,'Parameters')
 
         files = glob(pjoin(path,'*'))
@@ -543,22 +397,22 @@ class  AnalysisSelectionWidget(QDialog):
             dtype = type(self.config[analysis]['submit'][option_name])
             self.config[analysis]['submit'][option_name] = dtype(edit.text())
 
-        if 'cshl-wfield-preprocessing' in self.config.keys():
-            if 'submit' in self.config['cshl-wfield-preprocessing'].keys():
+        if PMD_BUCKET in self.config.keys():
+            if 'submit' in self.config[PMD_BUCKET].keys():
                 lay.addRow(QLabel('Advanced parameters for motion correction, compression, denoising and hemodynamics compensation'))
-                for k in self.config['cshl-wfield-preprocessing']['submit'].keys():
-                    c = QLineEdit(str(self.config['cshl-wfield-preprocessing']['submit'][k]))
+                for k in self.config[PMD_BUCKET]['submit'].keys():
+                    c = QLineEdit(str(self.config[PMD_BUCKET]['submit'][k]))
                     name = QLabel(k)
                     lay.addRow(name,c)
-                    c.textChanged.connect(partial(vschanged,'cshl-wfield-preprocessing' ,k,c))
-        if 'cshl-wfield-locanmf' in self.config.keys():
-            if 'submit' in self.config['cshl-wfield-locanmf'].keys():
+                    c.textChanged.connect(partial(vschanged,PMD_BUCKET ,k,c))
+        if NMF_BUCKET in self.config.keys():
+            if 'submit' in self.config[NMF_BUCKET].keys():
                 lay.addRow(QLabel('Advanced parameters for feature extraction'))                                  
-                for k in self.config['cshl-wfield-locanmf']['submit'].keys():
-                    c = QLineEdit(str(self.config['cshl-wfield-locanmf']['submit'][k]))
+                for k in self.config[NMF_BUCKET]['submit'].keys():
+                    c = QLineEdit(str(self.config[NMF_BUCKET]['submit'][k]))
                     name = QLabel(k)
                     lay.addRow(name,c)
-                    c.textChanged.connect(partial(vschanged,'cshl-wfield-locanmf',k,c))
+                    c.textChanged.connect(partial(vschanged,NMF_BUCKET,k,c))
         tabwidget.addTab(advancedwid,'Advanced configuration')
 
         
@@ -578,13 +432,27 @@ class  AnalysisSelectionWidget(QDialog):
                     dict(name = foldername, #os.path.basename(filetransfer[0]),
                          awsdestination = ['{0}' + foldername + '{1}'
                                            +os.path.basename(f) for f in filetransfer],
-                         awssubmit = '{0}'+foldername+'{1}/submit.json',
+                         awssubmit = '{0}'+foldername+'{1}submit.json',
                          awsbucket = None,
                          localpath = filetransfer,
                          last_status = 'pending_transfer'))
             if len(aws_transfer_queue):
                 self.transfer_queue = aws_transfer_queue
-                self.transfer_config = dict(self.config,selection=self.selections)
+                self.transfer_config = dict(self.config, selection=self.selections)
+                if self.selections[3]['selected']:
+                    # Then locaNMF is selected.
+                    lmarkfiles = glob(pjoin(path,'*_landmarks.json'))
+                    if not len(lmarkfiles):
+                        print('Openning the dataset to compute get Allen Landmarks.')
+                        from .io import load_stack
+                        from .widgets import RawViewer
+                        dat = load_stack(path)
+                        w = RawViewer(raw = dat,
+                                      folder = path)
+                        w.setWindowModality(QtCore.Qt.WindowModal)
+                    else:
+                        print('Found a landmarks file.')
+                    print(path)
             else:
                 print('No files selected.')
             self.close()
@@ -844,8 +712,7 @@ class NCAASwrapper(QMainWindow):
                                 print(nt['downloaded'])
                                 nt['config'] = t['locanmf_config']
                                 nt['submit'] = t['locanmf_submit']
-                                nt['awsbucket'] = 'cshl-wfield-locanmf'
-                                
+                                nt['awsbucket'] = NMF_BUCKET 
                                 nt['awssubmit'] = ('{0}/'+foldername+'{1}submit.json').format(
                                     nt['submit']['userfolder'],'/')
                                 print(nt['awssubmit'])
@@ -871,7 +738,6 @@ class NCAASwrapper(QMainWindow):
                                             dims = [config['fov_height'],config['fov_width']]
                                             
                                 if 'dims' in dir():
-                                    
                                     print('Creating the atlas.')
                                     from .allen import atlas_from_landmarks_file,load_allen_landmarks
                                     atlas, areanames, brain_mask = atlas_from_landmarks_file(landmarksfile,
@@ -1007,7 +873,6 @@ class NCAASwrapper(QMainWindow):
         self.submitb.setText('Transfer in progress')                        
 
         for i,t in enumerate(self.aws_view.aws_transfer_queue):
-            print(t)
             if t['last_status'] == 'pending_transfer':
                 for it, fname in enumerate(t['localpath']):
                     if os.path.isfile(fname):
@@ -1016,32 +881,12 @@ class NCAASwrapper(QMainWindow):
                         self.aws_view.aws_transfer_queue[i]['last_status'] = 'in_transfer'
                         self.refresh_queuelist()
                         self.count = 0
-                        class Upload():
-                            def __init__(self,item,config,s3):
-                                self.config = config
-                                self.s3 = s3
-                                self.item = item
-                                statinfo = os.stat(fname)
-                                self.fsize = statinfo.st_size
-                                self.count = 0
-                                self.isrunning = False
-                            def run(self):
-                                def update(chunk):
-                                    self.count += chunk
-                                    t = self.item
-                                    self.isrunning = True
-                                bucket =self.s3.Bucket(t['awsbucket'])
-                                print('Uploading to {0}'.format(t['awsdestination'][it]))
-                                bucket.upload_file(t['localpath'][it],
-                                                   t['awsdestination'][it],
-                                                   Callback = update)
-                                #Config=multipart_config)
-                                self.isrunning = False
-                        upload = Upload(t,self.config,self.aws_view.s3)
-                        self.to_log('Transfering {0} {1}'.format(t['localpath'][it],t['awsdestination'][it]))
-                        thread = threading.Thread(target=upload.run)
-                        thread.start()
-                        time.sleep(1)
+                        upload = Upload(bucket = t['awsbucket'],
+                                        filepath = t['localpath'][it],
+                                        destination = t['awsdestination'][it],
+                                        s3 = self.aws_view.s3)
+                        upload.start()
+                        time.sleep(.1)
                         cnt = 0
                         while (upload.isrunning):
                             QApplication.processEvents()
@@ -1052,7 +897,8 @@ class NCAASwrapper(QMainWindow):
                                 self.submitb.setStyleSheet("color: red")
                             else:
                                 self.submitb.setStyleSheet("color: black")
-                            
+                        self.to_log('Transfering {0} {1}'.format(t['localpath'][it],t['awsdestination'][it]))
+
                         QApplication.processEvents()
                         self.to_log('Done transfering {name}'.format(**t))
                         self.pbar.setMaximum(100)
@@ -1087,9 +933,7 @@ class NCAASwrapper(QMainWindow):
                 with open(temp,'w') as f:
                     json.dump(tmp, f, indent=4, sort_keys=True)
                 bucket.upload_file(temp,
-                                   t['awssubmit'])#os.path.dirname(t['awsdestination'][0])+'/'+'submit.json')
-                print(t['awssubmit'])
-
+                                   t['awssubmit'])
                 self.to_log('Submitted analysis {name} to {awssubmit}'.format(**t))
                 self.aws_view.aws_transfer_queue[i]['last_status'] = 'submitted'
                         
@@ -1261,9 +1105,9 @@ class AWSView(QTreeView):
             if (selection[0]['selected'] or # motion
                 selection[1]['selected'] or # compression
                 selection[2]['selected']):  # hemodynamics
-                bucketname = 'cshl-wfield-preprocessing' # TODO: this should not be hardcoded
+                bucketname = PMD_BUCKET 
             elif selection[3]['selected']:
-                bucketname = 'cshl-wfield-locanmf' # TODO: this should not be hardcoded
+                bucketname = NMF_BUCKET 
             else:
                 print('No analysis were selected ? ')
                 return e.accept()
@@ -1275,13 +1119,13 @@ class AWSView(QTreeView):
                 t['config'] = configselection[bucketname]['config']
                 t['config']['analysis_selection'] = [s['acronym'] for s in selection if s['selected']]
                 t['submit'] = configselection[bucketname]['submit']
-                if bucketname == 'cshl-wfield-preprocessing':
+                if bucketname == PMD_BUCKET:
                     t['awssubmit'] = t['awssubmit'].format(t['submit']['userfolder']+'/inputs/','/')
                 else:
                     t['awssubmit'] = t['awssubmit'].format(t['submit']['userfolder'],'/inputs/')
 
                 for i,f in enumerate(t['awsdestination']):
-                    if bucketname == 'cshl-wfield-preprocessing':
+                    if bucketname == PMD_BUCKET:
                         t['awsdestination'][i] = f.format(t['submit']['userfolder']+'/inputs/','/')
                     else:
                         t['awsdestination'][i] = f.format(t['submit']['userfolder'],'/inputs/')
@@ -1289,8 +1133,8 @@ class AWSView(QTreeView):
                 # Check if it will run locaNMF
                 t['selection'] = [s['acronym'] for s in configselection['selection'] if s['selected']]
                 if 'locaNMF' in t['selection']:
-                    t['locanmf_config'] = configselection['cshl-wfield-locanmf']['config'] 
-                    t['locanmf_submit'] = configselection['cshl-wfield-locanmf']['submit'] 
+                    t['locanmf_config'] = configselection[NMF_BUCKET]['config'] 
+                    t['locanmf_submit'] = configselection[NMF_BUCKET]['submit'] 
                 added = False
                 if len(self.aws_transfer_queue): # check if it is already there
                     names = [a['name'] for a in self.aws_transfer_queue]
@@ -1463,22 +1307,6 @@ class FilesystemView(QTreeView):
         self.setSelectionMode(3)
         e.ignore()
     
-def get_tree_path(items,root = ''):
-    ''' Get the paths from a QTreeView item'''
-    paths = []
-    for item in items:
-        level = 0
-        index = item
-        paths.append([index.data()])
-        while index.parent().isValid():
-            index = index.parent()
-            level += 1
-            paths[-1].append(index.data())
-        for i,p in enumerate(paths[-1]):
-            if p is None :
-                paths[-1][i] = ''
-        paths[-1] = '/'.join(paths[-1][::-1])
-    return paths
 
 def main(folder = '.'):
     if QApplication.instance() != None:

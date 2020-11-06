@@ -184,7 +184,8 @@ Creates a top view and extracts contours from each area in an annotation volume
                                 left_y = (c[:,0] - reference[0])*res,
                                 right_x = (d[:,1] - reference[1])*res,
                                 right_y = (d[:,0] - reference[0])*res))
-    ccf_regions = pd.DataFrame(ccf_regions)
+    from pandas import DataFrame
+    ccf_regions = DataFrame(ccf_regions)
     return proj,ccf_regions
 
 def projection_outline(proj, resolution = 10, reference=[540,570]):
@@ -329,7 +330,8 @@ def load_allen_landmarks(filename, reference = 'dorsal_cortex'):
         lmarks = json.load(fd)
     for k in ['landmarks_im','landmarks','landmarks_match']:
         if k in lmarks.keys():
-            lmarks[k] = pd.DataFrame(lmarks[k])[['x','y','name','color']]
+            from pandas import DataFrame
+            lmarks[k] = DataFrame(lmarks[k])[['x','y','name','color']]
     if 'transform' in lmarks.keys():
         from skimage.transform import SimilarityTransform
         lmarks['transform'] = SimilarityTransform(
@@ -345,8 +347,8 @@ Example:
     ccf_regions,proj,brain_outline = allen_load_reference('dorsal_cortex')
 
     '''
-    
-    ccf_regions = pd.read_json(pjoin(
+    from pandas import read_json
+    ccf_regions = read_json(pjoin(
         annotation_dir,'{0}_ccf_labels.json'.format(reference_name)))
     proj = np.load(pjoin(annotation_dir,
                          '{0}_projection.npy'.format(reference_name)))

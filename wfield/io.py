@@ -362,7 +362,8 @@ def parse_imager_mj2_folder(folder, destination,
     trialonsets = np.array(frametrial)
     np.save(pjoin(destination,'trial_onsets.npy'),trialonsets[:-1])
     # Save trial information
-    trialinfo = pd.DataFrame(framesinfo)
+    from pandas import DataFrame
+    trialinfo = DataFrame(framesinfo)
     trialinfo.to_csv(pjoin(destination,'trial_info.csv'))
     return mmap_dat(dat_path), frames_avg, trialonsets,trialinfo
 

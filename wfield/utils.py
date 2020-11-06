@@ -13,6 +13,11 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+import os
+import sys
+import time
+print('starting')
+t = time.time()
 
 try:
     import cv2 # OpenCV needs to be imported before numpy for some seg faulted reason...
@@ -20,20 +25,20 @@ except:
     print('Some functionality might be broken: install opencv-python or opencv-python-headless')
 import numpy as np
 from tqdm import tqdm
-import pandas as pd
-import os
-import time
+t = time.time()
+
+print(time.time()-t)
 from natsort import natsorted
 from glob import glob
 from os.path import join as pjoin
-from scipy.signal import medfilt
+from datetime import datetime
+from skimage.transform import warp
 from multiprocessing import Pool, cpu_count
 from functools import partial
-from scipy.signal import butter, filtfilt
-from skimage.transform import warp
 from scipy.interpolate import interp1d
-from scipy.ndimage import morphology
 from scipy.sparse import load_npz, issparse,csr_matrix
+print(time.time()-t)
+t = time.time()
 
 print = partial(print, flush=True)
 
@@ -82,10 +87,12 @@ def im_apply_transform(im,M,dims = None):
                     preserve_range=True)
 
 def lowpass(X, w = 7.5, fs = 30.):
+    from scipy.signal import butter, filtfilt
     b, a = butter(2,w/(fs/2.), btype='lowpass');
     return filtfilt(b, a, X, padlen=50)
 
 def highpass(X, w = 3., fs = 30.):
+    from scipy.signal import butter, filtfilt
     b, a = butter(2,w/(fs/2.), btype='highpass');
     return filtfilt(b, a, X, padlen=50)
 
@@ -94,6 +101,7 @@ def analog_ttl_to_onsets(dat,time=None, mfilt=3):
     if time is None:
         time = np.arange(len(dat))
     if medfilt:
+        from scipy.signal import medfilt
         dat = medfilt(dat,mfilt)
     tt = np.diff(dat.astype(np.float32))
     onsets = np.where(tt-np.max(np.abs(tt))/2 > 0)[0]+1
@@ -279,6 +287,7 @@ def contour_to_mask(x,y,dims,extent = None,n_up_samples = 2000):
     #    H[:,0] = np.uint8(1)
     #if np.sum(H[:,-1]):
     #    H[:,-1] = np.uint8(1)
+    from scipy.ndimage import morphology
     H = morphology.binary_dilation(H)
     H = morphology.binary_fill_holes(H)
     H = morphology.binary_erosion(H)
