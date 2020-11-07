@@ -34,14 +34,16 @@ defaultconfig = {
             brainmask_filename = 'brainmask.npy',
             temporal_data_filename = 'SVTcorr.npy',
             spatial_data_filename = 'U.npy'),
-        'config' :{"maxrank": 3,
-                   "loc_thresh": 80,
-                   "min_pixels": 100,
-                   "r2_thresh": 0.99,
-	           "maxiter_hals":20,
-	           "maxiter_lambda":300,
-	           "lambda_step":1.35,
-	           "lambda_init":0.000001}}}
+        'config' :{
+            "num_channels":2,
+            "maxrank": 3,
+            "loc_thresh": 80,
+            "min_pixels": 100,
+            "r2_thresh": 0.99,
+	    "maxiter_hals":20,
+	    "maxiter_lambda":300,
+	    "lambda_step":1.35,
+	    "lambda_init":0.000001}}}
 
 def ncaas_set_aws_keys(access_key,secret_key,region='us-east-1'):
     fname = pjoin(os.path.expanduser('~'),'.aws','credentials')
@@ -162,17 +164,16 @@ def s3_ls(s3,bucketnames):
     return files
 
 from boto3.s3.transfer import TransferConfig
-GB = 1024 ** 3
-multipart_config = TransferConfig(multipart_threshold=int(1*GB),
+multipart_config = TransferConfig(multipart_threshold=1024*50,
                                   max_concurrency=10,
-                                  multipart_chunksize=int(0.1*GB),
+                                  multipart_chunksize=1024*50,
                                   use_threads=True)
 
 class Upload(threading.Thread):
     def __init__(self,filepath,destination,bucket,s3):
+        super(Upload,self).__init__()
         self.s3 = s3
-        self.item = item
-        statinfo = os.stat(fname)
+        statinfo = os.stat(filepath)
         self.fsize = statinfo.st_size
         self.count = 0
         self.isrunning = False
@@ -180,9 +181,10 @@ class Upload(threading.Thread):
         self.filepath = filepath
         self.destination = destination
     def run(self):
+        self.isrunning = True
+        print('Running upload on' + self.filepath)
         def update(chunk):
             self.count += chunk
-            t = self.item
             self.isrunning = True
         bucket =self.s3.Bucket(self.bucket)
         bucket.upload_file(self.filepath,

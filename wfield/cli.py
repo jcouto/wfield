@@ -14,14 +14,11 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-
+from .utils import *
 import argparse
-import sys
-import os
 import subprocess
 import shlex
 import platform
-from .utils import *
 from .io import load_stack, mmap_dat
 from .io import frames_average_for_trials
 from .registration import motion_correct

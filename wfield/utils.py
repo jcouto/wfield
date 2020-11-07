@@ -16,8 +16,6 @@
 import os
 import sys
 import time
-print('starting')
-t = time.time()
 
 try:
     import cv2 # OpenCV needs to be imported before numpy for some seg faulted reason...
@@ -25,9 +23,6 @@ except:
     print('Some functionality might be broken: install opencv-python or opencv-python-headless')
 import numpy as np
 from tqdm import tqdm
-t = time.time()
-
-print(time.time()-t)
 from natsort import natsorted
 from glob import glob
 from os.path import join as pjoin
@@ -37,8 +32,6 @@ from multiprocessing import Pool, cpu_count
 from functools import partial
 from scipy.interpolate import interp1d
 from scipy.sparse import load_npz, issparse,csr_matrix
-print(time.time()-t)
-t = time.time()
 
 print = partial(print, flush=True)
 
@@ -319,3 +312,17 @@ def runpar(f,X,nprocesses = None,**kwargs):
     return res
 
 
+def zipdir(path, outputpath):
+    import zipfile
+    with zipfile.ZipFile(outputpath, 'w', 
+                         allowZip64 = True) as zipf:   
+        for root, dirs, files in os.walk(path):
+            for file in tqdm(files,desc = 'Compressing'):
+                zipf.write(os.path.join(root, file),file)
+
+def zipfiles(files, outputpath):
+    import zipfile
+    with zipfile.ZipFile(outputpath, 'w', 
+                         allowZip64 = True) as zipf:   
+        for f in tqdm(files,desc = 'Compressing'):
+            zipf.write(f,os.path.basename(f))

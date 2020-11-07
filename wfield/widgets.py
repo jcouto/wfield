@@ -370,19 +370,24 @@ class RawDisplayWidget(ImageWidget):
             self.pl.addItem(self.points)
             def update_table():
                 # Update the table when points move
-                nx = [p['pos'][0] for p in self.points.points]
-                ny = [p['pos'][1] for p in self.points.points]
-                self.allenwidget.landmarks_im.nx = nx
-                self.allenwidget.landmarks_im.ny = ny
-                for i,(x,y) in enumerate(zip(nx,ny)):
-                    self.allenwidget.table.item(i,4).setText(str(x))
-                    self.allenwidget.table.item(i,5).setText(str(y))
-                self.allenwidget.usave()
-                if self.wallen.isChecked():
-                    self.allenplot.update()
-                else:
-                    self.allenplot.remove()
-
+                try:
+                    nx = [p['pos'][0] for p in self.points.points]
+                    ny = [p['pos'][1] for p in self.points.points]
+                    self.allenwidget.landmarks_im.nx = nx
+                    self.allenwidget.landmarks_im.ny = ny
+                    for i,(x,y) in enumerate(zip(nx,ny)):
+                        self.allenwidget.table.item(i,4).setText(str(x))
+                        self.allenwidget.table.item(i,5).setText(str(y))
+                    try:
+                        self.allenwidget.usave()
+                    except Exception as e:
+                        print(e)
+                    if self.wallen.isChecked():
+                        self.allenplot.update()
+                    else:
+                        self.allenplot.remove()
+                except:
+                    print('There was an error updating the points.')
             self.points.scatter.sigPlotChanged.connect(update_table)
             self.allenplot = QAllenAreasPlot(plot=self.pl,parent = self,
                                              reference = self.referencename)
@@ -762,6 +767,30 @@ class RawViewer(QMainWindow):
         dock.setFeatures(QDockWidget.DockWidgetMovable |
                          QDockWidget.DockWidgetFloatable)
         dock.setFloating(floating)
+
+class AllenMatchWidget(QWidget):
+    def __init__(self,raw,
+                 folder = None,
+                 reference = 'dorsal_cortex'):
+        super(AllenMatchWidget,self).__init__()
+        self.raw = raw
+        self.folder = folder
+        if self.folder is None:
+            self.folder = os.path.abspath(os.path.curdir)
+        self.referencename = reference
+        landmarks_file = pjoin(self.folder,reference+'_landmarks.json')
+        
+        self.allenparwidget = AllenMatchTable(landmarks_file = landmarks_file,
+                                              reference = self.referencename,
+                                              parent = self)
+        self.rawwidget = RawDisplayWidget(raw,
+                                          parent = self,
+                                          reference = self.referencename)
+        l = QHBoxLayout()
+        self.setLayout(l)
+        l.addWidget(self.rawwidget)
+        l.addWidget(self.allenparwidget)
+        self.show()
 
         
 class LocalCorrelationWidget(ImageWidget):

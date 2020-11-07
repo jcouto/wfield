@@ -49,7 +49,6 @@ from PyQt5.QtWidgets import (QApplication,
                              QDialogButtonBox,
                              QAction)
 from functools import partial
-print(time.time()-t)
 try:
     from PyQt5.QtWebEngineWidgets import QWebEngineView
 except:
@@ -341,8 +340,10 @@ class  AnalysisSelectionWidget(QDialog):
         parameterswid.setLayout(lay)
         def vchanged(analysis,option_name,edit):
             dtype = type(self.config[analysis]['config'][option_name])
-            self.config[analysis]['config'][option_name] = dtype(edit.text())
-
+            try:
+                self.config[analysis]['config'][option_name] = dtype(edit.text())
+            except:
+                print('Could not get {0}.'.format(option_name))
         if PMD_BUCKET in self.config.keys():
             if 'config' in self.config[PMD_BUCKET].keys():
                 lay.addRow(QLabel('Parameters for motion correction, compression, denoising and hemodynamics compensation'))
@@ -382,7 +383,7 @@ class  AnalysisSelectionWidget(QDialog):
             f = QCheckBox()
             name = QLabel(os.path.basename(fname['fname']))
             lay.addRow(f,name)
-            f.clicked.connect(partial(filechanged, len(self.files),f))
+            f.clicked.connect(partial(filechanged, len(self.files)-1,f))
             f.setChecked(fname['selected'])
         if not len(self.files):
             print('This folder {0} contained no files that can be analysed.'.format(path))
@@ -395,7 +396,10 @@ class  AnalysisSelectionWidget(QDialog):
         advancedwid.setLayout(lay)
         def vschanged(analysis,option_name,edit):
             dtype = type(self.config[analysis]['submit'][option_name])
-            self.config[analysis]['submit'][option_name] = dtype(edit.text())
+            try:
+                self.config[analysis]['submit'][option_name] = dtype(edit.text())
+            except:
+                print('Could not get {0}'.format(option_name))
 
         if PMD_BUCKET in self.config.keys():
             if 'submit' in self.config[PMD_BUCKET].keys():
@@ -443,13 +447,12 @@ class  AnalysisSelectionWidget(QDialog):
                     # Then locaNMF is selected.
                     lmarkfiles = glob(pjoin(path,'*_landmarks.json'))
                     if not len(lmarkfiles):
-                        print('Openning the dataset to compute get Allen Landmarks.')
+                        print('Opening the dataset to compute get Allen Landmarks.')
                         from .io import load_stack
-                        from .widgets import RawViewer
+                        from .widgets import AllenMatchWidget
                         dat = load_stack(path)
-                        w = RawViewer(raw = dat,
-                                      folder = path)
-                        w.setWindowModality(QtCore.Qt.WindowModal)
+                        w = AllenMatchWidget(raw = dat,
+                                           folder = path)
                     else:
                         print('Found a landmarks file.')
                     print(path)
@@ -709,7 +712,12 @@ class NCAASwrapper(QMainWindow):
                                 nt['name'] = nt['name'] + '_locanmf'
                                 awsfolder = os.path.dirname(nt['awsdestination'][0])
                                 foldername = awsfolder.strip('/').split('/')[-1]
-                                print(nt['downloaded'])
+                                if not 'locanmf_config' in t.keys():
+                                    print('''
+There was no locanmf config in the submittion job. 
+
+This happens when you re-submit. You need to resubmit from uploaded data.''')
+                                    break
                                 nt['config'] = t['locanmf_config']
                                 nt['submit'] = t['locanmf_submit']
                                 nt['awsbucket'] = NMF_BUCKET 
@@ -871,10 +879,48 @@ class NCAASwrapper(QMainWindow):
         self.uploading = True
         self.submitb.setEnabled(False)
         self.submitb.setText('Transfer in progress')                        
-
+        QApplication.processEvents()
         for i,t in enumerate(self.aws_view.aws_transfer_queue):
             if t['last_status'] == 'pending_transfer':
-                for it, fname in enumerate(t['localpath']):
+                # Check if files need to be zipped.
+                if t['awsbucket'] == PMD_BUCKET:
+                    docompress = True
+                    from .utils import zipfiles
+                    dname = os.path.dirname(t['localpath'][0])
+                    fname = t['name']
+                    fname = pjoin(dname, fname + '.zip')
+                    if os.path.isfile(fname):
+                        dlg = QDialog()
+                        dlg.setWindowTitle('Found a zip file, do you upload that file?')
+                        but = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+                        def ok():
+                            docompress = False
+                            dlg.accept()
+                        but.accepted.connect(ok)
+                        but.rejected.connect(dlg.accept)
+                        l = QVBoxLayout()
+                        lab = QLabel('Found a zip file, do you upload that file?')
+                        lab.setStyleSheet("font: bold")
+                        l.addWidget(lab)
+                        l.addWidget(but)
+                        dlg.setLayout(l)
+                        dlg.exec_()
+                    if docompress:
+                        #import ipdb
+                        #ipdb.set_trace()
+                        self.to_log('Zipping {0}'.format(fname))
+                        self.submitb.setText('Compressing files')                        
+                        QApplication.processEvents()
+                        zipfiles(t['localpath'], fname)
+                    localpath = [fname]
+                    awsdestination = [os.path.dirname(t['awsdestination'][0]) +
+                                      '/'+ os.path.basename(fname)]
+                else:
+                    localpath = t['localpath']
+                    awsdestination = t['awsdestination']
+                self.submitb.setText('Transfer in progress')                        
+                QApplication.processEvents()
+                for it, fname in enumerate(localpath):
                     if os.path.isfile(fname):
                         self.pbar.setValue(0)
                         self.pbar.setMaximum(100)
@@ -882,8 +928,8 @@ class NCAASwrapper(QMainWindow):
                         self.refresh_queuelist()
                         self.count = 0
                         upload = Upload(bucket = t['awsbucket'],
-                                        filepath = t['localpath'][it],
-                                        destination = t['awsdestination'][it],
+                                        filepath = localpath[it],
+                                        destination = awsdestination[it],
                                         s3 = self.aws_view.s3)
                         upload.start()
                         time.sleep(.1)
@@ -897,22 +943,22 @@ class NCAASwrapper(QMainWindow):
                                 self.submitb.setStyleSheet("color: red")
                             else:
                                 self.submitb.setStyleSheet("color: black")
-                        self.to_log('Transfering {0} {1}'.format(t['localpath'][it],t['awsdestination'][it]))
+                        self.to_log('Transfering {0} {1}'.format(localpath[it],
+                                                                 awsdestination[it]))
 
                         QApplication.processEvents()
-                        self.to_log('Done transfering {name}'.format(**t))
-                        self.pbar.setMaximum(100)
                     else:
                         self.to_log('File not found {localpath}'.format(**t))
                         self.remove_from_queue(self.queuelist.item(i))
                         self.submitb.setStyleSheet("color: black")
                         self.submitb.setEnabled(False)
                         return
+                self.to_log('Done transfering {name}'.format(**t))
+                t['awsdestination'] = awsdestination
                 self.submitb.setStyleSheet("color: black")
                 self.pbar.setValue(0)
                 self.aws_view.aws_transfer_queue[i]['last_status'] = 'uploaded'
-                self.refresh_queuelist()
-
+                t['last_status'] == 'uploaded'
             if t['last_status'] == 'uploaded':
                 # add a config file
                 import yaml
@@ -936,7 +982,7 @@ class NCAASwrapper(QMainWindow):
                                    t['awssubmit'])
                 self.to_log('Submitted analysis {name} to {awssubmit}'.format(**t))
                 self.aws_view.aws_transfer_queue[i]['last_status'] = 'submitted'
-                        
+            self.refresh_queuelist()
         self.uploading = False
         self.submitb.setText('Run on NeuroCAAS')                        
         self.submitb.setEnabled(True)
