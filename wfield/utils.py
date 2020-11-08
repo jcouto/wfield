@@ -136,7 +136,7 @@ def reconstruct(u,svt,dims = None):
 
 
 class SVDStack(object):
-    def __init__(self, U, SVT, dims = None, dtype = 'float32'):
+    def __init__(self, U, SVT, dims = None, warped = None, dtype = 'float32'):
         self.U = U.astype('float32')
         self.SVT = SVT.astype('float32')
         self.issparse = False
@@ -149,32 +149,37 @@ class SVDStack(object):
             if dims is None:
                 dims = U.shape[:2]
             self.Uflat = self.U.reshape(-1,self.U.shape[-1])
-   
+        self.U_warped = warped
         self.warped = False
         self.M = None
         self.shape = [SVT.shape[1],*dims]
         self.dtype = dtype
-        
+        self.originalU = None
     def set_warped(self,value,M = None):
         ''' Apply affine transform to the spatial components '''
         if not M is None:
             self.M = M
-        if self.warped:
+        if self.originalU is None:
+            self.originalU = self.U.copy()
+        if not value:
             self.U = self.originalU
             self.warped = False
         else:
-            self.originalU = self.U.copy()
-            if not self.M is None:
-                if not self.issparse:
-                    U = self.U
-                    U[:,0,:] = 0
-                    U[0,:,:] = 0
-                    U[-1,:,:] = 0
-                    U[:,-1,:] = 0
-                    U = np.stack(runpar(im_apply_transform,
-                                        U.transpose([2,0,1]),
-                                        M = self.M)).transpose([1,2,0])
-                self.U = U
+            if self.U_warped is None:
+                if not self.M is None:
+                    if not self.issparse:
+                        if self.originalU is None:
+                            self.originalU = self.U.copy()
+                        self.U_warped = self.originalU.copy()
+                        self.U_warped[:,0,:] = 0
+                        self.U_warped[0,:,:] = 0
+                        self.U_warped[-1,:,:] = 0
+                        self.U_warped[:,-1,:] = 0
+                        self.U_warped = np.stack(runpar(im_apply_transform,
+                                                        self.U_warped.transpose([2,0,1]),
+                                                        M = self.M)).transpose([1,2,0])
+            if not self.U_warped is None:
+                self.U = self.U_warped
                 self.warped = True
         self.Uflat = self.U.reshape(-1,self.U.shape[-1])
         return

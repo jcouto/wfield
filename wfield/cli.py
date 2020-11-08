@@ -88,23 +88,29 @@ Type wfield ncaas <foldername> to open on a specific folder.
         localdisk = args.foldername
         from .io import mmap_dat
         fname = pjoin(localdisk,'U.npy')
+        Uwarped = None
         if os.path.isdir(pjoin(localdisk,'results')) and not args.no_ncaas:
             # then it is from neurocaas?
+            fname = pjoin(localdisk,'results','U_atlas.npy')
+            if os.path.isfile(fname):
+                Uwarped = np.load(fname)
+                print(Uwarped.shape)
+                iswarped = True
             fname = pjoin(localdisk,'results','config.yaml')
             if os.path.isfile(fname):
                 with open(fname,'r') as f:
                     import yaml
                     config = yaml.safe_load(f)
-            H,W = (config['fov_height'],config['fov_width'])
-            fname = pjoin(localdisk,'results','sparse_spatial.npz')
-            if os.path.isfile(fname):
-                print('Loading sparse format.')
-                from scipy.sparse import load_npz
-                U = load_npz(fname)
-                #U = np.squeeze(np.asarray(Us.todense()))
-                #U = U.reshape([H,W,-1])
-                dims = [H,W]
-            SVT = np.load(pjoin(localdisk,'results','SVTcorr.npy'))
+                H,W = (config['fov_height'],config['fov_width'])
+                fname = pjoin(localdisk,'results','reduced_spatial.npy')
+                if os.path.isfile(fname):
+                    U = np.load(fname)
+                    U = U.reshape([H,W,-1])
+                    dims = [H,W]
+            fname = pjoin(localdisk,'results','SVTcorr.npy')
+            if not os.path.isfile(fname):
+                fname = pjoin(localdisk,'results','reduced_temporal.npy')
+            SVT = np.load(fname)
         elif os.path.isfile(fname):
             U = np.load(fname)
             dims = U.shape[:2]
@@ -137,7 +143,7 @@ Type wfield ncaas <foldername> to open on a specific folder.
         else:
             trial_onsets = None
         
-        stack = SVDStack(U,SVT,dims = dims)
+        stack = SVDStack(U,SVT, warped = Uwarped, dims = dims)
         from .widgets import QApplication,SVDViewer
         app = QApplication(sys.argv)
         w = SVDViewer(stack,

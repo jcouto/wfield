@@ -84,49 +84,6 @@ analysis_selection_dict = [dict(acronym = 'motion',
 
 
 
-# Function to add credentials
-    
-def make_tree(item, tree):
-    if len(item) == 1:
-        if not item[0] == '':
-            tree[item[0]] = item[0]
-    else:
-        head, tail = item[0], item[1:]
-        tree.setdefault(head, {})
-        make_tree(
-            tail,
-            tree[head])
-def build_tree(item,parent):
-    for k in item.keys():
-        child = QStandardItem(k)
-        child.setFlags(child.flags() |
-                       Qt.ItemIsSelectable |
-                       Qt.ItemIsEnabled)
-        child.setEditable(False)
-        if type(item[k]) is dict:
-            build_tree(item[k],child)
-        parent.appendRow(child)
-
-def to_log(msg,logfile = None):
-    if logfile is None:
-        logfile = open(pjoin(
-                     os.path.expanduser('~'),
-                     '.wfield','ncaas_gui_log.txt'),'a')
-    nmsg = '['+datetime.today().strftime('%y-%m-%d %H:%M:%S')+'] - ' + msg + '\n'
-    logfile.seek(os.SEEK_END)
-    logfile.write(nmsg)
-    return nmsg
-
-def tail(filename, nlines=100):
-    """
-    This needs work (should not read the whole file).
-    """
-    with open(filename,'r') as f:
-        lines = f.readlines()
-    if len(lines) > 100:
-        lines = lines[-100:]
-    return lines
-    
 class CredentialsManager(QDockWidget):
     def __init__(self,
                  configfile = pjoin(
