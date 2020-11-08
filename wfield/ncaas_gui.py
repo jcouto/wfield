@@ -82,6 +82,16 @@ analysis_selection_dict = [dict(acronym = 'motion',
                                 desc = 'Applies locaNMF to the dataset to isolate the activity of individual areas. This step requires a compressed  dataset.',
                                 selected = True)]
 
+def build_tree(item,parent):
+    for k in item.keys():
+        child = QStandardItem(k)
+        child.setFlags(child.flags() |
+                       Qt.ItemIsSelectable |
+                       Qt.ItemIsEnabled)
+        child.setEditable(False)
+        if type(item[k]) is dict:
+            build_tree(item[k],child)
+        parent.appendRow(child)
 
 
 class CredentialsManager(QDockWidget):
@@ -744,6 +754,8 @@ This happens when you re-submit. You need to resubmit from uploaded data.''')
 
                                     # brainmask
                                     fname = pjoin(localfolder,'results','labels.json')
+                                    areanames = [dict(acronym = t[1],
+                                                      label=t[0]) for t in areanames]
                                     with open(fname,'w+') as fd:
                                         json.dump(areanames,fd)
                                     nt['submit']['areanames_filename'] = os.path.basename(fname)
@@ -841,7 +853,7 @@ This happens when you re-submit. You need to resubmit from uploaded data.''')
             if t['last_status'] == 'pending_transfer':
                 # Check if files need to be zipped.
                 if t['awsbucket'] == PMD_BUCKET:
-                    docompress = True
+                    docompress = [True]
                     from .utils import zipfiles
                     dname = os.path.dirname(t['localpath'][0])
                     fname = t['name']
@@ -851,7 +863,7 @@ This happens when you re-submit. You need to resubmit from uploaded data.''')
                         dlg.setWindowTitle('Found a zip file, do you upload that file?')
                         but = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
                         def ok():
-                            docompress = False
+                            docompress[0] = False
                             dlg.accept()
                         but.accepted.connect(ok)
                         but.rejected.connect(dlg.accept)
@@ -862,7 +874,7 @@ This happens when you re-submit. You need to resubmit from uploaded data.''')
                         l.addWidget(but)
                         dlg.setLayout(l)
                         dlg.exec_()
-                    if docompress:
+                    if docompress[0]:
                         #import ipdb
                         #ipdb.set_trace()
                         self.to_log('Zipping {0}'.format(fname))

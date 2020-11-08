@@ -135,16 +135,6 @@ def make_tree(item, tree):
             tail,
             tree[head])
 
-def build_tree(item,parent):
-    for k in item.keys():
-        child = QStandardItem(k)
-        child.setFlags(child.flags() |
-                       Qt.ItemIsSelectable |
-                       Qt.ItemIsEnabled)
-        child.setEditable(False)
-        if type(item[k]) is dict:
-            build_tree(item[k],child)
-        parent.appendRow(child)
 
 def to_log(msg,logfile = None):
     if logfile is None:
@@ -206,9 +196,9 @@ def s3_ls(s3,bucketnames):
     return files
 
 from boto3.s3.transfer import TransferConfig
-multipart_config = TransferConfig(multipart_threshold=1024*50,
-                                  max_concurrency=10,
-                                  multipart_chunksize=1024*50,
+multipart_config = TransferConfig(multipart_threshold=1024*25,
+                                  max_concurrency=12,
+                                  multipart_chunksize=1024*25,
                                   use_threads=True)
 
 class Upload(threading.Thread):

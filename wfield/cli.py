@@ -94,7 +94,7 @@ Type wfield ncaas <foldername> to open on a specific folder.
             fname = pjoin(localdisk,'results','U_atlas.npy')
             if os.path.isfile(fname):
                 Uwarped = np.load(fname)
-                print(Uwarped.shape)
+                print('Found U_atlas')
                 iswarped = True
             fname = pjoin(localdisk,'results','config.yaml')
             if os.path.isfile(fname):
@@ -144,6 +144,8 @@ Type wfield ncaas <foldername> to open on a specific folder.
             trial_onsets = None
         
         stack = SVDStack(U,SVT, warped = Uwarped, dims = dims)
+        if not Uwarped is None:
+            stack.set_warped(True)
         from .widgets import QApplication,SVDViewer
         app = QApplication(sys.argv)
         w = SVDViewer(stack,

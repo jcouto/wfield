@@ -249,9 +249,11 @@ class ImageWidget(QWidget):
     def __init__(self):
         super(ImageWidget,self).__init__()
 
-        self.layout = QFormLayout()
+        self.layout = QVBoxLayout()
         self.setLayout(self.layout)
         self.win = pg.GraphicsLayoutWidget()
+        self.layout.addWidget(self.win)
+
         self.pl = self.win.addPlot()
         self.pl.getViewBox().invertY(True)
         self.pl.getViewBox().setAspectLocked(True)
@@ -262,10 +264,12 @@ class ImageWidget(QWidget):
         
         self.pl.getAxis('bottom').setPen(axiscolor)
         self.pl.getAxis('left').setPen(axiscolor)
-        self.layout.addRow(self.win)
-
+        self.pl.setClipToView(True)
+        
     def _add_hist(self):
-        self.hist = pg.HistogramLUTItem()
+        self.hist = pg.HistogramLUTItem(fillHistogram=False,
+                                        rgbHistogram=False,
+                                        levelMode='mono')
         self.hist.setImageItem(self.im)
         self.pl.addItem(self.hist)
             
@@ -425,7 +429,7 @@ class RawDisplayWidget(ImageWidget):
         l1.addWidget(self.wallen)
 
         slayout.addRow(w1)
-        self.layout.addRow(widget)
+        self.layout.addWidget(widget)
         
         def uhist(val):
             self.adaptative_histogram = val
@@ -498,15 +502,16 @@ class RawDisplayWidget(ImageWidget):
         
         
 class SVDDisplayWidget(ImageWidget):
-    def __init__(self, stack,parent=None,reference = 'dorsal_cortex'):
+    def __init__(self, stack,
+                 parent=None,reference = 'dorsal_cortex'):
         super(SVDDisplayWidget,self).__init__()
         self.parent = parent
         self.stack = stack
-        self.warp_im = False
+        self.warp_im = stack.warped
         self.referencename = reference
         self.roiwidget = self.parent.roiwidget
         self.regions_plot = []
-        self.iframe = np.clip(100,0,len(self.stack))
+        self.iframe = np.clip(51,1,len(self.stack))
         tmp = self.stack[1:np.clip(100,0,len(self.stack))]
         self._init_ui()
         self._add_hist()
@@ -529,11 +534,12 @@ class SVDDisplayWidget(ImageWidget):
         l.addWidget(self.wframe)
         self.wimwarp = QCheckBox()
         l.addWidget(QLabel('Warp stack:'))
+        self.wimwarp.setChecked(self.warp_im)
         l.addWidget(self.wimwarp)
         self.wallen = QCheckBox()
         l.addWidget(QLabel('Show CCF:'))
         l.addWidget(self.wallen)
-        self.layout.addRow(w)
+        self.layout.addWidget(w)
         def uwarp(val):
             self.warp_im = val
             if hasattr(self.parent,'M'):
