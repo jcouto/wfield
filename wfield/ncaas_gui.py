@@ -567,7 +567,7 @@ class NCAASwrapper(QMainWindow):
         self.show()
         self.fetchresultstimer = QTimer()
         self.fetchresultstimer.timeout.connect(self.fetch_results)
-        self.fetchresultstimer.start(3000)
+        self.fetchresultstimer.start(5000)
         
     def fetch_results(self):
         '''
@@ -789,7 +789,7 @@ This happens when you re-submit. You need to resubmit from uploaded data.''')
                                     self.process_aws_transfer()
                                     self.aws_view.aws_transfer_queue[-1]['last_status'] = 'submitted'
                     self.fetching_results = False
-                    self.remove_from_queue(self.queuelist.item(i))
+                    #self.remove_from_queue(self.queuelist.item(i))
                     
                     self.submitb.setEnabled(True)
                     self.submitb.setText('Submit to NeuroCAAS')
