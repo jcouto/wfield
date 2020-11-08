@@ -93,7 +93,7 @@ def highpass(X, w = 3., fs = 30.):
 def analog_ttl_to_onsets(dat,time=None, mfilt=3):
     if time is None:
         time = np.arange(len(dat))
-    if medfilt:
+    if mfilt:
         from scipy.signal import medfilt
         dat = medfilt(dat,mfilt)
     tt = np.diff(dat.astype(np.float32))
