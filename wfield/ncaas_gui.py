@@ -279,7 +279,7 @@ class  AnalysisSelectionWidget(QDialog):
 
         '''
         super(AnalysisSelectionWidget,self).__init__()
-        self.config = config
+        self.config = dict(**config)
 
         # there are 2 parameter sets, one for locaNMF and one for PMD
         
@@ -628,7 +628,7 @@ class NCAASwrapper(QMainWindow):
                     if t['awsbucket'] == PMD_BUCKET:
                         got_all_results = [False,False]
                         for j,res in enumerate(['reduced_spatial.npy',
-                                              'reduced_temporal.npy']):
+                                                'reduced_temporal.npy']):
                             for f in resultsfiles:
                                 if res in f:
                                     got_all_results[j] = True
@@ -799,9 +799,9 @@ This happens when you re-submit. You need to resubmit from uploaded data.''')
                                     # temporal
                                     if os.path.isfile(pjoin(localfolder,'results','SVTcorr.npy')):
                                         fname = pjoin(localfolder,'results','SVTcorr.npy')
-                                    elif os.path.isfile(pjoin(localfolder,'results','primary_temporal.npy')):
-                                        fname = pjoin(localfolder,'results','primary_temporal.npy')
-                                        print('Using primary temporal for locaNMF temporal!!')
+                                    elif os.path.isfile(pjoin(localfolder,'results','reduced_temporal.npy')):
+                                        fname = pjoin(localfolder,'results','reduced_temporal.npy')
+                                        print('Using reduced temporal for locaNMF temporal!!')
                                     else:
                                         print('No temporal components?')
                                         break

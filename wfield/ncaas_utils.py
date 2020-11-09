@@ -17,14 +17,14 @@ defaultconfig = {
             analysis_extension = '.bin',
             userfolder = 'ChurchlandLab',
             decompress_results = True),  # this will decompress the U matrix when downloading
-        config = dict(block_height = 90,
-                      block_width = 80,
+        config = dict(block_height = 180,
+                      block_width = 160,
                       frame_rate = 60,
-                      max_components = 15,
+                      max_components = 5,
                       num_sims = 64,
                       num_channels = 2,
                       overlapping = True,
-                      window_length = 200)), # 7200    
+                      window_length = 1000)), # 7200    
     'cshl-wfield-locanmf': {
         'submit':dict(
             instance_type =  'p3.2xlarge',
@@ -36,7 +36,6 @@ defaultconfig = {
             temporal_data_filename = 'SVTcorr.npy',
             spatial_data_filename = 'U.npy'),
         'config' :{
-            "num_channels":2,
             "maxrank": 3,
             "loc_thresh": 80,
             "min_pixels": 100,
