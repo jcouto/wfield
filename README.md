@@ -6,13 +6,12 @@ This is a python package for visualizing and analysing data collected with a wid
 
 #### Use the graphical interface to [launch analysis on NeuroCAAS](usecases.md)
 
-### What else can this do:
+### These tools are for:
   - Motion correction
   - Data reduction
   - Hemodynamic correction
   - Matching to the Allen CCF
-  - Extract ROIs
-  - Visualize raw/reduced data and extracted ROIs
+  - Visualize raw/reduced data and ROIs
 
 ### Use cases and instructions [here](usecases.md)
 
@@ -74,7 +73,6 @@ To install start by getting [Anaconda](https://www.anaconda.com/distribution/#do
 
 
 The software was tested on Windows, Linux and MacOS Catalina. Installation takes less than 5 minutes on a standard computer with fast access to internet and a previous anaconda installation.
-
 
 ### Tutorial
 
