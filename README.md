@@ -12,23 +12,32 @@ This is a python package for visualizing and analysing data collected with a wid
 
 ### Use cases and instructions [here](usecases.md)
 
-A [dataset](http://repository.cshl.edu/id/eprint/38599/) that can be used to demo some of the functionality of this repository is made available in the ``demoRec`` folder. Follow to instructions in the GUI for demo in NeuroCAAS.
+A [dataset](http://repository.cshl.edu/id/eprint/38599/) that can be used to demo some of the functionality of this repository will be made available in the ``demoRec`` folder.
 
 ### File format conventions
 
-  - raw frame data is stored in binary files (uint16) <br />
-    The filename must end with: `_NCHANNELS_H_W_DTYPE.dat` <br />
-    Example: "frames_2_540_640_uint16.dat" H and W are the dimensions of a single frame. <br /> 
-  
-  - denoised/decomposed data are stored as `npy` arrays <br /> 
+  - raw frame data, when stored in binary files (uint16) <br />
+    the filename must end with: `_NCHANNELS_H_W_DTYPE.dat` <br />
+    Example: "frames_2_540_640_uint16.dat" H and W are the dimensions of a single frame. <br />
+    These files can be opened with the command `wfield open_raw <filename>` <br />
+
+  - denoised/decomposed (locally processed) data are stored as `npy` arrays <br /> 
   `U.npy` are the spatial components `(H, W, NCOMPONENTS)` <br />
   `SVT.npy` are the temporal components `(NCOMPONENTS, NFRAMES)` <br />
-  `sparse_spatial.npz` are the spatial components from denoised PMD `(H*W,NCOMPONENTS)` these are sparse matrices stored in compressed format. <br />
   
-  - `VSTcorr.npy` is the hemodynamic corrected temporal components `(NCOMPONENTS, NFRAMES)`
+  - `SVTcorr.npy` is the hemodynamic corrected temporal components `(NCOMPONENTS, NFRAMES)`
   
   - `info.json` has information about the dataset like the `frame_rate` or the `n_channels`
-    
+
+#### NeuroCAAS results folder
+
+  - `U_atlas.npy` are the spatial components transformed to a common atlas reference frame. <br />  (H, W, NCOMPONENTS)
+  - `reduced_spatial.npy` are the spatial components from the PMD `(H*W,NCOMPONENTS)` <br />
+    The H and W of the matrix are in the `config.yaml` file (or use `U_atlas`)
+  - `SVTcorr.npy` are the hemodynamic corrected temporal components `(NCOMPONENTS, NFRAMES)`<br />
+  - `reduced_temporal.npy` are the temporal components for the first channel `(NCOMPONENTS, NFRAMES)
+  - LocaNMF returns a matlab file with components in spatial components in the `A` variable and temporal components in the `C` variable.
+
 ### Installation
 
 To install start by getting [Anaconda](https://www.anaconda.com/distribution/#download-section) or [Miniconda](https://docs.conda.io/en/latest/miniconda.html).
@@ -66,10 +75,12 @@ The software was tested on Windows, Linux and MacOS Catalina. Installation takes
 ### Tutorial
 
 Instructions to use with NeuroCAAS [here](https://github.com/jcouto/wfield/tree/master/usecases.md).
+<br/>
 
+There is a command-line inteface to run computations from the command line. Do `wfield -h` to learn more. <br/> 
 
-Tutorials are [here](https://github.com/jcouto/wfield/tree/master/notebooks).
-
+Notebook examples are [here](https://github.com/jcouto/wfield/tree/master/notebooks).
+<br/>
 
 
 Copyright (C) 2020 Joao Couto - jpcouto@gmail.com
