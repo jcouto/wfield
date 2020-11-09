@@ -1,4 +1,6 @@
-# Tools to analyze widefield data 
+# wfield - tools to analysis widefield data
+
+![picture](images/timelapse.png)
 
 This is a python package for visualizing and analysing data collected with a widefield macroscope.
 
