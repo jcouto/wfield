@@ -4,7 +4,9 @@
 
 This is a python package for visualizing and analysing data collected with a widefield macroscope.
 
-### What this can do:
+#### Use the graphical interface to [launch analysis on NeuroCAAS](usecases.md)
+
+### What else can this do:
   - Motion correction
   - Data reduction
   - Hemodynamic correction
