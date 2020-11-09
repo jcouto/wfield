@@ -243,7 +243,8 @@ class TextEditor(QDockWidget):
         ckbox.setChecked(watch_file)
         def update():
             ori = self.refresh_original()
-            if ori == self.original:
+            if not ori == self.original:
+                self.original = ori
                 self.tx.setText(self.original)
         self.timer.timeout.connect(update)
         if watch_file:
@@ -338,10 +339,11 @@ class  AnalysisSelectionWidget(QDialog):
                 lay.addRow(QLabel('Parameters for motion correction, compression, denoising and hemodynamics compensation'))
 
                 for k in self.config[PMD_BUCKET]['config'].keys():
-                    c = QLineEdit(str(self.config[PMD_BUCKET]['config'][k]))
-                    name = QLabel(k)
-                    lay.addRow(name,c)
-                    c.textChanged.connect(partial(vchanged,PMD_BUCKET ,k,c))
+                    if not 'analysis_selection' == k:
+                        c = QLineEdit(str(self.config[PMD_BUCKET]['config'][k]))
+                        name = QLabel(k)
+                        lay.addRow(name,c)
+                        c.textChanged.connect(partial(vchanged,PMD_BUCKET ,k,c))
                     
         if NMF_BUCKET in self.config.keys():
             if 'config' in self.config[NMF_BUCKET].keys():
