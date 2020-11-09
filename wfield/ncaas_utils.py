@@ -22,6 +22,7 @@ defaultconfig = {
                       frame_rate = 60,
                       max_components = 15,
                       num_sims = 64,
+                      num_channels = 2,
                       overlapping = True,
                       window_length = 200)), # 7200    
     'cshl-wfield-locanmf': {
@@ -105,6 +106,14 @@ def ncaas_read_analysis_config(config):
         for k in defaultconfig.keys():
             if not k in config.keys(): # Use default
                 config[k] = defaultconfig[k]
+    # This is to delete a config from a previous version if there.
+    if not list(defaultconfig.keys())[0] in config.keys():
+        with open(config,'w') as f:
+            print('Replacing the config with the defaults. The old is not usable with this version of the gui.')
+            json.dump(defaultconfig,f,
+                      indent = 4,
+                      sort_keys = True)
+        config = dict(**defaultconfig)
     return config
 
 def get_tree_path(items,root = ''):

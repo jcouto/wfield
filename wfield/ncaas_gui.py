@@ -240,12 +240,14 @@ class TextEditor(QDockWidget):
         hl.addRow(QLabel('Watch file'),ckbox)
 
         self.timer = QTimer()
-        ckbox.setChecked(False)
+        ckbox.setChecked(watch_file)
         def update():
             ori = self.refresh_original()
             if ori == self.original:
                 self.tx.setText(self.original)
         self.timer.timeout.connect(update)
+        if watch_file:
+            self.timer.start(2000)
         
         def watch(val):
             if val:
@@ -264,6 +266,10 @@ class TextEditor(QDockWidget):
             with open(tempfile,'r') as f:
                 return f.read()
 
+    def closeEvent(self,evt):
+        self.timer.stop()
+        print('Stopped timer file: {0}'.format(self.path))
+        evt.accept()
 
 class  AnalysisSelectionWidget(QDialog):
     def __init__(self, path, config):
@@ -291,6 +297,10 @@ class  AnalysisSelectionWidget(QDialog):
         self.selections = analysis_selection_dict
         def ckchanged(ind,chk):
             val = self.selections[ind]['selected'] = chk.isChecked()
+            if ind == 1:
+                self.selections[2]['checkbox'].setChecked(False)
+                self.selections[2]['selected'] = False
+                print('Hemodynamics correction needs a compressed dataset.')
         for i,k in enumerate(self.selections):
             self.selections[i]['checkbox'] = QCheckBox()
             name = QLabel(k['name'])
@@ -309,6 +319,18 @@ class  AnalysisSelectionWidget(QDialog):
             dtype = type(self.config[analysis]['config'][option_name])
             try:
                 self.config[analysis]['config'][option_name] = dtype(edit.text())
+                if option_name ==  'num_channels':
+                    if not self.config[analysis]['config'][option_name] == 2:
+                        #disable hemodynamics
+                        self.selections[2]['checkbox'].setChecked(False)
+                        self.selections[2]['checkbox'].setEnabled(False)
+                        self.selections[2]['selected'] = False
+                        print('WARNING: Disabled hemodynamics correction because of num_channels')
+                    else:
+                        self.selections[2]['checkbox'].setChecked(True)
+                        self.selections[2]['selected'] = True
+                        self.selections[2]['checkbox'].setEnabled(True)
+                        print('WARNING: Enabled hemodynamics correction because of num_channels = 2')
             except:
                 print('Could not get {0}.'.format(option_name))
         if PMD_BUCKET in self.config.keys():
@@ -406,7 +428,8 @@ class  AnalysisSelectionWidget(QDialog):
                          awssubmit = '{0}'+foldername+'{1}submit.json',
                          awsbucket = None,
                          localpath = filetransfer,
-                         last_status = 'pending_transfer'))
+                         last_status = 'pending_transfer',
+                         last_change_time = datetime.now().strftime("%m/%d/%Y, %H:%M:%S")))
             if len(aws_transfer_queue):
                 self.transfer_queue = aws_transfer_queue
                 self.transfer_config = dict(self.config, selection=self.selections)
@@ -418,8 +441,17 @@ class  AnalysisSelectionWidget(QDialog):
                         from .io import load_stack
                         from .widgets import AllenMatchWidget
                         dat = load_stack(path)
+                        dlg = QDialog()
+                        dlg.setWindowTitle('Allen alignment is required for locaNMF')
+                        l = QVBoxLayout()
+                        lab = QLabel('Move the point to the respective landmarks and close this window.')
+                        lab.setStyleSheet("font: bold")
+                        l.addWidget(lab)
                         w = AllenMatchWidget(raw = dat,
-                                           folder = path)
+                                             folder = path)
+                        l.addWidget(w)
+                        dlg.setLayout(l)
+                        dlg.exec_()
                     else:
                         print('Found a landmarks file.')
                     print(path)
@@ -567,7 +599,7 @@ class NCAASwrapper(QMainWindow):
         self.show()
         self.fetchresultstimer = QTimer()
         self.fetchresultstimer.timeout.connect(self.fetch_results)
-        self.fetchresultstimer.start(5000)
+        self.fetchresultstimer.start(3000)
         
     def fetch_results(self):
         '''
@@ -585,15 +617,30 @@ class NCAASwrapper(QMainWindow):
                                                                       '/logs')
             if t['last_status'] == 'submitted':
                 resultsfiles = []
-                for a in self.aws_view.awsfiles:
+                awsfiles = s3_ls(self.aws_view.s3,self.aws_view.bucketnames) # update directly here (no lag).
+                for a in awsfiles:
                     if resultsdir in a or outputsdir in a:
                         resultsfiles.append(a)
-                    
                 if len(resultsfiles):
+                    # check that the results are all there (this should change in the next implementation of neurocaas, hopefully)
+                    if t['awsbucket'] == PMD_BUCKET:
+                        got_all_results = [False,False]
+                        for j,res in enumerate(['reduced_spatial.npy',
+                                              'reduced_temporal.npy']):
+                            for f in resultsfiles:
+                                if res in f:
+                                    got_all_results[j] = True
+                        got_all_results = np.sum(got_all_results) == 2
+                    else:
+                        got_all_results = True # Don't bother doing this for locaNMF?
+                    if got_all_results == False:
+                        print('Not all files were there for the PMD bucket?')
+                        return # Do nothing
                     self.submitb.setEnabled(False)
                     self.submitb.setText('Downloading result files')                        
 
                     self.aws_view.aws_transfer_queue[i]['last_status'] = 'fetching_results'
+                    self.aws_view.aws_transfer_queue[i]['last_change_time'] = datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
                     self.refresh_queuelist()
                     for a in self.aws_view.awsfiles:
                         if logsdir in a:
@@ -608,6 +655,7 @@ class NCAASwrapper(QMainWindow):
                     self.fetching_results = True
                     safe_delete = True
                     t['downloaded'] = []
+                    t['safe_delete'] = True
                     def get():
                         for f in resultsfiles:
                             # drop the bucket name
@@ -625,9 +673,14 @@ class NCAASwrapper(QMainWindow):
                             print(fn,lf)
                             t['downloaded'].append(lf)
                             if not os.path.isdir(lf):
-                                bucket.download_file(fn,lf)
+                                try:
+                                    bucket.download_file(fn,lf)
+                                except:
+                                    print('Warning: Could not download the file {0}. Is it open?'.format(lf))
+                                    t['safe_delete'] = False
+                                    
                             self.to_log('Fetching {0}'.format(lf))
-                    safe_delete=True
+                    safe_delete=t['safe_delete']
                     thread = threading.Thread(target=get)
                     thread.start()
                     time.sleep(0.5)
@@ -636,6 +689,9 @@ class NCAASwrapper(QMainWindow):
                         time.sleep(0.02)
                         
                     if not safe_delete:
+                        t['last_status'] = 'submitted'
+                        t['last_change_time'] = datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
+
                         self.to_log('Could not fetch results.')
                         self.submitb.setEnabled(True)
                         self.submitb.setText('Submit to NeuroCAAS')
@@ -711,10 +767,10 @@ This happens when you re-submit. You need to resubmit from uploaded data.''')
                                             import yaml
                                             config = yaml.load(fd)
                                             dims = [config['fov_height'],config['fov_width']]
-                                            
-                                if 'dims' in dir():
+                                
+                                if 'dims' in dir() and 'U' in dir() and not landmarksfile is None:
                                     print('Creating the atlas.')
-                                    from .allen import atlas_from_landmarks_file,load_allen_landmarks
+                                    from .allen import atlas_from_landmarks_file, load_allen_landmarks
                                     atlas, areanames, brain_mask = atlas_from_landmarks_file(landmarksfile,
                                                                                              dims = dims,
                                                                                              do_transform = False)
@@ -757,7 +813,7 @@ This happens when you re-submit. You need to resubmit from uploaded data.''')
                                     areanames = [dict(acronym = t[1],
                                                       label=t[0]) for t in areanames]
                                     with open(fname,'w+') as fd:
-                                        json.dump(areanames,fd)
+                                        json.dump(areanames, fd, indent=4)
                                     nt['submit']['areanames_filename'] = os.path.basename(fname)
                                     f = '{0}/' + foldername + '{1}'+'labels.json'
                                     nt['localpath'].append(fname)
@@ -780,6 +836,8 @@ This happens when you re-submit. You need to resubmit from uploaded data.''')
                                     nt['awsdestination'].append(f.format(nt['submit']['userfolder'],'/inputs/'))
                                     
                                     nt['last_status'] = 'pending_transfer'
+                                    nt['last_change_time'] = datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
+
                                     self.aws_view.aws_transfer_queue.append(nt)
                                     #print(nt)
                                     self.refresh_queuelist()
@@ -788,6 +846,7 @@ This happens when you re-submit. You need to resubmit from uploaded data.''')
                                         time.sleep(0.02)
                                     self.process_aws_transfer()
                                     self.aws_view.aws_transfer_queue[-1]['last_status'] = 'submitted'
+                                    self.aws_view.aws_transfer_queue[-1]['last_change_time'] = datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
                     self.fetching_results = False
                     #self.remove_from_queue(self.queuelist.item(i))
                     
@@ -797,20 +856,23 @@ This happens when you re-submit. You need to resubmit from uploaded data.''')
                     
 
     def remove_from_queue(self,item):
-        itemname = item.text()
-        names = [t['name'] for t in self.aws_view.aws_transfer_queue]
-        #itemname = itemname..strip('Dataset ')split('-')[0].strip(' ')
-        ii = None
-        for i in range(len(names)):
-            if names[i] in itemname:
-                ii = i
-                break
-        #ii = names.index(itemname)
-        tt = self.aws_view.aws_transfer_queue.pop(ii)
-        self.to_log('Removed {name} from the tranfer queue'.format(**tt))
-        self.queuelist.takeItem(self.queuelist.row(item))
-        self.store_transfer_queue()
-        
+        if not self.uploading:
+            itemname = item.text()
+            names = [t['name'] for t in self.aws_view.aws_transfer_queue]
+            #itemname = itemname..strip('Dataset ')split('-')[0].strip(' ')
+            ii = None
+            for i in range(len(names)):
+                if names[i] in itemname:
+                    ii = i
+                    break
+            #ii = names.index(itemname)
+            tt = self.aws_view.aws_transfer_queue.pop(ii)
+            self.to_log('Removed {name} from the tranfer queue'.format(**tt))
+            self.queuelist.takeItem(self.queuelist.row(item))
+            self.refresh_queuelist()
+        else:
+            print('Wait until the upload finishes to remove from queue.')
+            return
     def to_log(self,msg):
         msg  = to_log(msg,logfile = self.historyfile)
         self.infomon.moveCursor(-1)
@@ -828,15 +890,20 @@ This happens when you re-submit. You need to resubmit from uploaded data.''')
                 it = QListWidgetItem(itt['name'])
                 self.queuelist.insertItem(self.queuelist.count(),it)
             item = self.queuelist.item(i)
-            item.setText('Dataset {0} - state {1}'.format(itt['name'],itt['last_status']))
+            if not 'last_change_time' in itt.keys():
+                itt['last_change_time'] = datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
+            item.setText('Dataset {0} - state {1} [{2}]'.format(
+                itt['name'],
+                itt['last_status'].replace('_',' '),
+                itt['last_change_time']))
             if itt['last_status'] == 'pending_transfer':
-                item.setForeground(QColor(204,102,0))
+                item.setForeground(QColor(176,107,12))
             elif itt['last_status'] in ['in_transfer','fetching_results']:
-                item.setForeground(QColor(0,102,0))
+                item.setForeground(QColor(7,106,139))
             elif itt['last_status'] in ['uploaded']:
-                item.setForeground(QColor(255,0,0))
+                item.setForeground(QColor(72,33,17))
             elif itt['last_status'] == 'submitted':
-                item.setForeground(QColor(0,255,0))
+                item.setForeground(QColor(22,66,34))
             else:
                 item.setForeground(QColor(0,0,0))
                 
@@ -894,8 +961,34 @@ This happens when you re-submit. You need to resubmit from uploaded data.''')
                         self.pbar.setValue(0)
                         self.pbar.setMaximum(100)
                         self.aws_view.aws_transfer_queue[i]['last_status'] = 'in_transfer'
+                        self.aws_view.aws_transfer_queue[i]['last_change_status'] = datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
                         self.refresh_queuelist()
                         self.count = 0
+                        # check if the file is already there
+                        dotransfer = [True]
+                        for remotef in self.aws_view.awsfiles:
+                            if awsdestination[it] in remotef:
+                                dotransfer[0] = False
+                        if not dotransfer[0]:
+                            dlg = QDialog()
+                            dlg.setWindowTitle('File upload {0}'.format(
+                                os.path.basename(awsdestination[it])))
+                            but = QDialogButtonBox(QDialogButtonBox.Yes | QDialogButtonBox.No)
+                            def ok():
+                                dotransfer[0] = True
+                                dlg.accept()
+                            but.accepted.connect(ok)
+                            but.rejected.connect(dlg.accept)
+                            l = QVBoxLayout()
+                            lab = QLabel('A similar file is already on the cloud, do you want to replace it?')
+                            lab.setStyleSheet("font: bold")
+                            l.addWidget(lab)
+                            l.addWidget(but)
+                            dlg.setLayout(l)
+                            dlg.exec_()
+                        if not dotransfer[0]:
+                            print('Skipped {0}'.format(localpath[it]))
+                            continue
                         upload = Upload(bucket = t['awsbucket'],
                                         filepath = localpath[it],
                                         destination = awsdestination[it],
@@ -922,12 +1015,13 @@ This happens when you re-submit. You need to resubmit from uploaded data.''')
                         self.submitb.setStyleSheet("color: black")
                         self.submitb.setEnabled(False)
                         return
-                self.to_log('Done transfering {name}'.format(**t))
+                    self.to_log('Done transfering {name}'.format(**t))
                 t['awsdestination'] = awsdestination
                 self.submitb.setStyleSheet("color: black")
                 self.pbar.setValue(0)
                 self.aws_view.aws_transfer_queue[i]['last_status'] = 'uploaded'
-                t['last_status'] == 'uploaded'
+                self.aws_view.aws_transfer_queue[i]['last_change_status'] = datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
+                t['last_status'] = 'uploaded'
             if t['last_status'] == 'uploaded':
                 # add a config file
                 import yaml
@@ -951,6 +1045,7 @@ This happens when you re-submit. You need to resubmit from uploaded data.''')
                                    t['awssubmit'])
                 self.to_log('Submitted analysis {name} to {awssubmit}'.format(**t))
                 self.aws_view.aws_transfer_queue[i]['last_status'] = 'submitted'
+                self.aws_view.aws_transfer_queue[i]['last_change_time'] = datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
             self.refresh_queuelist()
         self.uploading = False
         self.submitb.setText('Run on NeuroCAAS')                        
@@ -1031,11 +1126,13 @@ class AWSView(QTreeView):
                                         localpath = os.path.curdir
                                     
                             if len(files):
-                                toadd = dict(dicttmp, name = os.path.basename(files[0]),
-                                             awsdestination = files,
-                                             awsbucket=bucketname,
-                                             localpath = [pjoin(localpath,os.path.basename(files[0]))],
-                                             last_status = "uploaded")
+                                toadd = dict(
+                                    dicttmp, name = os.path.basename(files[0]),
+                                    awsdestination = files,
+                                    awsbucket=bucketname,
+                                    localpath = [pjoin(localpath,os.path.basename(files[0]))],
+                                    last_status = "uploaded",
+                                    last_change_time = datetime.now().strftime("%m/%d/%Y, %H:%M:%S"))
                                 self.aws_transfer_queue.append(toadd)
                                 self.parent.refresh_queuelist()
                                 self.parent.to_log('Re-submitted {0} to the queue, (press "Run on NCAAS" to run).'.format(path))
