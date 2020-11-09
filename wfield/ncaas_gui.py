@@ -663,13 +663,13 @@ class NCAASwrapper(QMainWindow):
                             # drop the bucket name
                             fn = f.replace(t['awsbucket']+'/','')
                             if outputsdir in f:
-                                lf = fn.replace(outputsdir,localpath)
+                                lf = fn.replace(outputsdir,'{localpath}/')
                             if resultsdir in f:
-                                lf = fn.replace(resultsdir,localpath)
+                                lf = fn.replace(resultsdir,'{localpath}/')
                             if logsdir in f:
-                                lf = fn.replace(logsdir,localpath)
+                                lf = fn.replace(logsdir,'{localpath}/')
                             lf = lf.split('/')
-                            lf = pjoin(*lf)
+                            lf = pjoin(*lf).format(localpath = localpath)
                             if not os.path.isdir(os.path.dirname(lf)):
                                 os.makedirs(os.path.dirname(lf))
                             print(fn,lf)
@@ -786,9 +786,14 @@ This happens when you re-submit. You need to resubmit from uploaded data.''')
                                     U[-1,:,:] = 0
                                     U[:,-1,:] = 0
                                     lmarks = load_allen_landmarks(landmarksfile)
-                                    U = np.stack(runpar(im_apply_transform,
-                                                        U.transpose([2,0,1]),
-                                                        M = lmarks['transform'])).transpose([1,2,0])
+                                    try:
+                                        U = np.stack(runpar(
+                                            im_apply_transform,
+                                            U.transpose([2,0,1]),
+                                            M = lmarks['transform'])).transpose([1,2,0])
+                                    except:
+                                        print("There was an error trying to transpose the spatial components..")
+                                        break
                                     # spatial
                                     fname = pjoin(localfolder,'results','U_atlas.npy')
                                     np.save(fname,U)
