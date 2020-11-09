@@ -263,12 +263,19 @@ class TextEditor(QDockWidget):
     def refresh_original(self):
         if not self.s3 is None:
             bucket = self.s3.Bucket(self.bucketname)
-            bucket.download_file(self.path,tempfile)
-            with open(tempfile,'r') as f:
-                return f.read()
-
+            try:
+                bucket.download_file(self.path,tempfile)
+                with open(tempfile,'r') as f:
+                    return f.read()
+            except:
+                print("File {0} may have been deleted.".format(self.path))
+                self.timer.stop()
+                self.close()
     def closeEvent(self,evt):
-        self.timer.stop()
+        try:
+            self.timer.stop()
+        except:
+            pass
         print('Stopped timer file: {0}'.format(self.path))
         evt.accept()
 
@@ -279,7 +286,9 @@ class  AnalysisSelectionWidget(QDialog):
 
         '''
         super(AnalysisSelectionWidget,self).__init__()
-        self.config = dict(**config)
+        import copy
+
+        self.config = copy.deepcopy(config)
 
         # there are 2 parameter sets, one for locaNMF and one for PMD
         
