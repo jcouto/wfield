@@ -28,12 +28,29 @@ def findTransformECC(template,dst,M,warp_mode,criteria,inputMask,gaussFiltSize):
 cv2ver = cv2.__version__.split('.')
 if (int(cv2ver[0]) == 3) and (int(cv2ver[1]) <= 4):
     if int(cv2ver[2]) <= 5:
-        def findTransformECC(template,dst,M,warp_mode,criteria,inputMask,gaussFiltSize):
+        def findTransformECC(template,
+                             dst,
+                             M,
+                             warp_mode,
+                             criteria,
+                             inputMask,
+                             gaussFiltSize):
             return cv2.findTransformECC(template,dst,
                                         M, warp_mode,
                                         criteria,
                                         inputMask=inputMask)
-        
+elif (int(cv2ver[0]) == 4):
+    def findTransformECC(template,
+                         dst,
+                         M,
+                         warp_mode,
+                         criteria,
+                         inputMask,
+                         gaussFiltSize):
+        return cv2.findTransformECC(template,dst,
+                                    M, warp_mode,
+                                    criteria,
+                                    inputMask=inputMask)
 def registration_ecc(frame,template,
                      niter = 25,
                      eps0 = 1e-2,
