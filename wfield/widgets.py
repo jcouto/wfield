@@ -267,9 +267,7 @@ class ImageWidget(QWidget):
         self.pl.setClipToView(True)
         
     def _add_hist(self):
-        self.hist = pg.HistogramLUTItem(fillHistogram=False,
-                                        rgbHistogram=False,
-                                        levelMode='mono')
+        self.hist = pg.HistogramLUTItem()
         self.hist.setImageItem(self.im)
         self.pl.addItem(self.hist)
             
