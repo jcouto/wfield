@@ -773,27 +773,28 @@ This happens when you re-submit. You need to resubmit from uploaded data.''')
                                     if 'reduced_spatial' in d:
                                         print('Found reduced spatial.')
                                         U = np.load(d)
-                                    if 'config.yaml' in d:
-                                        with open(d,'r') as fd:
-                                            import yaml
-                                            config = yaml.load(fd)
-                                            dims = [config['fov_height'],config['fov_width']]
+                                        # This is in [H,W,k] size
+                                    #if 'config.yaml' in d:
+                                    #    with open(d,'r') as fd:
+                                    #        import yaml
+                                    #        config = yaml.load(fd)
+                                    #        dims = [config['fov_height'],config['fov_width']]
                                 
-                                if 'dims' in dir() and 'U' in dir() and not landmarksfile is None:
+                                if  'U' in dir() and not landmarksfile is None:
                                     print('Creating the atlas.')
+                                    dims = U.shape[:-1]
                                     from .allen import atlas_from_landmarks_file, load_allen_landmarks
                                     atlas, areanames, brain_mask = atlas_from_landmarks_file(landmarksfile,
                                                                                              dims = dims,
                                                                                              do_transform = False)
                                     nt['localpath'] = []
                                     nt['awsdestination'] = []
-                                    U = U.reshape([*dims,-1])
                                     print('Warping the U matrix.')
                                     from .utils import runpar, im_apply_transform
-                                    U[:,0,:] = 0
-                                    U[0,:,:] = 0
-                                    U[-1,:,:] = 0
-                                    U[:,-1,:] = 0
+                                    U[:,0,:] = 1e-10
+                                    U[0,:,:] = 1e-10
+                                    U[-1,:,:] = 1e-10
+                                    U[:,-1,:] = 1e-10
                                     lmarks = load_allen_landmarks(landmarksfile)
                                     try:
                                         U = np.stack(runpar(
