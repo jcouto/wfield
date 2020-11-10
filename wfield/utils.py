@@ -171,10 +171,10 @@ class SVDStack(object):
                         if self.originalU is None:
                             self.originalU = self.U.copy()
                         self.U_warped = self.originalU.copy()
-                        self.U_warped[:,0,:] = 0
-                        self.U_warped[0,:,:] = 0
-                        self.U_warped[-1,:,:] = 0
-                        self.U_warped[:,-1,:] = 0
+                        self.U_warped[:,0,:] = 1e-10
+                        self.U_warped[0,:,:] = 1e-10
+                        self.U_warped[-1,:,:] = 1e-10
+                        self.U_warped[:,-1,:] = 1e-10
                         self.U_warped = np.stack(runpar(im_apply_transform,
                                                         self.U_warped.transpose([2,0,1]),
                                                         M = self.M)).transpose([1,2,0])
