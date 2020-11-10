@@ -39,7 +39,8 @@ if (int(cv2ver[0]) == 3) and (int(cv2ver[1]) <= 4):
                                         M, warp_mode,
                                         criteria,
                                         inputMask=inputMask)
-elif (int(cv2ver[0]) == 4):
+elif (int(cv2ver[0]) == 4) and (int(cv2ver[1]) == 1):
+    # gaussFiltSize is a mandatory input on opencv 4.4 but not 4.1
     def findTransformECC(template,
                          dst,
                          M,
