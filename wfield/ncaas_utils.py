@@ -11,11 +11,11 @@ except:
     call('pip install boto3',shell = True)
     import boto3    
 defaultconfig = {
-    'cshl-wfield-preprocessing': dict(
+    'wfield-preprocess': dict(
         submit = dict(
             instance_type =  'r5.16xlarge',
-            analysis_extension = '.bin',
-            userfolder = 'ChurchlandLab',
+            analysis_extension = '.zip',
+            userfolder = 'ChurchlandGroup',
             decompress_results = True),  # this will decompress the U matrix when downloading
         config = dict(block_height = 180,
                       block_width = 160,

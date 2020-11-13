@@ -57,7 +57,7 @@ from PyQt5 import QtCore
 from PyQt5.QtGui import QStandardItem, QStandardItemModel,QColor
 from PyQt5.QtCore import Qt, QTimer,QMimeData
 
-PMD_BUCKET = 'cshl-wfield-preprocessing'
+PMD_BUCKET = 'wfield-preprocess'
 NMF_BUCKET = 'cshl-wfield-locanmf'
 
 tempfile = pjoin(os.path.expanduser('~'),'.wfield','tempfile')
