@@ -102,9 +102,11 @@ def ncaas_read_analysis_config(config):
                       sort_keys = True)
     with open(config,'r') as f:
         config = json.load(f)
-        for k in defaultconfig.keys():
-            if not k in config.keys(): # Use default
-                config[k] = defaultconfig[k]
+        for k in config.keys():
+            if k in defaultconfig.keys(): # Use default
+                for j in defaultconfig[k].keys():
+                    if not j in config[k].keys():
+                        config[k][j] = defaultconfig[k][j]
     # This is to delete a config from a previous version if there.
     if not list(defaultconfig.keys())[0] in config.keys():
         with open(config,'w') as f:

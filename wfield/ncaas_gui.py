@@ -657,7 +657,8 @@ class NCAASwrapper(QMainWindow):
                         if logsdir in a:
                             resultsfiles.append(a)
                     print('Found results for {name}'.format(**t))
-                    localpath = pjoin(os.path.dirname(t['localpath'][0]),'results')
+                    if not os.path.dirname(t['localpath'][0]).endswith('results'):
+                        localpath = pjoin(os.path.dirname(t['localpath'][0]),'results')
                     localpath = os.path.abspath(localpath)
                     if not os.path.isdir(localpath):
                         os.makedirs(localpath)
