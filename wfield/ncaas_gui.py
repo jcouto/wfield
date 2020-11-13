@@ -659,6 +659,8 @@ class NCAASwrapper(QMainWindow):
                     print('Found results for {name}'.format(**t))
                     if not os.path.dirname(t['localpath'][0]).endswith('results'):
                         localpath = pjoin(os.path.dirname(t['localpath'][0]),'results')
+                    else:
+                        localpath = os.path.dirname(t['localpath'][0])
                     localpath = os.path.abspath(localpath)
                     if not os.path.isdir(localpath):
                         os.makedirs(localpath)
