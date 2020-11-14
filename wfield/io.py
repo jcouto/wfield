@@ -518,10 +518,10 @@ class ImagerStack(GenericStack):
             # check if it is a folder
             if os.path.isdir(filenames):
                 dirname = filenames
-                filenames = natsorted(glob(pjoin(dirname,'Frames*'+self.extension)))
+                filenames = natsorted(glob(pjoin(dirname,'Frames*' + self.extension)))
                 if not len(filenames): # try mj2's
                     self.extension = '.mj2'
-                    filenames = natsorted(glob(pjoin(dirname,'Frames*'+self.extension)))
+                    filenames = natsorted(glob(pjoin(dirname,'Frames*' + self.extension)))
                     if len(filenames):
                         self.fileformat = 'mj2'
                         self.rotate_array = False # This is not needed for these files...
@@ -670,10 +670,6 @@ class TiffStack(GenericStack):
     def _load_substack(self,fileidx,channel = None):
         self.current_stack = self.imread(self.filenames[fileidx]).reshape([-1,*self.dims])
         self.current_fileidx = fileidx
-
-
-
-        
 
 def load_stack(foldername,order = ['binary','tiff','imager'], nchannels=None):
     ''' 
