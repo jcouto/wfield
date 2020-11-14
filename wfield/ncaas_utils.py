@@ -34,7 +34,7 @@ defaultconfig = {
             atlas_filename = 'atlas.npy',
             brainmask_filename = 'brainmask.npy',
             temporal_data_filename = 'SVTcorr.npy',
-            spatial_data_filename = 'U.npy'),
+            spatial_data_filename = 'U_atlas.npy'),
         'config' :{
             "maxrank": 3,
             "loc_thresh": 80,
@@ -91,30 +91,32 @@ def ncaas_read_aws_keys():
                 secret_key = secret_key,
                 region = region)    
 
-def ncaas_read_analysis_config(config):
-    if not os.path.exists(os.path.dirname(config)):
-        os.makedirs(os.path.dirname(config))
-    if not os.path.exists(config):
-        with open(config,'w') as f:
-            print('Creating config from defaults [{0}]'.format(config))
-            json.dump(defaultconfig,f,
+def ncaas_read_analysis_config(configname):
+    if not os.path.exists(os.path.dirname(configname)):
+        os.makedirs(os.path.dirname(configname))
+    if os.path.exists(configname):
+        with open(configname,'r') as f:
+            config = json.load(f)
+            # This is to delete a config from a previous version if there.
+        if not list(defaultconfig.keys())[0] in config.keys():
+            os.remove(configname)
+            dirname = os.path.dirname(configname)
+            qfile = pjoin(dirname,'ncaas_transfer_q.json')
+            if os.path.isfile(qfile):
+                os.remove(qfile)
+    if not os.path.exists(configname):
+        with open(configname,'w') as f:
+            print('Creating config from defaults [{0}]'.format(configname))
+            json.dump(defaultconfig, f,
                       indent = 4,
                       sort_keys = True)
-    with open(config,'r') as f:
+    with open(configname,'r') as f:
         config = json.load(f)
         for k in config.keys():
             if k in defaultconfig.keys(): # Use default
                 for j in defaultconfig[k].keys():
                     if not j in config[k].keys():
                         config[k][j] = defaultconfig[k][j]
-    # This is to delete a config from a previous version if there.
-    if not list(defaultconfig.keys())[0] in config.keys():
-        with open(config,'w') as f:
-            print('Replacing the config with the defaults. The old is not usable with this version of the gui.')
-            json.dump(defaultconfig,f,
-                      indent = 4,
-                      sort_keys = True)
-        config = dict(**defaultconfig)
     return config
 
 def get_tree_path(items,root = ''):
