@@ -34,7 +34,7 @@ reference_files =  [os.path.abspath(pjoin('references',f))
 longdescription = '''Utilities to look at widefield data and align with the allen reference map.'''
 setup(
     name = 'wfield',
-    version = '0.0',
+    version = '0.1',
     author = 'Joao Couto',
     author_email = 'jpcouto@gmail.com',
     description = (longdescription),
