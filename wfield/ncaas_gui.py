@@ -1033,6 +1033,7 @@ This happens when you re-submit. You need to resubmit from uploaded data.''')
                                         filepath = localpath[it],
                                         destination = awsdestination[it],
                                         s3 = self.aws_view.s3)
+                        '''
                         upload.start()
                         time.sleep(.1)
                         cnt = 0
@@ -1045,9 +1046,13 @@ This happens when you re-submit. You need to resubmit from uploaded data.''')
                                 self.submitb.setStyleSheet("color: red")
                             else:
                                 self.submitb.setStyleSheet("color: black")
-                        self.to_log('Transfering {0} {1}'.format(localpath[it],
+                        '''
+                        self.to_log('Transfered {0} {1}'.format(localpath[it],
                                                                  awsdestination[it]))
-
+                        if docompress[0]:
+                            if localpath[it].endswith('.zip'):
+                                self.to_log('Deleting the zip file {0}'.format(localpath[it]))
+                                os.remove(localpath[it])
                         QApplication.processEvents()
                     else:
                         self.to_log('File not found {localpath}'.format(**t))
