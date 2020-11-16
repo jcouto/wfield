@@ -216,9 +216,12 @@ from the GUI.
         event.accept()
         
 class TextEditor(QDockWidget):
-    def __init__(self,path,s3=None,bucket=None,
+    def __init__(self,path,
+                 s3=None,
+                 bucket=None,
                  parent = None,
-                 refresh_interval = 2,watch_file = True):
+                 refresh_interval = 2,
+                 watch_file = True):
         super(TextEditor,self).__init__()
         self.parent = parent
         self.s3 = s3
@@ -259,7 +262,7 @@ class TextEditor(QDockWidget):
         ckbox.setChecked(watch_file)
         ckbox.stateChanged.connect(watch)
         lay.addWidget(w)
-        
+        self.resize(self.width()*1.2, self.height())
     def refresh_original(self):
         if not self.s3 is None:
             bucket = self.s3.Bucket(self.bucketname)
@@ -608,7 +611,7 @@ class NCAASwrapper(QMainWindow):
         self.show()
         self.fetchresultstimer = QTimer()
         self.fetchresultstimer.timeout.connect(self.fetch_results)
-        self.fetchresultstimer.start(3000)
+        self.fetchresultstimer.start(10000)
         
     def fetch_results(self):
         '''
@@ -616,7 +619,6 @@ class NCAASwrapper(QMainWindow):
         '''
         if self.uploading:
             return
-        print('..')
         for i,t in enumerate(self.aws_view.aws_transfer_queue):
             resultsdir = os.path.dirname(t['awsdestination'][0]).replace('/inputs',
                                                                          '/results')
@@ -626,7 +628,8 @@ class NCAASwrapper(QMainWindow):
                                                                       '/logs')
             if t['last_status'] == 'submitted':
                 resultsfiles = []
-                awsfiles = s3_ls(self.aws_view.s3,self.aws_view.bucketnames) # update directly here (no lag).
+                awsfiles = self.aws_view.aws_files
+                #awsfiles = s3_ls(self.aws_view.s3,self.aws_view.bucketnames) # update directly here (no lag).
                 for a in awsfiles:
                     if resultsdir in a or outputsdir in a:
                         resultsfiles.append(a)
@@ -1185,10 +1188,9 @@ class AWSView(QTreeView):
         # These cause refresh, need to check if there are new files first.
         self.timer_update = QTimer()
         self.timer_update.timeout.connect(self.update_files)
-        self.timer_update.start(1500)
+        self.timer_update.start(4000)
 
     def update_files(self):
-        print('.')
         awsfiles = s3_ls(self.s3,self.bucketnames)
         if len(awsfiles) == len(self.awsfiles):
             return

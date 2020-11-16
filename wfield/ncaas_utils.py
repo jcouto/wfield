@@ -200,11 +200,14 @@ awsregions = ['us-east-2',
 def s3_connect():
     return boto3.resource('s3')
 
+from PyQt5.QtWidgets import QApplication # Keep the gui as responsive as possible..
 def s3_ls(s3,bucketnames):
     files = []
     for bucketname in bucketnames:
         bucket = s3.Bucket(bucketname)
-        files.extend([bucketname+'/'+l.key for l in list(bucket.objects.all())])
+        for l in list(bucket.objects.all()):
+            QApplication.processEvents()
+            files.append(bucketname+'/'+l.key)
     return files
 
 from boto3.s3.transfer import TransferConfig
