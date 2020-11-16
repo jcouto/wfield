@@ -1033,7 +1033,7 @@ This happens when you re-submit. You need to resubmit from uploaded data.''')
                                         filepath = localpath[it],
                                         destination = awsdestination[it],
                                         s3 = self.aws_view.s3)
-                        '''
+                        
                         upload.start()
                         time.sleep(.1)
                         cnt = 0
@@ -1046,7 +1046,7 @@ This happens when you re-submit. You need to resubmit from uploaded data.''')
                                 self.submitb.setStyleSheet("color: red")
                             else:
                                 self.submitb.setStyleSheet("color: black")
-                        '''
+                        
                         self.to_log('Transfered {0} {1}'.format(localpath[it],
                                                                  awsdestination[it]))
                         if docompress[0]:
