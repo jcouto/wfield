@@ -268,15 +268,13 @@ class TextEditor(QDockWidget):
                 with open(tempfile,'r') as f:
                     return f.read()
             except:
-                print("File {0} may have been deleted.".format(self.path))
-                self.timer.stop()
+                print("File {0} may have been deleted or you have no permission.".format(self.path))
                 self.close()
     def closeEvent(self,evt):
         try:
             self.timer.stop()
         except:
             pass
-        print('Stopped timer file: {0}'.format(self.path))
         evt.accept()
 
 class  AnalysisSelectionWidget(QDialog):
@@ -618,7 +616,7 @@ class NCAASwrapper(QMainWindow):
         '''
         if self.uploading:
             return
-        
+        print('..')
         for i,t in enumerate(self.aws_view.aws_transfer_queue):
             resultsdir = os.path.dirname(t['awsdestination'][0]).replace('/inputs',
                                                                          '/results')
@@ -1190,6 +1188,7 @@ class AWSView(QTreeView):
         self.timer_update.start(1500)
 
     def update_files(self):
+        print('.')
         awsfiles = s3_ls(self.s3,self.bucketnames)
         if len(awsfiles) == len(self.awsfiles):
             return
@@ -1202,8 +1201,7 @@ class AWSView(QTreeView):
         build_tree(filetree,root)
         self.model.appendRow(root)
         #index = self.aws_model.indexFromItem(root)
-        self.expandAll()
-        
+        #self.expandAll()
     def dragEnterEvent(self, e):        
         if e.mimeData().hasUrls():
             self.setSelectionMode(1)
