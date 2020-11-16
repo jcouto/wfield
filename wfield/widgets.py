@@ -61,7 +61,7 @@ class AllenMatchTable(QWidget):
     def __init__(self, landmarks_file = None,
                  reference = 'dorsal_cortex',
                  parent = None,
-                 save_and_close = False):
+                 save_and_close = None):
         super(AllenMatchTable,self).__init__()
         # This widget shows: bregmaoffset in image coordinates, resolution, landmarks table
         self.reference = reference
@@ -131,17 +131,17 @@ class AllenMatchTable(QWidget):
                 print('Resolution needs to be a float.')
         self.wbregma.textChanged.connect(ubregma)
         # save transform
-        if save_and_close:
-            self.wsave = QPushButton('Save points and close')
-        else:
+        if save_and_close is None:
             self.wsave = QPushButton('Save points')
+        else:
+            self.wsave = QPushButton('Save points and close')
 
         l.addRow(self.wsave)
         def usave():
             print('Saving points and landmarks to the _landmarks.json file.')
             self.usave()
-            if save_and_close:
-                self.parent.close()
+            if not save_and_close is None:
+                save_and_close.close()
         self.wsave.clicked.connect(usave)    
         lay.addRow(self.table,w)
 
@@ -788,7 +788,8 @@ class RawViewer(QMainWindow):
 class AllenMatchWidget(QWidget):
     def __init__(self,raw,
                  folder = None,
-                 reference = 'dorsal_cortex'):
+                 reference = 'dorsal_cortex',
+                 mainwidget = None):
         super(AllenMatchWidget,self).__init__()
         self.raw = raw
         self.folder = folder
@@ -800,7 +801,7 @@ class AllenMatchWidget(QWidget):
         self.allenparwidget = AllenMatchTable(landmarks_file = landmarks_file,
                                               reference = self.referencename,
                                               parent = self,
-                                              save_and_close = True) # to close with the save button...
+                                              save_and_close = mainwidget) # to close with the save button...
         self.rawwidget = RawDisplayWidget(raw,
                                           parent = self,
                                           reference = self.referencename)

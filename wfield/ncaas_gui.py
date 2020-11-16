@@ -461,7 +461,8 @@ class  AnalysisSelectionWidget(QDialog):
                         lab.setStyleSheet("font: bold")
                         l.addWidget(lab)
                         w = AllenMatchWidget(raw = dat,
-                                             folder = path)
+                                             folder = path,
+                                             mainwidget = dlg)
                         l.addWidget(w)
                         dlg.setLayout(l)
                         dlg.exec_()
