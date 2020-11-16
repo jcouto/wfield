@@ -58,7 +58,10 @@ pg.setConfigOptions(imageAxisOrder='row-major')
 axiscolor = 'k'
 
 class AllenMatchTable(QWidget):
-    def __init__(self, landmarks_file = None,reference = 'dorsal_cortex',parent = None):
+    def __init__(self, landmarks_file = None,
+                 reference = 'dorsal_cortex',
+                 parent = None,
+                 save_and_close = False):
         super(AllenMatchTable,self).__init__()
         # This widget shows: bregmaoffset in image coordinates, resolution, landmarks table
         self.reference = reference
@@ -128,11 +131,17 @@ class AllenMatchTable(QWidget):
                 print('Resolution needs to be a float.')
         self.wbregma.textChanged.connect(ubregma)
         # save transform
-        self.wsave = QPushButton('Save points')
+        if save_and_close:
+            self.wsave = QPushButton('Save points and close')
+        else:
+            self.wsave = QPushButton('Save points')
+
         l.addRow(self.wsave)
         def usave():
             print('Saving points and landmarks to the _landmarks.json file.')
             self.usave()
+            if save_and_close:
+                self.parent.close()
         self.wsave.clicked.connect(usave)    
         lay.addRow(self.table,w)
 
@@ -790,7 +799,8 @@ class AllenMatchWidget(QWidget):
         
         self.allenparwidget = AllenMatchTable(landmarks_file = landmarks_file,
                                               reference = self.referencename,
-                                              parent = self)
+                                              parent = self,
+                                              save_and_close = True) # to close with the save button...
         self.rawwidget = RawDisplayWidget(raw,
                                           parent = self,
                                           reference = self.referencename)

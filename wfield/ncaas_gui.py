@@ -440,6 +440,7 @@ class  AnalysisSelectionWidget(QDialog):
                          awssubmit = '{0}'+foldername+'{1}submit.json',
                          awsbucket = None,
                          localpath = filetransfer,
+                         log=None,
                          last_status = 'pending_transfer',
                          last_change_time = datetime.now().strftime("%m/%d/%Y, %H:%M:%S")))
             if len(aws_transfer_queue):
@@ -573,6 +574,7 @@ class NCAASwrapper(QMainWindow):
                 self.aws_view.aws_transfer_queue[i]['last_status'] = 'pending_transfer'
             if t['last_status'] == 'fetching_results': # there can be no fetching when init - resume
                 self.aws_view.aws_transfer_queue[i]['last_status'] = 'submitted'
+            t['log'] = None
         
         sw = QWidget()
         sl = QVBoxLayout()
@@ -611,7 +613,7 @@ class NCAASwrapper(QMainWindow):
         self.show()
         self.fetchresultstimer = QTimer()
         self.fetchresultstimer.timeout.connect(self.fetch_results)
-        self.fetchresultstimer.start(10000)
+        self.fetchresultstimer.start(5000)
         
     def fetch_results(self):
         '''
@@ -619,6 +621,7 @@ class NCAASwrapper(QMainWindow):
         '''
         if self.uploading:
             return
+        
         for i,t in enumerate(self.aws_view.aws_transfer_queue):
             resultsdir = os.path.dirname(t['awsdestination'][0]).replace('/inputs',
                                                                          '/results')
@@ -627,8 +630,23 @@ class NCAASwrapper(QMainWindow):
             logsdir = os.path.dirname(t['awsdestination'][0]).replace('/inputs',
                                                                       '/logs')
             if t['last_status'] == 'submitted':
+                if t['log'] is None: # check of there is any element on the queue that needs a log to open
+                    logs = []
+                    for a in self.aws_view.awsfiles:
+                        if logsdir in a:
+                            logs.append(a)
+                    if len(logs):
+                        t['log'] = logs
+                        for l in logs:
+                            extension = os.path.splitext(l)[-1]
+                            if extension in ['.yaml','.txt','.json']:
+                                bucket = l.strip('/').split('/')[0]
+                                temp = l.replace(bucket,'').strip('/')
+                                wid = TextEditor(temp, s3=self.aws_view.s3, bucket = bucket)
+                                self.addDockWidget(Qt.RightDockWidgetArea, wid)
+                                wid.setFloating(True)
                 resultsfiles = []
-                awsfiles = self.aws_view.aws_files
+                awsfiles = self.aws_view.awsfiles
                 #awsfiles = s3_ls(self.aws_view.s3,self.aws_view.bucketnames) # update directly here (no lag).
                 for a in awsfiles:
                     if resultsdir in a or outputsdir in a:
@@ -646,7 +664,7 @@ class NCAASwrapper(QMainWindow):
                     else:
                         got_all_results = True # Don't bother doing this for locaNMF?
                     if got_all_results == False:
-                        print('Not all files were there for the PMD bucket?')
+                        #print('Not all files were there for the PMD bucket?')
                         return # Do nothing
                     self.submitb.setEnabled(False)
                     self.submitb.setText('Downloading result files')                        
@@ -874,7 +892,7 @@ This happens when you re-submit. You need to resubmit from uploaded data.''')
                     self.submitb.setEnabled(True)
                     self.submitb.setText('Submit to NeuroCAAS')
                     return # because we removed an item from the queue, restart the loop
-                    
+                
 
     def remove_from_queue(self,item):
         if not self.uploading:
@@ -1268,6 +1286,7 @@ class AWSView(QTreeView):
                     t['locanmf_config'] = configselection[NMF_BUCKET]['config'] 
                     t['locanmf_submit'] = configselection[NMF_BUCKET]['submit'] 
                 added = False
+                t['log'] = None
                 if len(self.aws_transfer_queue): # check if it is already there
                     names = [a['name'] for a in self.aws_transfer_queue]
                     if not t['name'] in names:
