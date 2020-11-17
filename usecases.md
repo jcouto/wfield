@@ -1,35 +1,38 @@
 # Analysing data with NeuroCAAS
 
 Motion correction, penalized matrix decomposition and hemodynamics correction are combined in a NeuroCAAS pipeline for a scalable and reproducible analysis pipeline.
-The blueprint in on the ``cshl-wfield-preprocessing`` analysis bucket; you may need that when getting a NeuroCAAS [account](http://neurocaas.org) .
+The blueprint in on the ``wfield-preprocess`` and ``cshl-wfield-locanmf`` analysis buckets; you may need that when getting a NeuroCAAS [account](http://neurocaas.org) .
 
-You can launch the analysis using the ``wfield-ncaas`` graphical user interface. This is in a testing phase and we will migrate to the a new version of NeuroCAAS soon. Please raise a github issue if you need assistance using this. If you use group ID B65176 when creating an account you can use it for testing and later create a group of your own.
+You can launch the analysis using the ``wfield ncaas`` graphical user interface. This is in a testing phase and we will migrate to the a new version of NeuroCAAS soon. Please raise a github issue if you need assistance using this.
+If you want credentials to use this create an account on neurocaas.org and ask access to the ``wfield-preprocess`` and ``cshl-wfield-locanmf`` analysis buckets. 
 
 ### Getting a test dataset
 To test the interface you can get a test dataset (50 trials collected by Simon Musall and Steve Gluf) from [here](https://drive.google.com/drive/folders/1ZKNaiLiJDp9b97PzT5mEP_Tdf2mCxKLm?usp=sharing). <br/>
 
-To use the datasets, unzip to different folders. The software will treat each folder as a separate dataset.
+To use the datasets, unzip each file to an **individual folder**. The software will treat each folder as a separate dataset. **Mac users: if you can not unzip the file type ``unzip FILENAME`` in the terminal.
 
-### Using the ``wfield-ncaas`` interface
+### Using the ``wfield ncaas`` interface
 
-Follow the instructions to [install wfield](https://github.com/jcouto/wfield/tree/dev#installation) before this.
+Follow the instructions to [install wfield](https://github.com/jcouto/wfield/tree/dev#installation) before trying this.
 
-1. Prepare a folder with data. Different experiments need their own folder.
-2. Open a terminal in the directory where the experiment folders are and type ``wfield ncaas``. 
-3. The window opens a browser to neurocaas.org. Use your login information to log to neurocaas.org (you need to be in group ). Upon successfull login the necessary credentials are copied (you can visualize the credentials and other settings in the 'advanced' tab). <br \> If you already have Amazon Web Services credentials those will be used and no prompt will appear (To delete existing credentials rename the ``~/.aws/credentials`` file). Close this window to save and continue.
+1. Prepare a folder with data. The content in the zip files must be on a separate folder; i.e. different experiments need their own folder.
+2. Open a terminal in the directory above where the experiment folders are and type ``wfield ncaas``. 
+3. The window opens a browser to _neurocaas.org_. **Scroll down**: use your login information to log to neurocaas.org (you need to be added to the correct groups - ask the neurocaas admin). Upon successfull login the necessary credentials are copied (you can visualize the credentials and other settings in the 'advanced' tab). <br \> If you already have Amazon Web Services credentials those will be used and no prompt will appear (To delete existing credentials rename the ``~/.aws/credentials`` file). Close this window to save and continue.
 
 ![picture](images/ncaas_gui_labeled.png)
 
 3. This will start the graphical interface like in the picture above. Use this interface to **upload data** to NeuroCAAS, **running analysis** and **getting results** back. The next time you start the interface, step 2 will be skipped.
 
-4. Drag and drop folders from the ``local disk`` to the ``NCAAS disk`` to add analysis to the ``local queue``. Folders should contain a ``.dat`` file containing the raw data in binary format. <br \> When you drop a folder, a window opens where you can select the specific analysis.
+4. Drag and drop folders from the ``local disk`` to the ``NCAAS disk`` to add analysis to the ``local queue``. Folders should contain the raw data in **binary format**, a set of **tiff stacks**, or files recorded by the **WidefieldImager**. <br \> When you drag-and-drop a folder, a window opens where you can select the specific analysis.
 
-5. Nothing is uploaded until you press the ``Submit to NeuroCAAS``. This will transfer data from the **local queue** to the cloud and to start the analysis. The ``progress bar`` will show the copy progress of the files. The ``local log`` informs what commands are ran.
+5. Select the analysis to run and analysis parameters and click submit to close the dialog.
 
-6. Leave the window open. When the analysis completes, the **results are automatically copied** to the ``local disk`` deleted from the cloud. If the locaNMF analysis was selected and you registered to the allen using ``wfield open_raw <foldername>`` the results of data compresssion will be uploaded to the server to run the localNMF analysis.
+6. Nothing is uploaded until you press the ``Submit to NeuroCAAS``. This will transfer data from the **local queue** to the cloud and to start the analysis. The ``progress bar`` will show the copy progress of the files. The ``local log`` informs what commands are ran. <br />**Note**: To remove items from the queue: _double-click_ the item. You can not upload experiments with the same name.  
+
+6. When the analysis completes, the **results are automatically copied** to the ``local disk`` deleted from the cloud. If the locaNMF analysis was selected and you registered to the allen using ``wfield open_raw <foldername>`` the results of data compresssion will be uploaded to the server to run the localNMF analysis.
 
 
-**Note:** The log file and transfer queue are stored in the local computer and reloaded when starting ``wfield-ncaas``.
+**Note:** The log file and transfer queue are stored in the local computer and reloaded when starting ``wfield ncaas``.
 
 
 **TESTING AND EXTRA FEATURES:**
