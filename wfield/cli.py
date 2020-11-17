@@ -370,8 +370,8 @@ Type wfield ncaas <foldername> to open on a specific folder.
                             help = 'Frames per batch ') 
         
         args = parser.parse_args(sys.argv[2:])
-        localdisk = args.foldername 
-        _motion(localdisk,nchannels = args.nchannels, mode = args.mode,chunksize = args.chunksize)
+        localdisk = args.foldername
+        _motion(localdisk,nchannels = args.nchannels, mode = args.mode, chunksize = args.chunksize)
 
     def decompose(self):
         parser = argparse.ArgumentParser(
@@ -409,7 +409,7 @@ Type wfield ncaas <foldername> to open on a specific folder.
         _hemocorrect(localdisk,fs=args.fs)
         
 def _motion(localdisk, nchannels = None, mode = 'ecc',chunksize=256, in_place = True):
-
+    # TODO: check if a motion corrected file is already here
     # if a single binary file try in-place
     dat_path = glob(pjoin(localdisk,'*.bin'))
     if not len(dat_path):
@@ -427,7 +427,7 @@ def _motion(localdisk, nchannels = None, mode = 'ecc',chunksize=256, in_place = 
                         shape = dat.shape)
     (yshifts,xshifts),rshifts = motion_correct(dat,
                                                out=out,
-                                               chunksize=256,
+                                               chunksize=int(chunksize),
                                                mode = mode,
                                                apply_shifts=True)
     del out # close and finish writing
