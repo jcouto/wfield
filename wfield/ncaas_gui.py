@@ -1049,10 +1049,11 @@ This happens when you re-submit. You need to resubmit from uploaded data.''')
                         
                         self.to_log('Transfered {0} {1}'.format(localpath[it],
                                                                  awsdestination[it]))
-                        if docompress[0]:
-                            if localpath[it].endswith('.zip'):
-                                self.to_log('Deleting the zip file {0}'.format(localpath[it]))
-                                os.remove(localpath[it])
+                        if 'docompress' in dir():
+                            if docompress[0]:
+                                if localpath[it].endswith('.zip'):
+                                    self.to_log('Deleting the zip file {0}'.format(localpath[it]))
+                                    os.remove(localpath[it])
                         QApplication.processEvents()
                     else:
                         self.to_log('File not found {localpath}'.format(**t))
@@ -1139,6 +1140,8 @@ class AWSView(QTreeView):
                             fname = p.replace(bucketname,'').strip('/')
                             
                             bucket = self.s3.Bucket(bucketname)
+                            print('This is not possible with this version of neurocaas, it will be available in the future.')
+                            return
                             bucket.download_file(fname,tempfile)
                             dicttmp = {}
                             dicttmp['awssubmit'] = fname
