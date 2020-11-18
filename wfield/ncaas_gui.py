@@ -662,6 +662,14 @@ class NCAASwrapper(QMainWindow):
                                 if res in f:
                                     got_all_results[j] = True
                         got_all_results = np.sum(got_all_results) == 2
+                    elif t['awsbucket'] == NMF_BUCKET:
+                        got_all_results = [False,False]
+                        for j,res in enumerate(['SummaryComponents.png',
+                                                'LocaNMF_Components.mat']):
+                            for f in resultsfiles:
+                                if res in f:
+                                    got_all_results[j] = True
+                        got_all_results = np.sum(got_all_results) == 2
                     else:
                         got_all_results = True # Don't bother doing this for locaNMF?
                     if got_all_results == False:
@@ -682,7 +690,7 @@ class NCAASwrapper(QMainWindow):
                     else:
                         localpath = os.path.dirname(t['localpath'][0])
                     localpath = os.path.abspath(localpath)
-                    if not os.path.isdir(localpath):
+                    if not os.path.exists(localpath):
                         os.makedirs(localpath)
                         self.to_log('Creating {0}'.format(localpath))
                     bucket = self.aws_view.s3.Bucket(t['awsbucket'])
@@ -721,7 +729,8 @@ class NCAASwrapper(QMainWindow):
                     while thread.is_alive():
                         QApplication.processEvents()
                         time.sleep(0.02)
-                        
+                    self.aws_view.aws_transfer_queue[i]['last_status'] = 'got_results'
+                    
                     if not safe_delete:
                         t['last_status'] = 'submitted'
                         t['last_change_time'] = datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
@@ -730,9 +739,6 @@ class NCAASwrapper(QMainWindow):
                         self.submitb.setEnabled(True)
                         self.submitb.setText('Submit to NeuroCAAS')
                         return
-                    self.to_log('Done fetching results to {0}'.format(localpath))
-
-                    self.aws_view.aws_transfer_queue[i]['last_status'] = 'got_results'
 
                     if self.delete_results:
                         for f in resultsfiles:
@@ -758,7 +764,7 @@ class NCAASwrapper(QMainWindow):
                                 self.aws_view.s3.Object(t['awsbucket'],submitpath).delete()
                             except:
                                 pass
-
+                    self.to_log('Done fetching results to {0}'.format(localpath))
                     self.to_log('COMPLETED {0}'.format(t['name']))
                 
                     if 'analysis_selection' in t['config'].keys():
@@ -889,7 +895,7 @@ This happens when you re-submit. You need to resubmit from uploaded data.''')
                                     self.aws_view.aws_transfer_queue[-1]['last_change_time'] = datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
                     self.fetching_results = False
                     #self.remove_from_queue(self.queuelist.item(i))
-                    
+                    self.refresh_queuelist()
                     self.submitb.setEnabled(True)
                     self.submitb.setText('Submit to NeuroCAAS')
                     return # because we removed an item from the queue, restart the loop
