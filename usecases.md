@@ -29,10 +29,13 @@ Follow the instructions to [install wfield](https://github.com/jcouto/wfield/tre
 
 5. Select the analysis to run and analysis parameters and click submit to close the dialog.
 
-6. Nothing is uploaded until you press the ``Submit to NeuroCAAS``. This will transfer data from the **local queue** to the cloud and to start the analysis. The ``progress bar`` will show the copy progress of the files. The ``local log`` informs what commands are ran. <br />**Note**: To remove items from the queue: _double-click_ the item. You can not upload experiments with the same name.  
+6. Nothing is uploaded until you press the ``Submit to NeuroCAAS``. This will transfer data from the **local queue** to the cloud and to start the analysis. The ``progress bar`` will show the copy progress of the files. The ``local log`` informs what commands are ran. <br /> **Note**: To remove items from the queue: _double-click_ the item. You can not upload experiments with the same name.  
 
-6. When the analysis completes, the **results are automatically copied** to the ``local disk`` deleted from the cloud. If the locaNMF analysis was selected and you registered to the allen using ``wfield open_raw <foldername>`` the results of data compresssion will be uploaded to the server to run the localNMF analysis.
+7. When the AWS instance starts a log file will open so you can monitor progress. 
 
+8. When the analysis completes, the **results are automatically copied** to the ``local disk`` deleted from the cloud. If the locaNMF analysis was selected and you registered to the allen; the results of data compresssion will be uploaded to the server to run the localNMF analysis.
+
+9. You can view the motion corrected, compressed, denoised and hemodynamic corrected movies with the ``wfield open <foldername that has a results folder inside>``. When the atlas is overlaid; click over an area to get the average activity on that area. Alternatively hold the ctr key and click over a region to use create a draggable ROI.
 
 **Note:** The log file and transfer queue are stored in the local computer and reloaded when starting ``wfield ncaas``.
 
@@ -42,7 +45,7 @@ Follow the instructions to [install wfield](https://github.com/jcouto/wfield/tre
 You can launch jobs that have been ran before to test how the interface gets data from the server to your home directories. You can do that by following step 2 below. That will launch an analysis and the results will be copied to your local disk when the analysis completes.
 
 1. To monitor log files, navigate to the logs folder in the ``ncaas disk`` and double click a file. The file is refreshed every 2 seconds if the ``watch file`` checkbox is selected.
-2. To re-submit a job, right click the a ``submit.json`` and click 're-submit'.
+2. To re-submit a job, right click the a ``submit.json`` and click 're-submit'. (This has been disabled now)
 
 
 
