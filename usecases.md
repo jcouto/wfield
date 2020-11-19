@@ -7,9 +7,11 @@ You can launch the analysis using the ``wfield ncaas`` graphical user interface.
 If you want credentials to use this create an account on neurocaas.org and ask access to the ``wfield-preprocess`` and ``cshl-wfield-locanmf`` analysis buckets. 
 
 ### Getting a test dataset
-To test the interface you can get a test dataset (50 trials collected by Simon Musall and Steve Gluf) from [here](https://drive.google.com/drive/folders/1ZKNaiLiJDp9b97PzT5mEP_Tdf2mCxKLm?usp=sharing). <br/>
+To test the interface you can get a test dataset (50 trials collected by Simon Musall and Steve Gluf) from [here](https://drive.google.com/drive/folders/1ZKNaiLiJDp9b97PzT5mEP_Tdf2mCxKLm?usp=sharing). <br\>
 
 To use the datasets, unzip each file to an **individual folder**. The software will treat each folder as a separate dataset. **Mac users: if you can not unzip the file type ``unzip FILENAME`` in the terminal.
+
+![picture](images/ncaas_gui_walkthrough.gif)
 
 ### Using the ``wfield ncaas`` interface
 
