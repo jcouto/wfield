@@ -671,7 +671,80 @@ class TiffStack(GenericStack):
         self.current_stack = self.imread(self.filenames[fileidx]).reshape([-1,*self.dims])
         self.current_fileidx = fileidx
 
-def load_stack(foldername,order = ['binary','tiff','imager'], nchannels=None):
+class VideoStack(GenericStack):
+    def __init__(self,filenames,
+                 extensions = ['.avi','.mov','.mj2'], # this will try this extension first and then .tif, .TIFF and .TIF
+                 extension = None,
+                 nchannels = None): 
+        '''
+        Select a stack from a sequence of mov stack files
+
+        '''
+        self.extension = extension
+        if type(filenames) is str:
+            # check if it is a folder
+            if os.path.isdir(filenames):
+                dirname = filenames
+                filenames = []
+                for extension in extensions:
+                    if not len(filenames): # try other
+                        self.extension = extension
+                        filenames = natsorted(glob(pjoin(dirname,'*'+self.extension)))
+        if not len(filenames):
+            raise(OSError('Could not find files.'))
+        super(VideoStack,self).__init__(filenames,extension)
+        from skvideo.io import FFmpegReader
+        self.reader = FFmpegReader
+        offsets = [0]
+        for fname in self.filenames:
+            # Parse all files in the stack
+            with FFmpegReader(fname) as f:
+                dims = f.getShape()[:-1]
+                if f.pix_fmt == 'gray16le':
+                    dtype = 'uint16' 
+                else:
+                    dtype = 'uint8'
+                self.pix_fmt = f.pix_fmt 
+                offsets.append(dims[0])
+                self.framerate = f.inputfps
+        # offset for each file
+        self.frames_offset = np.cumsum(offsets)
+        if nchannels is None:
+            nchannels = 1
+        self.frames_offset = (self.frames_offset/nchannels).astype(int)
+        self.dims = dims[1:]
+        self.dims = [nchannels,*self.dims]
+        self.dtype = dtype
+        self.nframes = self.frames_offset[-1]
+        self.shape = tuple([self.nframes,*self.dims])
+        self.current_fileidx = -1
+        self.current_frameidx = 0
+    def _load_substack(self,fileidx,frameidx=0):
+        inputdict = {'-pix_fmt':self.pix_fmt}
+        outputdict = inputdict
+        tidx = (frameidx*self.dims[0])/self.framerate
+        t = time.strftime("%H:%M:%S", time.gmtime(tidx))+'{0:.3f}'.format(tidx % 1)[1:]
+        self.current_stack = self.reader(self.filenames[fileidx], 
+                                          inputdict = {'-ss':t},
+                                          outputdict=outputdict)
+        self.current_frameidx = frameidx
+        self.current_fileidx = fileidx
+
+    def _get_frame(self,frame):
+        ''' 
+        Returns a single frame from the stack.
+        '''
+        fileidx,frameidx = self._get_frame_index(frame)
+        if not fileidx == self.current_fileidx:
+            self._load_substack(fileidx,frameidx)
+        elif not frameidx == self.current_frameidx:
+            self._load_substack(fileidx,frameidx)        
+        for frame in self.current_stack:
+            self.current_frameidx = frameidx+1
+            return frame.transpose([-1,0,1])
+
+        
+def load_stack(foldername,order = ['binary','tiff','video','imager'], nchannels=None):
     ''' 
     Searches the correct format to load from a folder.
     '''
@@ -693,7 +766,10 @@ def load_stack(foldername,order = ['binary','tiff','imager'], nchannels=None):
         if len(files):
             return TiffStack(files, nchannels = nchannels)
     # check for avi and mov
-    
+    for ext in ['.avi','.mov','.mj2']:
+        files = natsorted(glob(pjoin(foldername,'*'+ext)))
+        if len(files):
+            return VideoStack(files, extension = ext, nchannels = nchannels)
     # check imager
     files = natsorted(glob(pjoin(foldername,'Analog*.dat')))
     if len(files):
