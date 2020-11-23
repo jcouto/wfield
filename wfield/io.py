@@ -505,7 +505,8 @@ class ImagerStack(GenericStack):
     def __init__(self,filenames,
                  extension = '.dat',
                  version = 2,# this is because the triggers number changed between the new and the old version...
-                 rotate_array=True):
+                 rotate_array=True,
+                 imager_preview = False):
         '''
         
         rotate_array=True is for rotating the files saved by the imager...
@@ -532,6 +533,9 @@ class ImagerStack(GenericStack):
         self.index_ch1 = []
         self.index_ch2 = []
         self.extrainfo = []
+        if imager_preview:
+            print('Loading only a subset of the frames (preview mode)')
+            self.filenames = self.filenames[:3]
         for f in tqdm(self.filenames,desc='Parsing files to access the stack size'):
             # Parse all analog files and frames
             ch1,ch2,info = _imager_parse_file(f,version = self.version)
@@ -744,10 +748,12 @@ class VideoStack(GenericStack):
             return frame.transpose([-1,0,1])
 
         
-def load_stack(foldername,order = ['binary','tiff','video','imager'], nchannels=None):
+def load_stack(foldername, nchannels=None, imager_preview = False):
     ''' 
     Searches the correct format to load from a folder.
     '''
+    #    TODO: follow a specific order
+    # order = ['binary','tiff','imager','video']
     # First check whats in the folder
     if os.path.isfile(foldername):
         if foldername.endswith('.bin') or  foldername.endswith('.dat'): 
@@ -765,15 +771,15 @@ def load_stack(foldername,order = ['binary','tiff','video','imager'], nchannels=
         files = natsorted(glob(pjoin(foldername,'*'+ext)))
         if len(files):
             return TiffStack(files, nchannels = nchannels)
+    # check imager
+    files = natsorted(glob(pjoin(foldername,'Analog*.dat')))
+    if len(files):
+        return ImagerStack(foldername, imager_preview = imager_preview)
     # check for avi and mov
     for ext in ['.avi','.mov','.mj2']:
         files = natsorted(glob(pjoin(foldername,'*'+ext)))
         if len(files):
             return VideoStack(files, extension = ext, nchannels = nchannels)
-    # check imager
-    files = natsorted(glob(pjoin(foldername,'Analog*.dat')))
-    if len(files):
-        return ImagerStack(foldername)
     # check for dat
     files = natsorted(glob(pjoin(foldername,'*.dat')))
     if len(files):

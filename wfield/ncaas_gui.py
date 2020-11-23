@@ -453,7 +453,7 @@ class  AnalysisSelectionWidget(QDialog):
                         print('Opening the dataset to compute get Allen Landmarks.')
                         from .io import load_stack
                         from .widgets import AllenMatchWidget
-                        dat = load_stack(path)
+                        dat = load_stack(path,imager_preview = True)
                         dlg = QDialog()
                         dlg.setWindowTitle('Allen alignment is required for locaNMF')
                         l = QVBoxLayout()
