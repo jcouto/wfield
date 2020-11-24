@@ -20,6 +20,7 @@ from .registration import motion_correct
 from .decomposition import svd_blockwise,approximate_svd,reconstruct
 from .hemocorrection import hemodynamic_correction
 from .allen import *
+from .imutils import *
 
 # other
 from .viz import *
