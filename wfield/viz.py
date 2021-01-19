@@ -30,6 +30,59 @@ def two_chan_to_rgb(dat,norm=True):
     return img
 
 
+# Settings for colors and saving plots
+colors = ['#000000',
+          '#d62728',
+          '#1f77b4',
+          '#ff7f0e',
+          '#2ca02c',
+          '#9467bd',
+          '#8c564b',
+          '#e377c2',
+          '#7f7f7f',
+          '#bcbd22',
+          '#17becf']
+
+mplstyledict = {'pdf.fonttype' : 42,
+                'ps.fonttype' : 42,
+                'svg.fonttype':'none',
+                'axes.titlesize' : 14,
+                'axes.labelsize' : 12,
+                'axes.facecolor': 'none',
+                'axes.linewidth' : 0.8,
+                'axes.spines.right': False,
+                'axes.spines.top': False,
+                'axes.titleweight': 'bold',
+                'axes.prop_cycle': plt.cycler('color', colors),
+                'ytick.major.size': 8,
+                'xtick.major.size': 8,
+                'xtick.labelsize' : 8,
+                'ytick.labelsize' : 8,
+                'xtick.major.width': 1,
+                'ytick.major.width': 1,
+                'figure.edgecolor': 'none',
+                'figure.facecolor': 'none',
+                'figure.frameon': False,
+                'font.family': ['sans-serif'],
+                'font.size'  : 12,
+                'font.sans-serif': ['Arial',
+                                    'DejaVu Sans',
+                                    'Bitstream Vera Sans',
+                                    'Computer Modern Sans Serif',
+                                    'Lucida Grande',
+                                    'Verdana',
+                                    'Geneva',
+                                    'Lucid',
+                                    'Avant Garde',
+                                    'sans-serif'],             
+                'lines.linewidth' : 1.5,
+                'lines.markersize' : 4,
+                'image.interpolation': 'none',
+                'image.resample': False,
+                'savefig.dpi': 500
+}
+plt.matplotlib.style.use(mplstyledict)
+
 ################################################################
 #######################  MATPLOTLIB WRAPPERS ###################
 ################################################################
