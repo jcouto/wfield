@@ -239,6 +239,12 @@ Example:
 
 
 def apply_affine_to_points(x,y,M):
+    '''
+    Apply an affine transform to a set of contours or (x,y) points.
+
+    x,y = apply_affine_to_points(x, y, tranform)
+
+    '''
     if M is None:
         nM = np.identity(3,dtype = np.float32)
     else:
@@ -248,6 +254,17 @@ def apply_affine_to_points(x,y,M):
     return res[:,0],res[:,1]
 
 def allen_transform_regions(M,ccf_regions,resolution = 1,bregma_offset = [0.,0.]):
+    ''' This transforms regions from the reference to image coordinates.
+    Usage:
+
+    lmarks = load_allen_landmarks('dorsal_cortex_landmarks.json')
+    refregions = allen_load_reference('dorsal_cortex')
+    refregions_image = allen_transform_regions(lmarks['transform'],refregions,
+                                        resolution = lmarks['resolution'],
+                                        bregma_offset = lmarks['bregma_offset'])
+
+    The output: refregions_image is the same as refregions but in image space.
+ '''
     nccf = ccf_regions.copy()
     for i,c in nccf.iterrows():
         for side in ['left','right']:
@@ -261,6 +278,12 @@ def allen_transform_regions(M,ccf_regions,resolution = 1,bregma_offset = [0.,0.]
     return nccf
 
 def allen_transform_from_landmarks(landmarks_im,match):
+    '''
+    Compute the similarity transform from annotated landmarks. 
+    
+    transform = allen_transform_from_landmarks(landmarks_im,match)
+    
+    '''
     ref = np.vstack([landmarks_im['x'],landmarks_im['y']]).T
     cor = np.vstack([match['x'],match['y']]).T
     return estimate_similarity_transform(ref, cor)
@@ -270,7 +293,13 @@ def allen_landmarks_to_image_space(landmarks,
                                    resolution = 0.01):
     '''
     Convert landmarks from allen to "image" space.
-    Basically just divides by the resolution and adds the bregma offset
+    Basically just divides by the resolution and adds the bregma offset.
+
+    Warning this does the operation in place, pass .copy()
+
+    landmarks = allen_landmarks_to_image_space(landmarks.copy(),
+                                   bregma_offset = np.array([0,0]),
+                                   resolution = 0.01)
     '''
     landmarks['x'] = landmarks['x']/resolution + bregma_offset[0]
     landmarks['y'] = landmarks['y']/resolution + bregma_offset[1]

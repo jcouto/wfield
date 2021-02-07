@@ -58,6 +58,11 @@ def im_adapt_hist(im,clip_limit = .1, grid_size=(8,8)):
     return clahe.apply(im.squeeze())
 
 def im_apply_transform(im,M,dims = None):
+    '''
+    Applies an affine transform M to an image.
+    nim = im_apply_transform(im,M)
+
+    '''
     if issparse(im):
         # then reshape before
         if dims is None:
@@ -193,9 +198,9 @@ class SVDStack(object):
             idxz = args[0]        
         return reconstruct(self.U,self.SVT[:,idxz],dims = self.shape[1:])
     def get_timecourse(self,xy):
-        # TODO: this needs a better interface
-        x = int(np.clip(xy[0],0,self.shape[1]))
-        y = int(np.clip(yy[1],0,self.shape[2]))
+        # index are in xy, like what np.where(mask) returns
+        x = np.array(np.clip(xy[0],0,self.shape[1]),dtype=int)
+        y = np.array(np.clip(xy[1],0,self.shape[2]),dtype=int)
         idx = np.ravel_multi_index((x,y),self.shape[1:])
         t = self.Uflat[idx,:].dot(self.SVT)
         return t
