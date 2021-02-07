@@ -82,6 +82,8 @@ Instructions to use with NeuroCAAS [here](https://github.com/jcouto/wfield/tree/
 There is a command-line inteface to run computations from the command line. Do `wfield -h` to learn more. <br/> 
 
 Notebook examples are [here](https://github.com/jcouto/wfield/tree/master/notebooks).
+
+Look at [this one](https://github.com/jcouto/wfield/tree/master/notebooks/tutorial_example_warping_stack_ROIs.ipynb) to load decomposed data and extract ROIs. 
 <br/>
 
 
