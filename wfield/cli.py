@@ -293,7 +293,7 @@ Type wfield ncaas <foldername> to open on a specific folder.
 
         tproc = time.time()
         # MOTION CORRECTION
-        _motion(localdisk)
+        _motion(localdisk,outdisk = localdisk)
         # COMPUTE AVERAGE FOR BASELINE
         _baseline(localdisk,args.nbaseline_frames)
         # DATA REDUCTION
@@ -318,6 +318,9 @@ Type wfield ncaas <foldername> to open on a specific folder.
         parser.add_argument('foldername', action='store',
                             default=None, type=str,
                             help='Folder that has the binary file (FAST DISK).')
+        parser.add_argument('-o','--output', action='store',
+                            default='wfield_results', type=str,
+                            help='Output folder')
         parser.add_argument('-k', action='store',default=200,type=int,
                             help = 'Number of components for SVD')
         #parser.add_argument('--mask-edge', action='store',default=30,type=int,
@@ -330,18 +333,23 @@ Type wfield ncaas <foldername> to open on a specific folder.
                             help='Sampling frequency of an individual channel')
         
         args = parser.parse_args(sys.argv[2:])
-        localdisk = args.foldername # this should be an SSD or a fast drive
-
+        datadisk = os.path.abspath(args.foldername) # this should be an SSD or a fast drive
+        
+        localdisk = args.output # this should be an SSD or a fast drive
         if localdisk is None:
             print('Specify a fast local disk with the  -o option.')
             exit(1)
+        if localdisk == 'wfield_results':
+            localdisk = pjoin(datadisk,localdisk)
+        else:
+            localdisk = os.path.abspath(localdisk)
         if not os.path.isdir(localdisk):
             os.makedirs(localdisk)
             print('Created {0}'.format(localdisk))
 
         tproc = time.time()
         # MOTION CORRECTION
-        _motion(localdisk)
+        _motion(datadisk,outdisk = localdisk)
         # COMPUTE AVERAGE FOR BASELINE
         _baseline(localdisk,args.nbaseline_frames)
         # DATA REDUCTION
@@ -408,20 +416,28 @@ Type wfield ncaas <foldername> to open on a specific folder.
 
         _hemocorrect(localdisk,fs=args.fs)
         
-def _motion(localdisk, nchannels = None, mode = 'ecc',chunksize=256, in_place = True):
+def _motion(localdisk,
+            nchannels = None,
+            mode = 'ecc',
+            chunksize=256,
+            outdisk = None,
+            in_place = False):
     # TODO: check if a motion corrected file is already here
     # if a single binary file try in-place
     dat_path = glob(pjoin(localdisk,'*.bin'))
+    if outdisk is None:
+        outdisk = localdisk
     if not len(dat_path):
         dat_path = glob(pjoin(localdisk,'*.dat'))
     if len(dat_path) == 1:
         dat = mmap_dat(dat_path[0], mode='r+')
-        if in_place:
-            out = dat
     else:
         # else do else
         dat = load_stack(localdisk, nchannels = nchannels)
-        out = np.memmap(pjoin(localdisk,'motioncorrect_{0}_{1}_{2}_{3}.bin'.format(*dat.shape[1:],dat.dtype)),
+    if in_place:
+        out = dat
+    else:
+        out = np.memmap(pjoin(outdisk,'motioncorrect_{0}_{1}_{2}_{3}.bin'.format(*dat.shape[1:],dat.dtype)),
                         mode='w+',
                         dtype=dat.dtype,
                         shape = dat.shape)
@@ -432,8 +448,8 @@ def _motion(localdisk, nchannels = None, mode = 'ecc',chunksize=256, in_place = 
                                                apply_shifts=True)
     del out # close and finish writing
     shifts = np.rec.array([yshifts,xshifts],dtype=[('y','float32'),('x','float32')])
-    np.save(pjoin(localdisk,'motion_correction_shifts.npy'),shifts)
-    np.save(pjoin(localdisk,'motion_correction_rotation.npy'),rshifts)
+    np.save(pjoin(outdisk,'motion_correction_shifts.npy'),shifts)
+    np.save(pjoin(outdisk,'motion_correction_rotation.npy'),rshifts)
     from .plots import plot_summary_motion_correction
     plot_summary_motion_correction(shifts,localdisk)
     del shifts
