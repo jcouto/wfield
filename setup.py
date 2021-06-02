@@ -31,15 +31,26 @@ reference_files =  [os.path.abspath(pjoin('references',f))
                     for f in os.listdir('references')
                     if os.path.isfile(pjoin('references', f))]
 
-longdescription = '''Utilities to look at widefield data and align with the allen reference map.'''
+description = '''Utilities to look at widefield data and align with the allen reference map.'''
+
+with open("README.md", "r") as fh:
+    longdescription = fh.read()
+
+requirements = []
+with open("requirements.txt","r") as f:
+    requirements = f.read().splitlines()
+
 setup(
     name = 'wfield',
     version = '0.1',
     author = 'Joao Couto',
     author_email = 'jpcouto@gmail.com',
-    description = (longdescription),
+    description = (description),
     long_description = longdescription,
+    long_description_content_type='text/markdown',
     license = 'GPL',
+    install_requires = requirements,
+    url = "https://github.com/jpcouto/wfield",
     packages = ['wfield'],
     entry_points = {
         'console_scripts': [
