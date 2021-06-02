@@ -41,7 +41,11 @@ A [dataset](http://repository.cshl.edu/id/eprint/38599/) that can be used to dem
   - `reduced_temporal.npy` are the temporal components for the first channel `(NCOMPONENTS, NFRAMES)
   - LocaNMF returns a matlab file with components in spatial components in the `A` variable and temporal components in the `C` variable.
 
-### Installation
+### Installation (from pip)
+
+``pip install wfield``
+
+### Installation (using Anaconda)
 
 To install start by getting [Anaconda](https://www.anaconda.com/distribution/#download-section) or [Miniconda](https://docs.conda.io/en/latest/miniconda.html). Install also [git](https://git-scm.com/book/en/v2/Getting-Started-Installing-Git). Run the following commands from a terminal window (Anaconda prompt or git Bash on Windows, the Mac OS terminal). Check the notes below for common issues.
 
