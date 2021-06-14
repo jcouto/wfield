@@ -137,7 +137,7 @@ from the GUI.
         def cred_secret():
             self.awsinfo['secret_key'] = self.cred_secret.text()
         self.cred_secret.textChanged.connect(cred_secret)
-
+        
         self.aws_region = QComboBox()
         for r in awsregions:
             self.aws_region.addItem(r)
@@ -171,9 +171,15 @@ from the GUI.
                 for i,t in enumerate(tt):
                     if extra in t:
                         values.append(t.replace(extra,'').strip(' ').split('"')[0])
+
                 if len(values)>=4:
                     self.cred_access.setText(values[2])
                     self.cred_secret.setText(values[3])
+                    self.ncaasconfig['user_group_name'] = values[-1]
+                    ncaasconfig_json = json.dumps(self.ncaasconfig,
+                                                  indent=4,
+                                                  sort_keys=True)
+                    self.configedit.setPlainText(ncaasconfig_json)
                     print('Got credentials from the website, you can close this window.')
                     dlg = QDialog()
                     dlg.setWindowTitle('Good job!')
@@ -225,6 +231,7 @@ class TextEditor(QDockWidget):
         super(TextEditor,self).__init__()
         self.parent = parent
         self.s3 = s3
+        print(bucket)
         self.bucketname = bucket
         self.path = path
         self.original = self.refresh_original()
@@ -265,13 +272,15 @@ class TextEditor(QDockWidget):
         self.resize(self.width()*1.2, self.height())
     def refresh_original(self):
         if not self.s3 is None:
-            bucket = self.s3.Bucket(self.bucketname)
+            #bucket = self.s3.Bucket(self.bucketname)
+            print(self.bucketname,self.path,tempfile)
             try:
-                bucket.download_file(self.path,tempfile)
+                self.s3.download_file(self.bucketname,self.path,tempfile)
                 with open(tempfile,'r') as f:
                     return f.read()
-            except:
+            except Exception as err:
                 print("File {0} may have been deleted or you have no permission.".format(self.path))
+                print(err)
                 self.close()
     def closeEvent(self,evt):
         try:
@@ -437,7 +446,7 @@ class  AnalysisSelectionWidget(QDialog):
                     dict(name = foldername, #os.path.basename(filetransfer[0]),
                          awsdestination = ['{0}' + foldername + '{1}'
                                            +os.path.basename(f) for f in filetransfer],
-                         awssubmit = '{0}'+foldername+'{1}submit.json',
+                         awssubmit = '{0}'+foldername.replace('/inputs','/submissions')+'/{1}submit.json',
                          awsbucket = None,
                          localpath = filetransfer,
                          log=None,
@@ -643,7 +652,7 @@ class NCAASwrapper(QMainWindow):
                             if extension in ['.yaml','.txt','.json']:
                                 bucket = l.strip('/').split('/')[0]
                                 temp = l.replace(bucket,'').strip('/')
-                                wid = TextEditor(temp, s3=self.aws_view.s3, bucket = bucket)
+                                wid = TextEditor(temp, s3=self.aws_view.s3client, bucket = bucket)
                                 self.addDockWidget(Qt.RightDockWidgetArea, wid)
                                 wid.setFloating(True)
                 resultsfiles = []
@@ -783,8 +792,9 @@ This happens when you re-submit. You need to resubmit from uploaded data.''')
                                     break
                                 nt['config'] = t['locanmf_config']
                                 nt['submit'] = t['locanmf_submit']
+                                nt['submit']['userfolder'] = self.config['user_group_name']
                                 nt['awsbucket'] = NMF_BUCKET 
-                                nt['awssubmit'] = ('{0}/'+foldername+'{1}submit.json').format(
+                                nt['awssubmit'] = ('{0}/'+foldername+'/submissions/{1}submit.json').format(
                                     nt['submit']['userfolder'],'/')
                                 print(nt['awssubmit'])
                                 # Which files: labels.json,atlas.npy,brainmask.npy,SVTcorr.npy,U.npy
@@ -1194,9 +1204,11 @@ class AWSView(QTreeView):
         self.customContextMenuRequested.connect(menu_here)
         
         self.config = config
-        self.s3 = s3_connect()
+        self.user_group_name = config['user_group_name']
+        self.s3, self.s3client = s3_connect()
         print('Connected to Amazon Web Services')
         self.bucketnames = self.config.keys()
+        self.bucketnames = list(filter( lambda x: not x == 'user_group_name', self.bucketnames))
         print('Using buckets: {0}'.format(', '.join(self.bucketnames)))
         self.awsfiles = []
         self.aws_transfer_queue = []
@@ -1210,7 +1222,7 @@ class AWSView(QTreeView):
             if extension in ['.yaml','.txt','.json']:
                 bucket = paths[0].strip('/').split('/')[0]
                 temp = paths[0].replace(bucket,'').strip('/')
-                wid = TextEditor(temp, s3=self.s3, bucket = bucket)
+                wid = TextEditor(temp, s3=self.s3client, bucket = bucket)
                 self.parent.addDockWidget(Qt.RightDockWidgetArea, wid)
                 wid.setFloating(True)
                 self.parent.open_editors.append(paths[0])
@@ -1224,7 +1236,7 @@ class AWSView(QTreeView):
         self.timer_update.start(4000)
 
     def update_files(self):
-        awsfiles = s3_ls(self.s3,self.bucketnames)
+        awsfiles = s3_ls(self.s3client,self.s3,self.bucketnames,folder = self.user_group_name)
         if len(awsfiles) == len(self.awsfiles):
             return
         self.awsfiles = awsfiles
@@ -1284,11 +1296,12 @@ class AWSView(QTreeView):
                 t['config'] = configselection[bucketname]['config']
                 t['config']['analysis_selection'] = [s['acronym'] for s in selection if s['selected']]
                 t['submit'] = configselection[bucketname]['submit']
+                t['submit']['userfolder'] = self.config['user_group_name']
+
                 if bucketname == PMD_BUCKET:
                     t['awssubmit'] = t['awssubmit'].format(t['submit']['userfolder']+'/inputs/','/')
                 else:
                     t['awssubmit'] = t['awssubmit'].format(t['submit']['userfolder'],'/inputs/')
-
                 for i,f in enumerate(t['awsdestination']):
                     if bucketname == PMD_BUCKET:
                         t['awsdestination'][i] = f.format(t['submit']['userfolder']+'/inputs/','/')
@@ -1475,12 +1488,14 @@ class FilesystemView(QTreeView):
     
 
 def main(folder = '.'):
+    configpath = pjoin(os.path.expanduser('~'),'.wfield','ncaas_config.json')
     if QApplication.instance() != None:
         app = QApplication.instance()
     else:
         app = QApplication(sys.argv)
     awskeys = ncaas_read_aws_keys()
-    if awskeys['access_key'] == '' or awskeys['secret_key'] == '':
+    ncaasconfig = ncaas_read_analysis_config(configpath)
+    if awskeys['access_key'] == '' or awskeys['secret_key'] == '' or not 'user_group_name' in ncaasconfig.keys():
         print('NeuroCAAS credentials not found.')
         cred = CredentialsManager()
         app.exec_()
