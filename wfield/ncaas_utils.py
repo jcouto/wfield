@@ -94,6 +94,7 @@ def ncaas_read_aws_keys():
 def ncaas_read_analysis_config(configname):
     if not os.path.exists(os.path.dirname(configname)):
         os.makedirs(os.path.dirname(configname))
+    '''
     if os.path.exists(configname):
         with open(configname,'r') as f:
             config = json.load(f)
@@ -104,6 +105,7 @@ def ncaas_read_analysis_config(configname):
             qfile = pjoin(dirname,'ncaas_transfer_q.json')
             if os.path.isfile(qfile):
                 os.remove(qfile)
+    '''
     if not os.path.exists(configname):
         with open(configname,'w') as f:
             print('Creating config from defaults [{0}]'.format(configname))
@@ -221,9 +223,12 @@ def s3_ls(s3client, s3, bucketnames, folder ):
 
 # recursive ls
 def s3_ls_r(files,s3client,bucket,prefix):
-    objlist = s3client.list_objects_v2(Bucket=bucket,
-                                       Delimiter = '/',
-                                       Prefix=prefix)
+    try:
+        objlist = s3client.list_objects_v2(Bucket=bucket,
+                                           Delimiter = '/',
+                                           Prefix=prefix)
+    except:
+        return files
     if 'Contents' in objlist.keys():
         for obj in objlist['Contents']:
             QApplication.processEvents()
