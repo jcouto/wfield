@@ -94,6 +94,7 @@ def ncaas_read_aws_keys():
 def ncaas_read_analysis_config(configname):
     if not os.path.exists(os.path.dirname(configname)):
         os.makedirs(os.path.dirname(configname))
+    '''
     if os.path.exists(configname):
         with open(configname,'r') as f:
             config = json.load(f)
@@ -104,6 +105,7 @@ def ncaas_read_analysis_config(configname):
             qfile = pjoin(dirname,'ncaas_transfer_q.json')
             if os.path.isfile(qfile):
                 os.remove(qfile)
+    '''
     if not os.path.exists(configname):
         with open(configname,'w') as f:
             print('Creating config from defaults [{0}]'.format(configname))
@@ -198,17 +200,46 @@ awsregions = ['us-east-2',
 
 
 def s3_connect():
-    return boto3.resource('s3')
+    aws = ncaas_read_aws_keys()
+    session = boto3.session.Session(aws_access_key_id = aws['access_key'],
+                                    aws_secret_access_key = aws['secret_key'])
+    return session.resource('s3'), session.client('s3')
+
 
 from PyQt5.QtWidgets import QApplication # Keep the gui as responsive as possible..
-def s3_ls(s3,bucketnames):
+
+def s3_ls(s3client, s3, bucketnames, folder ):
     files = []
     for bucketname in bucketnames:
-        bucket = s3.Bucket(bucketname)
-        for l in list(bucket.objects.all()):
-            QApplication.processEvents()
-            files.append(bucketname+'/'+l.key)
+        #bucket = s3.Bucket(bucketname)
+        #t = bucket.objects.filter(Delimiter = '/',Prefix='{0}/'.format(folder))
+        f = []
+        files.extend(s3_ls_r(f,
+                             s3client,
+                             bucketname,
+                             folder+'/'))
+        
     return files
+
+# recursive ls
+def s3_ls_r(files,s3client,bucket,prefix):
+    try:
+        objlist = s3client.list_objects_v2(Bucket=bucket,
+                                           Delimiter = '/',
+                                           Prefix=prefix)
+    except:
+        return files
+    if 'Contents' in objlist.keys():
+        for obj in objlist['Contents']:
+            QApplication.processEvents()
+            files.append(bucket + '/'+obj['Key'])
+    if 'CommonPrefixes' in objlist.keys():
+        for obj in objlist['CommonPrefixes']:
+            QApplication.processEvents()
+            files.append(bucket + '/'+obj['Prefix'])
+            s3_ls_r(files,s3client,bucket,obj['Prefix'])
+    return files
+
 
 from boto3.s3.transfer import TransferConfig
 multipart_config = TransferConfig(multipart_threshold=1024*25,
@@ -229,7 +260,9 @@ class Upload(threading.Thread):
         self.destination = destination
     def run(self):
         self.isrunning = True
-        print('Running upload on' + self.filepath)
+        print('Running upload on {0} to {2}/{1}'.format(self.filepath,
+                                                        self.destination,
+                                                        self.bucket))
         def update(chunk):
             self.count += chunk
             self.isrunning = True

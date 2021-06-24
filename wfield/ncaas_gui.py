@@ -137,7 +137,7 @@ from the GUI.
         def cred_secret():
             self.awsinfo['secret_key'] = self.cred_secret.text()
         self.cred_secret.textChanged.connect(cred_secret)
-
+        
         self.aws_region = QComboBox()
         for r in awsregions:
             self.aws_region.addItem(r)
@@ -171,9 +171,15 @@ from the GUI.
                 for i,t in enumerate(tt):
                     if extra in t:
                         values.append(t.replace(extra,'').strip(' ').split('"')[0])
+
                 if len(values)>=4:
                     self.cred_access.setText(values[2])
                     self.cred_secret.setText(values[3])
+                    self.ncaasconfig['user_group_name'] = values[-1]
+                    ncaasconfig_json = json.dumps(self.ncaasconfig,
+                                                  indent=4,
+                                                  sort_keys=True)
+                    self.configedit.setPlainText(ncaasconfig_json)
                     print('Got credentials from the website, you can close this window.')
                     dlg = QDialog()
                     dlg.setWindowTitle('Good job!')
@@ -225,6 +231,7 @@ class TextEditor(QDockWidget):
         super(TextEditor,self).__init__()
         self.parent = parent
         self.s3 = s3
+        print(bucket)
         self.bucketname = bucket
         self.path = path
         self.original = self.refresh_original()
@@ -265,13 +272,15 @@ class TextEditor(QDockWidget):
         self.resize(self.width()*1.2, self.height())
     def refresh_original(self):
         if not self.s3 is None:
-            bucket = self.s3.Bucket(self.bucketname)
+            #bucket = self.s3.Bucket(self.bucketname)
+            print(self.bucketname,self.path,tempfile)
             try:
-                bucket.download_file(self.path,tempfile)
+                self.s3.download_file(self.bucketname,self.path,tempfile)
                 with open(tempfile,'r') as f:
                     return f.read()
-            except:
+            except Exception as err:
                 print("File {0} may have been deleted or you have no permission.".format(self.path))
+                print(err)
                 self.close()
     def closeEvent(self,evt):
         try:
@@ -378,8 +387,8 @@ class  AnalysisSelectionWidget(QDialog):
             if not os.path.isfile(fname['fname']):
                 continue
             _,ext = os.path.splitext(fname['fname'])
-            if not ext in analysis_extensions:
-                fname['selected'] = False
+            if not ext in analysis_extensions or 'landmarks.json' in fname['fname']:
+                fname['selected'] = False                
             self.files.append(fname)
             f = QCheckBox()
             name = QLabel(os.path.basename(fname['fname']))
@@ -436,8 +445,8 @@ class  AnalysisSelectionWidget(QDialog):
                 aws_transfer_queue.append(
                     dict(name = foldername, #os.path.basename(filetransfer[0]),
                          awsdestination = ['{0}' + foldername + '{1}'
-                                           +os.path.basename(f) for f in filetransfer],
-                         awssubmit = '{0}'+foldername+'{1}submit.json',
+                                           + os.path.basename(f) for f in filetransfer],
+                         awssubmit = '{0}'+foldername.replace('/inputs','/configs')+'/{1}submit.json',
                          awsbucket = None,
                          localpath = filetransfer,
                          log=None,
@@ -629,7 +638,7 @@ class NCAASwrapper(QMainWindow):
             outputsdir = os.path.dirname(t['awsdestination'][0]).replace('/inputs',
                                                                          '/outputs')
             logsdir = os.path.dirname(t['awsdestination'][0]).replace('/inputs',
-                                                                      '/logs')
+                                                                      '/results')
             if t['last_status'] == 'submitted':
                 if t['log'] is None: # check of there is any element on the queue that needs a log to open
                     logs = []
@@ -643,7 +652,7 @@ class NCAASwrapper(QMainWindow):
                             if extension in ['.yaml','.txt','.json']:
                                 bucket = l.strip('/').split('/')[0]
                                 temp = l.replace(bucket,'').strip('/')
-                                wid = TextEditor(temp, s3=self.aws_view.s3, bucket = bucket)
+                                wid = TextEditor(temp, s3=self.aws_view.s3client, bucket = bucket)
                                 self.addDockWidget(Qt.RightDockWidgetArea, wid)
                                 wid.setFloating(True)
                 resultsfiles = []
@@ -751,7 +760,8 @@ class NCAASwrapper(QMainWindow):
                     if self.delete_inputs:
                         # need to delete the remote data
                         self.to_log('Remote delete: {0}'.format(t['awsdestination']))
-                        configpath = os.path.dirname(t['awsdestination'][0])+'/'+'config.yaml' 
+                        configpath = t['awssubmit'].replace('submit.json','config.yaml')
+                            #os.path.dirname(t['awsdestination'][0])+'/'+'config.yaml' 
                         submitpath = t['awssubmit']#os.path.dirname(t['awsdestination'])+'/'+'submit.json'
                         
                         for a in t['awsdestination']:
@@ -783,10 +793,12 @@ This happens when you re-submit. You need to resubmit from uploaded data.''')
                                     break
                                 nt['config'] = t['locanmf_config']
                                 nt['submit'] = t['locanmf_submit']
-                                nt['awsbucket'] = NMF_BUCKET 
-                                nt['awssubmit'] = ('{0}/'+foldername+'{1}submit.json').format(
-                                    nt['submit']['userfolder'],'/')
-                                print(nt['awssubmit'])
+                                nt['submit']['userfolder'] = self.config['user_group_name']
+                                nt['awsbucket'] = NMF_BUCKET
+                                # LocalNMF is going to upload only to configs
+                                nt['awssubmit'] = ('{0}/{1}/'+foldername+'/submit.json').format(
+                                    nt['submit']['userfolder'],'configs')
+                                #print(nt['awssubmit'])
                                 # Which files: labels.json,atlas.npy,brainmask.npy,SVTcorr.npy,U.npy
                                 #t['awsdestination'][i] = f.format(t['submit']['userfolder'],'/inputs/')
                                 # Check for the landmarks file in the original folder
@@ -839,7 +851,7 @@ This happens when you re-submit. You need to resubmit from uploaded data.''')
                                     nt['submit']['spatial_data_filename'] = os.path.basename(fname)
                                     f = '{0}/' + foldername + '{1}'+'U_atlas.npy'
                                     nt['localpath'].append(fname)
-                                    nt['awsdestination'].append(f.format(nt['submit']['userfolder'],'/inputs/'))
+                                    nt['awsdestination'].append(f.format(nt['submit']['userfolder']+'/configs','/inputs/'))
                                     # temporal
                                     if os.path.isfile(pjoin(localfolder,'results','SVTcorr.npy')):
                                         fname = pjoin(localfolder,'results','SVTcorr.npy')
@@ -852,7 +864,7 @@ This happens when you re-submit. You need to resubmit from uploaded data.''')
                                     nt['submit']['temporal_data_filename'] = os.path.basename(fname)
                                     f = '{0}/' + foldername + '{1}'+os.path.basename(fname)
                                     nt['localpath'].append(fname)
-                                    nt['awsdestination'].append(f.format(nt['submit']['userfolder'],'/inputs/'))
+                                    nt['awsdestination'].append(f.format(nt['submit']['userfolder']+'/configs','/inputs/'))
 
                                     # brainmask
                                     fname = pjoin(localfolder,'results','labels.json')
@@ -863,7 +875,7 @@ This happens when you re-submit. You need to resubmit from uploaded data.''')
                                     nt['submit']['areanames_filename'] = os.path.basename(fname)
                                     f = '{0}/' + foldername + '{1}'+'labels.json'
                                     nt['localpath'].append(fname)
-                                    nt['awsdestination'].append(f.format(nt['submit']['userfolder'],'/inputs/'))
+                                    nt['awsdestination'].append(f.format(nt['submit']['userfolder']+'/configs','/inputs/'))
                                     
                                     # brainmask
                                     fname = pjoin(localfolder,'results','brainmask.npy')
@@ -871,7 +883,7 @@ This happens when you re-submit. You need to resubmit from uploaded data.''')
                                     nt['submit']['brainmask_filename'] = os.path.basename(fname)
                                     f = '{0}/' + foldername + '{1}'+'brainmask.npy'
                                     nt['localpath'].append(fname)
-                                    nt['awsdestination'].append(f.format(nt['submit']['userfolder'],'/inputs/'))
+                                    nt['awsdestination'].append(f.format(nt['submit']['userfolder']+'/configs','/inputs/'))
 
                                     #atlas
                                     fname = pjoin(localfolder,'results','atlas.npy')
@@ -879,11 +891,11 @@ This happens when you re-submit. You need to resubmit from uploaded data.''')
                                     nt['submit']['atlas_filename'] = os.path.basename(fname)
                                     f = '{0}/' + foldername + '{1}'+'atlas.npy'
                                     nt['localpath'].append(fname)
-                                    nt['awsdestination'].append(f.format(nt['submit']['userfolder'],'/inputs/'))
+                                    nt['awsdestination'].append(f.format(nt['submit']['userfolder']+'/configs','/inputs/'))
                                     
                                     nt['last_status'] = 'pending_transfer'
                                     nt['last_change_time'] = datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
-
+                                    
                                     self.aws_view.aws_transfer_queue.append(nt)
                                     #print(nt)
                                     self.refresh_queuelist()
@@ -965,7 +977,7 @@ This happens when you re-submit. You need to resubmit from uploaded data.''')
         for i,t in enumerate(self.aws_view.aws_transfer_queue):
             if t['last_status'] == 'pending_transfer':
                 # Check if files need to be zipped.
-                if t['awsbucket'] == PMD_BUCKET:
+                if t['awsbucket'] == PMD_BUCKET :#and len(t['awsdestination']) > 1: # this should change in the future
                     docompress = [True]
                     from .utils import zipfiles
                     dname = os.path.dirname(t['localpath'][0])
@@ -988,8 +1000,6 @@ This happens when you re-submit. You need to resubmit from uploaded data.''')
                         dlg.setLayout(l)
                         dlg.exec_()
                     if docompress[0]:
-                        #import ipdb
-                        #ipdb.set_trace()
                         self.to_log('Zipping {0}'.format(fname))
                         self.submitb.setText('Compressing files')                        
                         QApplication.processEvents()
@@ -1035,6 +1045,7 @@ This happens when you re-submit. You need to resubmit from uploaded data.''')
                         if not dotransfer[0]:
                             print('Skipped {0}'.format(localpath[it]))
                             continue
+                        print(awsdestination[it])
                         upload = Upload(bucket = t['awsbucket'],
                                         filepath = localpath[it],
                                         destination = awsdestination[it],
@@ -1082,6 +1093,7 @@ This happens when you re-submit. You need to resubmit from uploaded data.''')
                     yaml.dump(t['config'],f)
                 bucket =self.aws_view.s3.Bucket(t['awsbucket'])
                 bucket.upload_file(temp,
+                                   #t['awssubmit'].replace('submit.json', 'config.yaml'))
                                    os.path.dirname(t['awsdestination'][0])+'/'+'config.yaml')
                 self.to_log('Uploaded default config to {name}'.format(**t))
                 
@@ -1095,6 +1107,11 @@ This happens when you re-submit. You need to resubmit from uploaded data.''')
                     json.dump(tmp, f, indent=4, sort_keys=True)
                 bucket.upload_file(temp,
                                    t['awssubmit'])
+                # this is to be able to load the file.
+                if not '/configs/' in t['awssubmit']:
+                    bucket.upload_file(temp,
+                                       t['awssubmit'].replace('/inputs/','/configs/'))
+
                 self.to_log('Submitted analysis {name} to {awssubmit}'.format(**t))
                 self.aws_view.aws_transfer_queue[i]['last_status'] = 'submitted'
                 self.aws_view.aws_transfer_queue[i]['last_change_time'] = datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
@@ -1194,9 +1211,11 @@ class AWSView(QTreeView):
         self.customContextMenuRequested.connect(menu_here)
         
         self.config = config
-        self.s3 = s3_connect()
+        self.user_group_name = config['user_group_name']
+        self.s3, self.s3client = s3_connect()
         print('Connected to Amazon Web Services')
         self.bucketnames = self.config.keys()
+        self.bucketnames = list(filter( lambda x: not x == 'user_group_name', self.bucketnames))
         print('Using buckets: {0}'.format(', '.join(self.bucketnames)))
         self.awsfiles = []
         self.aws_transfer_queue = []
@@ -1210,7 +1229,7 @@ class AWSView(QTreeView):
             if extension in ['.yaml','.txt','.json']:
                 bucket = paths[0].strip('/').split('/')[0]
                 temp = paths[0].replace(bucket,'').strip('/')
-                wid = TextEditor(temp, s3=self.s3, bucket = bucket)
+                wid = TextEditor(temp, s3=self.s3client, bucket = bucket)
                 self.parent.addDockWidget(Qt.RightDockWidgetArea, wid)
                 wid.setFloating(True)
                 self.parent.open_editors.append(paths[0])
@@ -1224,7 +1243,7 @@ class AWSView(QTreeView):
         self.timer_update.start(4000)
 
     def update_files(self):
-        awsfiles = s3_ls(self.s3,self.bucketnames)
+        awsfiles = s3_ls(self.s3client,self.s3,self.bucketnames,folder = self.user_group_name)
         if len(awsfiles) == len(self.awsfiles):
             return
         self.awsfiles = awsfiles
@@ -1284,16 +1303,17 @@ class AWSView(QTreeView):
                 t['config'] = configselection[bucketname]['config']
                 t['config']['analysis_selection'] = [s['acronym'] for s in selection if s['selected']]
                 t['submit'] = configselection[bucketname]['submit']
-                if bucketname == PMD_BUCKET:
-                    t['awssubmit'] = t['awssubmit'].format(t['submit']['userfolder']+'/inputs/','/')
-                else:
-                    t['awssubmit'] = t['awssubmit'].format(t['submit']['userfolder'],'/inputs/')
+                t['submit']['userfolder'] = self.config['user_group_name']
 
+                if bucketname == PMD_BUCKET:
+                    t['awssubmit'] = t['awssubmit'].format(t['submit']['userfolder']+'/inputs/','')
+                else:
+                    t['awssubmit'] = t['awssubmit'].format(t['submit']['userfolder']+'/configs/','') # goes to configs on locaNMF
                 for i,f in enumerate(t['awsdestination']):
                     if bucketname == PMD_BUCKET:
                         t['awsdestination'][i] = f.format(t['submit']['userfolder']+'/inputs/','/')
                     else:
-                        t['awsdestination'][i] = f.format(t['submit']['userfolder'],'/inputs/')
+                        t['awsdestination'][i] = f.format(t['submit']['userfolder']+'/inputs/','/')
 
                 # Check if it will run locaNMF
                 t['selection'] = [s['acronym'] for s in configselection['selection'] if s['selected']]
@@ -1475,12 +1495,15 @@ class FilesystemView(QTreeView):
     
 
 def main(folder = '.'):
+    configpath = pjoin(os.path.expanduser('~'),'.wfield','ncaas_config.json')
     if QApplication.instance() != None:
         app = QApplication.instance()
     else:
         app = QApplication(sys.argv)
     awskeys = ncaas_read_aws_keys()
-    if awskeys['access_key'] == '' or awskeys['secret_key'] == '':
+    ncaasconfig = ncaas_read_analysis_config(configpath)
+    print('Read config.')
+    if awskeys['access_key'] == '' or awskeys['secret_key'] == '' or not 'user_group_name' in ncaasconfig.keys():
         print('NeuroCAAS credentials not found.')
         cred = CredentialsManager()
         app.exec_()
