@@ -35,6 +35,23 @@ from scipy.sparse import load_npz, issparse,csr_matrix
 
 print = partial(print, flush=True)
 
+
+# create the wfield folder and place the references.
+# this runs if installed from pip
+wfield_dir = pjoin(os.path.expanduser('~'),'.wfield')
+if not os.path.isdir(wfield_dir):
+    os.makedirs(wfield_dir)
+    modulepath = pjoin(__file__.split('lib')[0],'share','wfield')
+    refpath = pjoin(modulepath, 'references')
+    reference_files = [pjoin(refpath,r) for r in os.listdir(refpath)]
+    from shutil import copyfile
+    for f in reference_files:
+        print(f)
+        if os.path.isfile(f):
+            copyfile(f,f.replace(refpath,wfield_dir))
+    print('Created {0}'.format(wfield_dir))
+        
+
 def estimate_similarity_transform(ref,points):
     '''
     
