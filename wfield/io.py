@@ -399,13 +399,13 @@ class GenericStack():
         '''
         fileidx,frameidx = self._get_frame_index(frame)
         if not fileidx == self.current_fileidx:
+            print('Loading {0}'.format(fileidx))
             self._load_substack(fileidx)
-        
         return self.current_stack[frameidx]
 
     def __len__(self):
-        return self.shape[0
-        ]
+        return self.shape[0]
+    
     def __getitem__(self, *args, squeeze = False):
         index  = args[0]
         idx1 = None
@@ -624,7 +624,6 @@ class BinaryStack(GenericStack):
         self.current_stack = mmap_dat(self.filenames[fileidx])
         self.current_fileidx = fileidx
 
-        
 class TiffStack(GenericStack):
     def __init__(self,filenames,
                  extension = '.tiff', # this will try this extension first and then .tif, .TIFF and .TIF
@@ -648,14 +647,17 @@ class TiffStack(GenericStack):
         super(TiffStack,self).__init__(filenames,extension)
         from tifffile import imread, TiffFile
         self.imread = imread
+        self.TiffFile = TiffFile
         offsets = [0]
         for f in tqdm(self.filenames, desc='Parsing tiffs'):
             # Parse all files in the stack
             tmp =  TiffFile(f)
-            dims = [*tmp.series[0].shape]
+            # get the size from the pages (works with OEM files)
+            dims = [len(tmp.pages),*tmp.pages[0].shape]
+            #dims = [*tmp.series[0].shape]
             if len(dims) == 2: # then these are single page tiffs
                 dims = [1,*dims]
-            dtype = tmp.series[0].dtype
+            dtype = tmp.pages[0].dtype
             offsets.append(dims[0])
             del tmp
         # offset for each file
@@ -671,8 +673,14 @@ class TiffStack(GenericStack):
         self.nframes = self.frames_offset[-1]
         self.shape = tuple([self.nframes,*self.dims])
         
+    def _imread(self, filename):
+        arr = None
+        with self.TiffFile(filename, mode = 'rb') as tf:
+            arr = np.stack([p.asarray() for p in tf.pages])
+        return arr
+    
     def _load_substack(self,fileidx,channel = None):
-        self.current_stack = self.imread(self.filenames[fileidx]).reshape([-1,*self.dims])
+        self.current_stack = self._imread(self.filenames[fileidx]).reshape([-1,*self.dims])
         self.current_fileidx = fileidx
 
 class VideoStack(GenericStack):
@@ -756,7 +764,7 @@ def load_stack(foldername, nchannels=None, imager_preview = False):
     # order = ['binary','tiff','imager','video']
     # First check whats in the folder
     if os.path.isfile(foldername):
-        if foldername.endswith('.bin') or  foldername.endswith('.dat'): 
+        if foldername.endswith('.bin') or foldername.endswith('.dat'): 
             return mmap_dat(foldername)
     # Check binary sequence.
     files = natsorted(glob(pjoin(foldername,'*.bin')))

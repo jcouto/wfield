@@ -15,15 +15,15 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from .utils import *
-import argparse
-import subprocess
-import shlex
-import platform
 from .io import load_stack, mmap_dat
 from .io import frames_average_for_trials
 from .registration import motion_correct
 from .decomposition import approximate_svd
 from .hemocorrection import hemodynamic_correction
+import argparse
+import subprocess
+import shlex
+import platform
 
 class CLIParser(object):
     def __init__(self):
@@ -297,7 +297,7 @@ Type wfield ncaas <foldername> to open on a specific folder.
         # COMPUTE AVERAGE FOR BASELINE
         _baseline(localdisk,args.nbaseline_frames)
         # DATA REDUCTION
-        _decompose(localdisk,k=args.k)
+        _decompose(localdisk, k=args.k)
         # HEMODYNAMIC CORRECTION
         _hemocorrect(localdisk,fs=args.fs)
         tproc = (time.time() - tproc)/60.
@@ -325,7 +325,11 @@ Type wfield ncaas <foldername> to open on a specific folder.
                             help = 'Number of components for SVD')
         #parser.add_argument('--mask-edge', action='store',default=30,type=int,
         #                    help = 'Size of the mask used on the edges during motion correction ') 
-        parser.add_argument('--nchannels', action='store', default=None, type=int)
+        parser.add_argument('--nchannels', action='store', default=None, type=int,
+                            help = 'Number of recorded channels (interleaved)')
+        parser.add_argument('--functional-channel', action='store',
+                            default=0, type=int,
+                            help='Index of the functional channel')
         parser.add_argument('--nbaseline-frames', action='store',
                             default=30, type=int,
                             help='Number of frames to compute the  baseline')
@@ -349,17 +353,17 @@ Type wfield ncaas <foldername> to open on a specific folder.
 
         tproc = time.time()
         # MOTION CORRECTION
-        _motion(datadisk,outdisk = localdisk)
+        _motion(datadisk,outdisk = localdisk, nchannels = args.nchannels)
         # COMPUTE AVERAGE FOR BASELINE
-        _baseline(localdisk,args.nbaseline_frames)
+        _baseline(localdisk,args.nbaseline_frames, nchannels = args.nchannels)
         # DATA REDUCTION
-        _decompose(localdisk,k=args.k)
+        _decompose(localdisk, k=args.k, nchannels = args.nchannels)
         # HEMODYNAMIC CORRECTION
         # check if it is 2 channel
         dat = load_stack(localdisk, nchannels = args.nchannels)
         if dat.shape[1] == 2:
             del dat
-            _hemocorrect(localdisk,fs=args.fs)
+            _hemocorrect(localdisk,fs=args.fs, functional_channel = args.functional_channel)
             
         tproc = (time.time() - tproc)/60.
         print('Done  pre-processing ({0} min)'.format(tproc))
@@ -410,11 +414,15 @@ Type wfield ncaas <foldername> to open on a specific folder.
                             help='Folder with U and SVT files.')
         parser.add_argument('--fs', action='store',default=30.,type=np.float32,
                             help = 'Sampling rate of an individual channel ') 
+        parser.add_argument('--functional-channel', action='store',
+                            default=0, type=int,
+                            help='Index of the functional channel')
         
         args = parser.parse_args(sys.argv[2:])
         localdisk = args.foldername 
 
-        _hemocorrect(localdisk,fs=args.fs)
+        _hemocorrect(localdisk, fs=args.fs,
+                     functional_channel=args.functional_channel)
         
 def _motion(localdisk,
             nchannels = None,
@@ -451,7 +459,7 @@ def _motion(localdisk,
     np.save(pjoin(outdisk,'motion_correction_shifts.npy'),shifts)
     np.save(pjoin(outdisk,'motion_correction_rotation.npy'),rshifts)
     from .plots import plot_summary_motion_correction
-    plot_summary_motion_correction(shifts,localdisk)
+    plot_summary_motion_correction(shifts,outdisk)
     del shifts
 
 def _baseline(localdisk, nbaseline_frames, nchannels = None):
@@ -497,14 +505,15 @@ def _decompose(localdisk, k, nchannels = None):
     np.save(pjoin(localdisk,'U.npy'),U)
     np.save(pjoin(localdisk,'SVT.npy'),SVT)
 
-def _hemocorrect(localdisk,fs):
+def _hemocorrect(localdisk,fs,functional_channel = 0):
     U = np.load(pjoin(localdisk,'U.npy'))
     SVT = np.load(pjoin(localdisk,'SVT.npy'))
     
-    SVT_470 = SVT[:,0::2]
+    SVT_470 = SVT[:,np.mod(functional_channel,2)::2]
     t = np.arange(SVT.shape[1]) # interpolate the violet
     from scipy.interpolate import interp1d
-    SVT_405 = interp1d(t[1::2],SVT[:,1::2],axis=1,
+    SVT_405 = interp1d(t[np.mod(functional_channel+1,2)::2],
+                       SVT[:,np.mod(functional_channel+1,2)::2],axis=1,
                        fill_value='extrapolate')(t[0::2])
     SVTcorr, rcoeffs, T = hemodynamic_correction(U, SVT_470, SVT_405, fs=fs)  
 
