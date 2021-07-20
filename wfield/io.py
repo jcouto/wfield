@@ -675,7 +675,7 @@ class TiffStack(GenericStack):
         
     def _imread(self, filename):
         arr = None
-        with self.TiffFile(filename, mode = 'rb') as tf:
+        with self.TiffFile(filename) as tf:
             arr = np.stack([p.asarray() for p in tf.pages])
         return arr
     
