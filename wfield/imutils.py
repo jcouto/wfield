@@ -1,6 +1,7 @@
 from .utils import *
 from numpy.fft import fft
 import math
+from scipy.ndimage.filters import gaussian_filter
 
 def mask_to_3d(mask,shape,include_mask = None):
     '''
@@ -71,6 +72,13 @@ def fft_movie(movie, component = 1,output_raw = False):
 
 def fft_get_phase(movief):
     return -1. * np.angle(movief) % (2*np.pi)
+
+def gaussfilt2d(X,size = int(7)):
+    '''
+    2d gaussian filter a movie of images in parallel
+    '''
+    return np.stack(runpar(gaussian_filter,X,sigma = size))
+
 
 def phasemap_to_visual_degrees(phasemap,startdeg,stopdeg):
     '''

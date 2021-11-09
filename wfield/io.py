@@ -399,7 +399,7 @@ class GenericStack():
         '''
         fileidx,frameidx = self._get_frame_index(frame)
         if not fileidx == self.current_fileidx:
-            print('Loading {0}'.format(fileidx))
+            #print('Loading {0}'.format(fileidx))
             self._load_substack(fileidx)
         return self.current_stack[frameidx]
 
