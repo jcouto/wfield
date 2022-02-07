@@ -263,7 +263,12 @@ Type wfield ncaas <foldername> to open on a specific folder.
                             help='Number of frames to compute the  baseline')
         parser.add_argument('--fs', action='store',default=30.,type=np.float32,
                             help='Sampling frequency of an individual channel')
-        
+        parser.add_argument('--mode', choices=('ecc','2d'),default='ecc',
+                            help = 'Algorithm for  motion correction ')
+        parser.add_argument('--chunksize', default=256,
+                            help = 'Frames per batch ') 
+
+
         args = parser.parse_args(sys.argv[2:])
         remotepath = args.foldername
         localdisk = args.output # this should be an SSD or a fast drive
@@ -293,7 +298,10 @@ Type wfield ncaas <foldername> to open on a specific folder.
 
         tproc = time.time()
         # MOTION CORRECTION
-        _motion(localdisk,outdisk = localdisk)
+        _motion(localdisk,
+                outdisk = localdisk,
+                chunksize = args.chunksize,
+                mode = args.mode)
         # COMPUTE AVERAGE FOR BASELINE
         _baseline(localdisk,args.nbaseline_frames)
         # DATA REDUCTION
@@ -335,6 +343,11 @@ Type wfield ncaas <foldername> to open on a specific folder.
                             help='Number of frames to compute the  baseline')
         parser.add_argument('--fs', action='store',default=30.,type=np.float32,
                             help='Sampling frequency of an individual channel')
+        parser.add_argument('--mode', choices=('ecc','2d'),default='ecc',
+                            help = 'Algorithm for  motion correction ') 
+        parser.add_argument('--chunksize', default=256,
+                            help = 'Frames per batch ') 
+
         
         args = parser.parse_args(sys.argv[2:])
         datadisk = os.path.abspath(args.foldername) # this should be an SSD or a fast drive
@@ -353,7 +366,10 @@ Type wfield ncaas <foldername> to open on a specific folder.
 
         tproc = time.time()
         # MOTION CORRECTION
-        _motion(datadisk,outdisk = localdisk, nchannels = args.nchannels)
+        _motion(datadisk,outdisk = localdisk,
+                mode = args.mode,
+                chunksize = args.chunksize,
+                nchannels = args.nchannels)
         # COMPUTE AVERAGE FOR BASELINE
         _baseline(localdisk,args.nbaseline_frames, nchannels = args.nchannels)
         # DATA REDUCTION
@@ -380,10 +396,15 @@ Type wfield ncaas <foldername> to open on a specific folder.
                             help = 'Algorithm for  motion correction ') 
         parser.add_argument('--chunksize', default=256,
                             help = 'Frames per batch ') 
-        
+        parser.add_argument('--mode', choices=('ecc','2d'),default='ecc',
+                            help = 'Algorithm for  motion correction ') 
+
         args = parser.parse_args(sys.argv[2:])
         localdisk = args.foldername
-        _motion(localdisk,nchannels = args.nchannels, mode = args.mode, chunksize = args.chunksize)
+        _motion(localdisk,
+                nchannels = args.nchannels,
+                mode = args.mode,
+                chunksize = args.chunksize)
 
     def decompose(self):
         parser = argparse.ArgumentParser(
@@ -464,14 +485,16 @@ def _motion(localdisk,
 
 def _baseline(localdisk, nbaseline_frames, nchannels = None):
 
+    if os.path.exists(pjoin(localdisk,'frames_average.npy')):
+        print('Found frame_average.npy. skipping.')
+        
+        return np.load(pjoin(localdisk,'frames_average.npy'))
     dat = load_stack(localdisk,nchannels = nchannels)
     try:
         trial_onsets = np.load(pjoin(localdisk,'trial_onsets.npy'))[:,1].astype(int)
     except FileNotFoundError:
         print('''
-Skipping trial frame average because there was no trial_onsets.npy in the folder.
  Estimating the mean by the average of the chunked mean projection.
-
 ''')
         chunkidx = chunk_indices(len(dat),chunksize=64)
         frame_averages = []

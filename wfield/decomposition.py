@@ -29,8 +29,19 @@ def approximate_svd(dat, frames_average,
     This is similar to what described in Steinmetz et al. 2017
 
     Joao Couto - March 2020
+    
+    This computes the mean centered SVD of the dataset, it does not compute F-F0/F0 a.k.a. df/f.
+    Compute it after using the SVD components.
 
-    TODO: Separate the movie binning from the actual SVD?
+    Inputs:
+        dat (array)             : (NFRAMES, NCHANNEL, H, W) 
+        k (int)                 : number of components to estimate (200)
+        nframes_per_bin (int)   : number of frames to estimate the initial U components
+        nbinned_frames (int)    : maximum number frames to estimate tje initial U components
+        nframes_per_chunk (int) : window size to load to memory each time.   
+    Returns:
+        U   (array)             : 
+        SVT (array)             : 
     '''
     from sklearn.preprocessing import normalize
 

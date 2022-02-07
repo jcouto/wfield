@@ -136,7 +136,12 @@ def _register_multichannel_stack(frames,templates,mode='2d',
         stack[:,ichan,:,:] = np.stack([r[1] for r in res])
     return (xs,ys,rot), stack
 
-def motion_correct(dat, out = None, chunksize=512, nreference = 60, mode = 'ecc', apply_shifts=True):
+def motion_correct(dat, out = None,
+                   refs = None,
+                   chunksize=512,
+                   nreference = 60,
+                   mode = 'ecc',
+                   apply_shifts=True):
     '''
     Motion correction by translation.
     This estimate x and y shifts using phase correlation. 
@@ -145,12 +150,15 @@ def motion_correct(dat, out = None, chunksize=512, nreference = 60, mode = 'ecc'
 
     Inputs:
         dat (array)           : (NFRAMES, NCHANNEL, H, W) is overwritten if apply_shifts is True
+        out (array)           : same size as dat or None to overwrite dat
+        refs (array)          : reference frames (NCHANNEL, H, W) or None to compute from nreference frames
         chunksize (int)       : size of the chunks (needs to be small enough to fit in memory - default 512)
         nreference            : number of frames to take as reference (default 60)
         apply_shifts          : overwrite the data with the motion corrected (default True)
+        mode                  : ecc (default) is rigid body; 2d is only translation in x and y using dft
     Returns:
-        yshifts               : shitfs in y (NFRAMES, NCHANNELS)
-        xshifts               : shifts in x
+        (yshifts, xshifts)    : shitfs in y and x ((NFRAMES, NCHANNELS),(NFRAMES, NCHANNELS))
+        rot_shifts            : rotational shifts if in ecc mode 
     '''
     nframes,nchan,h,w = dat.shape
     if out is None:
@@ -161,27 +169,24 @@ def motion_correct(dat, out = None, chunksize=512, nreference = 60, mode = 'ecc'
     rshifts = []
     # reference is from the start of the file (nreference frames to nreference*2)
     # (chunksize frames and for each channel independently)
-    nreference = int(nreference)
-    chunk = np.array(dat[nreference:nreference*2])
-    refs = chunk[0].astype('float32')
-    # align to the ref of each channel and use the mean
-    _,refs = _register_multichannel_stack(chunk,refs,mode=mode)
-    refs = np.mean(refs,axis=0).astype('float32')
+    if refs is None:
+        nreference = int(nreference)
+        chunk = np.array(dat[nreference:nreference*2])
+        refs = chunk[0].astype('float32')
+        # align to the ref of each channel and use the mean
+        _,refs = _register_multichannel_stack(chunk,refs,mode=mode)
+        refs = np.mean(refs,axis=0).astype('float32')
     for c in tqdm(chunks,desc='Motion correction'):
         # this is the reg bit
         localchunk = np.array(dat[c[0]:c[-1]])
-        # always do 2d first
-        #(xs,ys,rot),corrected = _register_multichannel_stack(localchunk,refs,
-        #                                                     mode='2d')
-        #if not mode == '2d' :
-        #xs += xs0
-        #ys += ys0
         (xs,ys,rot),corrected = _register_multichannel_stack(
             localchunk,
             refs,
             mode=mode)
         if apply_shifts:
             out[c[0]:c[-1]] = corrected[:]
+            if hasattr(out,'flush'):
+                out.flush() # write to disk
         yshifts.append(ys)
         xshifts.append(xs)
         rshifts.append(rot)
