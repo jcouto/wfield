@@ -53,8 +53,8 @@ elif (int(cv2ver[0]) == 4) and (int(cv2ver[1]) <= 1):
                                     criteria,
                                     inputMask=inputMask)
 def registration_ecc(frame,template,
-                     niter = 25,
-                     eps0 = 1e-2,
+                     niter = 100,
+                     eps0 = 1e-3,
                      warp_mode = cv2.MOTION_EUCLIDEAN,
                      prepare = True,
                      gaussian_filter = 1,
@@ -101,7 +101,7 @@ def registration_upsample(frame,template):
     return (xs,ys),(np.clip(dst,0,(2**16-1))).astype('uint16')
 
 def _register_multichannel_stack(frames,templates,mode='2d',
-                                 niter = 25,
+                                 niter = 100,
                                  eps0 = 1e-3,
                                  warp_mode = cv2.MOTION_EUCLIDEAN): # mode 2d
 
