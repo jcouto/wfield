@@ -199,3 +199,63 @@ def assemble_blockwise_spatial(block_U,blocks,dims):
     return U.T
 
 
+#############################
+############ PMD ############
+#############################
+
+# This was written by Ian Kinsella for the NeuroCAAS implementation
+# of the penalized matrix factorization of widefield data with 2 channels.
+# The interface was simplified to be used locally
+# It may require alot of memory
+
+def eval_spatial_stats(u):
+    num_pixels, num_comps = np.prod(u.shape[:-1]), u.shape[-1]
+    vert_diffs = np.abs(u[1:,:,:] - u[:-1,:,:])
+    horz_diffs = np.abs(u[:,1:,:] - u[:,:-1,:])
+    avg_diff = ((np.sum(vert_diffs.reshape((-1, num_comps), order='F'), axis=0) + 
+                 np.sum(horz_diffs.reshape((-1, num_comps), order='F'), axis=0)) /
+                (np.prod(vert_diffs.shape[:-1]) + np.prod(horz_diffs.shape[:-1])))
+    avg_elem = np.mean(np.abs(u.reshape((num_pixels,-1), order='F')), axis=0)
+    return avg_diff / avg_elem
+
+
+def eval_temporal_stats(v):
+    return np.mean(np.abs(v[:, :-2] + v[:, 2:] - 2*v[:, 1:-1]), axis=-1) / np.mean(np.abs(v), axis=-1)
+
+def noise_decomp(num_components, params=None):
+    """ TESTING: downsampled case """
+    E = np.random.randn(params['block_height'], params['block_width'], params['window_length'])
+    U = np.zeros((params['block_height'] * params['block_width'] * num_components,), dtype=np.float64)
+    V = np.zeros((params['window_length'] * num_components,), dtype=np.float64)
+
+    if params['d_sub'] > 1 or params['t_sub'] > 1:
+        # Downsample Simulated Noise
+        E_sub = skimage.measure.block_reduce(E, (d_sub, d_sub, t_sub), func=np.mean)
+
+        # Perform Partial Decomposition Without Thresholds W/ Decimated Init
+        _ = decimated_decompose(params['block_height'],
+                                params['block_width'],
+                                params['d_sub'],
+                                params['window_length'], 
+                                params['t_sub'],
+                                np.reshape(E, (-1,)), np.reshape(E_sub, (-1,)),
+                                U, V,
+                                1e3, 1e3,
+                                num_components, num_components,
+                                params['max_iters_main'], params['max_iters_init'],
+                                params['tol'])
+    else:
+        # Perform Partial Decomposition Without Thresholds
+        _ = decompose(params['block_height'],
+                      params['block_width'],
+                      params['window_length'], 
+                      np.reshape(E, (-1,)),
+                      U, V,
+                      1e3, 1e3,
+                      num_components, num_components,
+                      params['max_iters_main'], params['max_iters_init'],
+                      params['tol'])
+
+    # Return Summary Stats
+    return (eval_spatial_stats(U.reshape((params['block_height'], params['block_width'], -1), order='F')),
+            eval_temporal_stats(V.reshape((-1, params['window_length']))))

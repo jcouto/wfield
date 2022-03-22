@@ -95,7 +95,7 @@ def _xy_rot_from_affine(affines):
 def registration_upsample(frame,template):
     h,w = frame.shape
     dst = frame.astype('float32')
-    (xs, ys), sf = cv2.phaseCorrelate(template.astype('float32'),dst)    
+    (xs, ys), sf = cv2.phaseCorrelate(dst,template.astype('float32'))    
     M = np.float32([[1,0,xs],[0,1,ys]])
     dst = cv2.warpAffine(dst,M,(w, h))
     return (xs,ys),(np.clip(dst,0,(2**16-1))).astype('uint16')

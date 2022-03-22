@@ -63,3 +63,6 @@ class svd_pix_correlation():
             fig.canvas.flush_events()
         fig.canvas.mpl_connect('button_press_event', update)
     
+
+def _compute_percentile_from_reconstructed(U,SVT,percentile = 10):
+    return np.percentile(np.dot(U,SVT), percentile, axis = 1)

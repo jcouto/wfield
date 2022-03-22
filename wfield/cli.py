@@ -24,6 +24,7 @@ import argparse
 import subprocess
 import shlex
 import platform
+from multiprocessing import set_start_method
 
 class CLIParser(object):
     def __init__(self):
@@ -33,18 +34,23 @@ class CLIParser(object):
 
 The commands are:
     ncaas               Opens a gui to launch data on the neuroCAAS platform
+
     open                Opens a gui to look at the preprocessed data        
     open_raw            Opens a gui to look at the raw frames
-    preprocess          Preprocess data in binary fornat
-    motion              Registers data from a binary file
+
+    preprocess          Preprocess stack 
+
+    motion              Registers stack
     decompose           Performs single value decomposition
     correct             Performs hemodynamic correction on dual channel data
+
     imager              
     imager_preprocess   Preprocesses data recorded with the WidefieldImager
 ''')
         parser.add_argument('command', help='type wfieldtools <command> -h for help')
 
         args = parser.parse_args(sys.argv[1:2])
+        set_start_method("spawn")
         if not hasattr(self, args.command):
             print('Command {0} not recognized.'.format(args.command))
             parser.print_help()

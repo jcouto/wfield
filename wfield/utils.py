@@ -38,18 +38,44 @@ print = partial(print, flush=True)
 # create the wfield folder and place the references.
 # this runs if installed from pip
 wfield_dir = pjoin(os.path.expanduser('~'),'.wfield')
-if not os.path.isdir(wfield_dir):
-    os.makedirs(wfield_dir)
+
+def _create_wfield_folder():
+    if not os.path.isdir(wfield_dir):
+        print('Created {0}'.format(wfield_dir))
+        os.makedirs(wfield_dir)
+    # try first from the shared folder 
     modulepath = pjoin(__file__.split('lib')[0],'share','wfield')
     refpath = pjoin(modulepath, 'references')
-    reference_files = [pjoin(refpath,r) for r in os.listdir(refpath)]
-    from shutil import copyfile
-    for f in reference_files:
-        print(f)
-        if os.path.isfile(f):
-            copyfile(f,f.replace(refpath,wfield_dir))
-    print('Created {0}'.format(wfield_dir))
-        
+    if os.path.exists(refpath):
+        reference_files = [pjoin(refpath,r) for r in os.listdir(refpath)]
+        from shutil import copyfile
+        for f in reference_files:
+            if os.path.isfile(f):
+                copyfile(f,f.replace(refpath,wfield_dir))
+    else:
+        import requests
+        from shutil import copyfileobj
+        webpath = 'https://raw.githubusercontent.com/jcouto/wfield/master/references/{0}'
+        files = ['dorsal_cortex_ccf_labels.json',
+                 'dorsal_cortex_landmarks.json',
+                 'dorsal_cortex_outline.npy',
+                 'dorsal_cortex_projection.npy',
+                 'vis_ccf_labels.json',
+                 'vis_outline.npy',
+                 'vis_projection.npy']
+        # download the files
+        for f in files:
+            print('    Downloading {0}'.format(f))
+            if '.json' in f: # because of the encodings.
+                with open(pjoin(wfield_dir,f),'w') as fid:
+                    res = requests.get(webpath.format(f))
+                    fid.write(res.text)
+                    del res
+            else:
+                with open(pjoin(wfield_dir,f),'wb') as fid:
+                    raw = requests.get(webpath.format(f),stream=True)
+                    copyfileobj(raw.raw, fid)
+                    del raw
 
 def estimate_similarity_transform(ref,points):
     '''
@@ -89,8 +115,8 @@ def im_apply_transform(im,M,dims = None):
                    order = 1,
                    mode='constant',
                    cval = 0,
-                   clip=True,
-                   preserve_range=True)
+                   clip = True,
+                   preserve_range = True)
         return csr_matrix(tmp.reshape(shape))
     else:    
         return warp(im,M,
@@ -103,12 +129,12 @@ def im_apply_transform(im,M,dims = None):
 def lowpass(X, w = 7.5, fs = 30.):
     from scipy.signal import butter, filtfilt
     b, a = butter(2,w/(fs/2.), btype='lowpass');
-    return filtfilt(b, a, X, padlen=50)
+    return filtfilt(b, a, X, padlen = 50)
 
 def highpass(X, w = 3., fs = 30.):
     from scipy.signal import butter, filtfilt
     b, a = butter(2,w/(fs/2.), btype='highpass');
-    return filtfilt(b, a, X, padlen=50)
+    return filtfilt(b, a, X, padlen = 50)
 
 
 def analog_ttl_to_onsets(dat,time=None, mfilt=3):
@@ -134,7 +160,7 @@ def chunk_indices(nframes, chunksize = 512, min_chunk_size = 16):
     return [[chunks[i],chunks[i+1]] for i in range(len(chunks)-1)]
 
 
-def make_overlapping_blocks(dims,blocksize=128,overlap=16):
+def make_overlapping_blocks(dims, blocksize = 128, overlap = 16):
     '''
     Creates overlapping block indices to span an image
     '''
@@ -176,6 +202,7 @@ class SVDStack(object):
         self.shape = [SVT.shape[1],*dims]
         self.dtype = dtype
         self.originalU = None
+        
     def set_warped(self,value,M = None):
         ''' Apply affine transform to the spatial components '''
         if not M is None:

@@ -22,7 +22,7 @@ import json
 
 # allensdk imports are inside the functions because it needs an old pandas and i dont understand why. To install it do: pip install allensdk
 
-annotation_dir = pjoin(os.path.expanduser('~'),'.wfield')
+annotation_dir = wfield_dir #pjoin(os.path.expanduser('~'),'.wfield')
 
 selection_dorsal_cortex = [
     'MOB',
@@ -85,7 +85,6 @@ def allen_get_raw_annotation(annotation_dir,
                              resolution = 10):
     import nrrd
     from allensdk.api.queries.mouse_connectivity_api import MouseConnectivityApi
-    
     annotation_path = pjoin(annotation_dir, 'annotation_{0}_{1}.nrrd'.format(
         version,resolution))
     if not os.path.isdir(annotation_dir):
@@ -368,7 +367,7 @@ def load_allen_landmarks(filename, reference = 'dorsal_cortex'):
     return lmarks
 
     
-def allen_load_reference(reference_name,annotation_dir = annotation_dir):
+def allen_load_reference(reference_name, annotation_dir = annotation_dir):
     '''
 Load allen areas to use as reference.
 
@@ -376,11 +375,18 @@ Example:
     ccf_regions,proj,brain_outline = allen_load_reference('dorsal_cortex')
 
     '''
+    if annotation_dir == wfield_dir:
+        # then it is the reference folder, download if not there
+        if not os.path.exists(pjoin(
+                annotation_dir,
+                '{0}_ccf_labels.json'.format(reference_name))):
+            from .utils import _create_wfield_folder
+            _create_wfield_folder()
     from pandas import read_json
     ccf_regions = read_json(pjoin(
         annotation_dir,'{0}_ccf_labels.json'.format(reference_name)))
     proj = np.load(pjoin(annotation_dir,
-                         '{0}_projection.npy'.format(reference_name)))
+                         '{0}_projection.npy'.format(reference_name),))
     brain_outline = np.load(pjoin(annotation_dir,
                                   '{0}_outline.npy'.format(reference_name)))
     return ccf_regions,proj,brain_outline
