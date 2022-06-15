@@ -31,33 +31,10 @@ with open("README.md", "r") as fh:
 requirements = []
 with open("requirements.txt","r") as f:
     requirements = f.read().splitlines()
-
-class AddReferences(Command):
-    """ """
-    
-    description = 'create the wfield folder and add reference maps and files.'
-    user_options = []
-    
-    def initialize_options(self):
-        pass
-    def finalize_options(self):
-        pass
-    def run(self):
-        wfield_dir = pjoin(os.path.expanduser('~'),'.wfield')
-        if not os.path.isdir(wfield_dir):
-            os.makedirs(wfield_dir)
-        refpath = 'references'
-        reference_files = [pjoin(refpath,r) for r in os.listdir(refpath)]
-        from shutil import copyfile
-        for f in reference_files:
-            if os.path.isfile(f):
-                copyfile(f,f.replace(refpath,wfield_dir))
-                print('{0} copied to {1}'.format(f,wfield_dir))
-
     
 setup(
     name = 'wfield',
-    version = '0.3.1',
+    version = '0.3.2',
     author = 'Joao Couto',
     author_email = 'jpcouto@gmail.com',
     description = (description),
@@ -67,10 +44,6 @@ setup(
     install_requires = requirements,
     url = "https://github.com/jcouto/wfield",
     packages = ['wfield'],
-    cmdclass = {'references' : AddReferences},
-    include_package_data = True,
-    package_data = {'share/wfield/references':['references/*.json','references/*.npy']},
-    #data_files = [('share/wfield/references',['references/'+f]) for f in os.listdir('references')],
     entry_points = {
         'console_scripts': [
             'wfield = wfield.cli:main',
