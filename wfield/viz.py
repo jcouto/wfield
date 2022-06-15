@@ -128,6 +128,8 @@ def nb_play_movie(data,interval=30,shape = None,**kwargs):
     def updateImage(change):
         i = _handle_sparse(data[change['new']],shape=shape)
         im.set_data(i.squeeze())
+        plt.gcf().canvas.draw()
+        plt.gcf().canvas.flush_events()
     slider.observe(updateImage, names='value')
     return dict(fig = plt.gcf(),
                 ax=plt.gca(),

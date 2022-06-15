@@ -228,25 +228,33 @@ def _imager_parse_file(fname, version = 2):
     del stack
     return idxch1,idxch2,info
 
-def _imager_split_channels(stack,analog,analogheader,version = 2):
+def _imager_split_channels(stack_slice,analog,analogheader,version = 2):
     ''' splits channels from the imager '''
     from .utils import analog_ttl_to_onsets
     #fname_analog = fname_mj2.replace('Frames_','Analog_').replace('.mj2','.dat')
     #stack = read_mj2_frames(fname_mj2)
     #dat,header = read_imager_analog(fname_analog)
 
-    if version == 1:
-        # then the channels are -2 and -1
-        ch1,ch1_ = analog_ttl_to_onsets(analog[-1,:],time=None) # this is the blue LED
-        ch2,ch2_ = analog_ttl_to_onsets(analog[-2,:],time=None) # this is the violet LED
-        ch3_onset,ch3_offset = analog_ttl_to_onsets(analog[3,:],time=None) # this is the stim
-        ch4_onset,ch4_offset = analog_ttl_to_onsets(analog[4,:],time=None) # this is another sync
-    else:
-        ch1,ch1_ = analog_ttl_to_onsets(analog[1,:],time=None) # this is the blue LED
-        ch2,ch2_ = analog_ttl_to_onsets(analog[2,:],time=None) # this is the violet LED
-        ch3_onset,ch3_offset = analog_ttl_to_onsets(analog[3,:],time=None) # this is the stim
-        ch4_onset,ch4_offset = analog_ttl_to_onsets(analog[4,:],time=None) # this is another sync
-    
+    def parse_channels(analog,version = version):
+        if version == 1:
+            # then the channels are -2 and -1
+            ch1,ch1_ = analog_ttl_to_onsets(analog[-2,:],time=None) # this is the blue LED
+            ch2,ch2_ = analog_ttl_to_onsets(analog[-1,:],time=None) # this is the violet LED
+            ch3_onset,ch3_offset = analog_ttl_to_onsets(analog[3,:],time=None) # this is the stim
+            ch4_onset,ch4_offset = analog_ttl_to_onsets(analog[4,:],time=None) # this is another sync
+        else:
+            ch1,ch1_ = analog_ttl_to_onsets(analog[1,:],time=None) # this is the blue LED
+            ch2,ch2_ = analog_ttl_to_onsets(analog[2,:],time=None) # this is the violet LED
+            ch3_onset,ch3_offset = analog_ttl_to_onsets(analog[3,:],time=None) # this is the stim
+            ch4_onset,ch4_offset = analog_ttl_to_onsets(analog[4,:],time=None) # this is another sync
+        return ch1,ch1_,ch2,ch2_,ch3_onset,ch3_offset,ch4_onset,ch4_offset
+    ch1,ch1_,ch2,ch2_,ch3_onset,ch3_offset,ch4_onset,ch4_offset = parse_channels(analog,version = version)
+    # here we check if both are empty, do it again for the other version
+    if len(ch1) < stack_slice.shape[0]/2-20 and len(ch2) < stack_slice.shape[0]/2 - 20:
+        print('Using imager version {0} (something strange with the wiring?)'.format(np.mod(version+1,2)))
+        ch1,ch1_,ch2,ch2_,ch3_onset,ch3_offset,ch4_onset,ch4_offset = parse_channels(
+            analog,
+            version = np.mod(version+1,2))
     info = dict(baseline = analogheader['baseline'],
                 ch1 = ch1,
                 ch2 = ch2,
@@ -255,12 +263,17 @@ def _imager_split_channels(stack,analog,analogheader,version = 2):
                 ch4_onset = ch4_onset,
                 ch4_offset = ch4_offset,
                 onset = analogheader['onset'])
-    nframes = stack.shape[0]
-    avgnorm = stack.reshape((nframes,-1))
+    nframes = stack_slice.shape[0]
+    avgnorm = stack_slice.reshape((nframes,-1))
     avgnorm = avgnorm.mean(axis=1)
     avgnorm -= np.mean(avgnorm)/2
     # find the last frame with the LED on; that's ch0
     idx = np.where(avgnorm>0)[0][-1]
+    # Find out how many channels were used
+    if len(ch1) < stack_slice.shape[0]/2-20 or len(ch2) < stack_slice.shape[0]/2-20:
+        print(len(ch1),stack_slice.shape[0]/2-20)
+        return np.arange(nframes)[avgnorm>0],[],info
+    # otherwise using 2 channels
     # Check if the last frame is odd or even
     if idx & 1:
         chAidx = np.arange(nframes)[1::2]
@@ -271,10 +284,6 @@ def _imager_split_channels(stack,analog,analogheader,version = 2):
     # drop empty frames
     chAidx = chAidx[avgnorm[chAidx]>0]
     chBidx = chBidx[avgnorm[chBidx]>0]
-    if not len(info['ch1']) or not len(info['ch2']):
-        print('Could not parse {0}'.format(fname_mj2))
-        print(info)
-        return None,None,info
     # look at the analog channels to know which was the last channel.
     lastch = np.argmax([info['ch1'][-1],info['ch2'][-1]])
     if lastch == 1: # last channel was channel 2
@@ -519,7 +528,7 @@ class ImagerStack(GenericStack):
             # check if it is a folder
             if os.path.isdir(filenames):
                 dirname = filenames
-                filenames = natsorted(glob(pjoin(dirname,'Frames*' + self.extension)))
+                filenames = natsorted(glob(pjoin(dirname,'Frams*' + self.extension)))
                 if not len(filenames): # try mj2's
                     self.extension = '.mj2'
                     filenames = natsorted(glob(pjoin(dirname,'Frames*' + self.extension)))
@@ -555,6 +564,13 @@ class ImagerStack(GenericStack):
             if len(stack.shape) == 4:
                 stack = stack.transpose([0,1,3,2])
         self.dims = stack.shape[1:]
+        # count the number of channels
+        self.nchannels = np.sum([len(self.index_ch1[0])>0,
+                                 len(self.index_ch2[0])>0])
+        if len(self.dims) == 2:
+            self.dims = [self.nchannels,*self.dims]
+        self.dims[0] = self.nchannels
+
         self.dtype = stack.dtype
         self.nframes = self.frames_offset[-1]
         self.shape = tuple([self.nframes,*self.dims])
@@ -571,8 +587,12 @@ class ImagerStack(GenericStack):
                 tmp = tmp.transpose([0,1,3,2])
         tmp = tmp.reshape([-1,*tmp.shape[-2:]])
         # combine the indexes from the 2 channels
-        idx = np.sort(np.hstack([self.index_ch1[fileidx],
-                                 self.index_ch2[fileidx]]))
+        if self.nchannels == 2:
+            idx = np.sort(np.hstack([self.index_ch1[fileidx],
+                                     self.index_ch2[fileidx]]))
+        else:
+            idx = np.sort(self.index_ch1[fileidx])
+            
         try:
             self.current_stack = tmp[idx].reshape([-1,*self.dims])
         except:
@@ -614,6 +634,13 @@ class BinaryStack(GenericStack):
             del tmp
         # offset for each file
         self.frames_offset = np.cumsum(offsets)
+        if nchannels is None:
+            nchannels = 1
+        self.frames_offset = (self.frames_offset/nchannels).astype(int)
+        self.dims = dims[1:]
+        if len(self.dims) == 2:
+            self.dims = [nchannels,*self.dims]
+        self.dims[0] = nchannels
 
         self.dims = dims
         self.dtype = dtype
@@ -756,7 +783,7 @@ class VideoStack(GenericStack):
             return frame.transpose([-1,0,1])
 
         
-def load_stack(foldername, nchannels=None, imager_preview = False):
+def load_stack(foldername, nchannels=None, imager_preview = False, imager_version = 2):
     ''' 
     Searches the correct format to load from a folder.
     '''
@@ -782,7 +809,7 @@ def load_stack(foldername, nchannels=None, imager_preview = False):
     # check imager
     files = natsorted(glob(pjoin(foldername,'Analog*.dat')))
     if len(files):
-        return ImagerStack(foldername, imager_preview = imager_preview)
+        return ImagerStack(foldername, imager_preview = imager_preview, version = imager_version)
     # check for avi and mov
     for ext in ['.avi','.mov','.mj2']:
         files = natsorted(glob(pjoin(foldername,'*'+ext)))
