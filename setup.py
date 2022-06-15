@@ -57,7 +57,7 @@ class AddReferences(Command):
     
 setup(
     name = 'wfield',
-    version = '0.3.0',
+    version = '0.3.1',
     author = 'Joao Couto',
     author_email = 'jpcouto@gmail.com',
     description = (description),
@@ -65,7 +65,7 @@ setup(
     long_description_content_type='text/markdown',
     license = 'GPL',
     install_requires = requirements,
-    url = "https://github.com/jpcouto/wfield",
+    url = "https://github.com/jcouto/wfield",
     packages = ['wfield'],
     cmdclass = {'references' : AddReferences},
     include_package_data = True,
