@@ -57,7 +57,7 @@ class AddReferences(Command):
     
 setup(
     name = 'wfield',
-    version = '0.2.3',
+    version = '0.3.0',
     author = 'Joao Couto',
     author_email = 'jpcouto@gmail.com',
     description = (description),

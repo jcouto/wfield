@@ -783,7 +783,7 @@ class VideoStack(GenericStack):
             return frame.transpose([-1,0,1])
 
         
-def load_stack(foldername, nchannels=None, imager_preview = False, imager_version = 2):
+def load_stack(foldername, nchannels=None, imager_preview = False):
     ''' 
     Searches the correct format to load from a folder.
     '''
@@ -809,7 +809,7 @@ def load_stack(foldername, nchannels=None, imager_preview = False, imager_versio
     # check imager
     files = natsorted(glob(pjoin(foldername,'Analog*.dat')))
     if len(files):
-        return ImagerStack(foldername, imager_preview = imager_preview, version = imager_version)
+        return ImagerStack(foldername, imager_preview = imager_preview)
     # check for avi and mov
     for ext in ['.avi','.mov','.mj2']:
         files = natsorted(glob(pjoin(foldername,'*'+ext)))
