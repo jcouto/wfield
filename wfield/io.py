@@ -249,12 +249,7 @@ def _imager_split_channels(stack_slice,analog,analogheader,version = 2):
             ch4_onset,ch4_offset = analog_ttl_to_onsets(analog[4,:],time=None) # this is another sync
         return ch1,ch1_,ch2,ch2_,ch3_onset,ch3_offset,ch4_onset,ch4_offset
     ch1,ch1_,ch2,ch2_,ch3_onset,ch3_offset,ch4_onset,ch4_offset = parse_channels(analog,version = version)
-    # here we check if both are empty, do it again for the other version
-    if len(ch1) < stack_slice.shape[0]/2-20 and len(ch2) < stack_slice.shape[0]/2 - 20:
-        print('Using imager version {0} (something strange with the wiring?)'.format(np.mod(version+1,2)))
-        ch1,ch1_,ch2,ch2_,ch3_onset,ch3_offset,ch4_onset,ch4_offset = parse_channels(
-            analog,
-            version = np.mod(version+1,2))
+
     info = dict(baseline = analogheader['baseline'],
                 ch1 = ch1,
                 ch2 = ch2,
@@ -528,7 +523,7 @@ class ImagerStack(GenericStack):
             # check if it is a folder
             if os.path.isdir(filenames):
                 dirname = filenames
-                filenames = natsorted(glob(pjoin(dirname,'Frams*' + self.extension)))
+                filenames = natsorted(glob(pjoin(dirname,'Frames*' + self.extension)))
                 if not len(filenames): # try mj2's
                     self.extension = '.mj2'
                     filenames = natsorted(glob(pjoin(dirname,'Frames*' + self.extension)))
@@ -569,7 +564,6 @@ class ImagerStack(GenericStack):
                                  len(self.index_ch2[0])>0])
         if len(self.dims) == 2:
             self.dims = [self.nchannels,*self.dims]
-        self.dims[0] = self.nchannels
 
         self.dtype = stack.dtype
         self.nframes = self.frames_offset[-1]

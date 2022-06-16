@@ -353,6 +353,13 @@ def save_allen_landmarks(landmarks,
 def load_allen_landmarks(filename, reference = 'dorsal_cortex'):
     if filename is None:
         filename = pjoin(annotation_dir,reference + '_landmarks.json')
+    if not os.path.exists(filename):
+        if '.wfield' in filename:
+            from .utils import _create_wfield_folder
+            _create_wfield_folder()
+        else:
+            raise(OSError('Could not find the reference file {0}.'.format(filename)))
+
     with open(filename,'r') as fd:
         import json
         lmarks = json.load(fd)
