@@ -708,12 +708,14 @@ class VideoStack(GenericStack):
     def __init__(self,filenames,
                  extensions = ['.avi','.mov','.mj2'], # this will try this extension first and then .tif, .TIFF and .TIF
                  extension = None,
-                 nchannels = None): 
+                 nchannels = None,
+                 outputdict = None): 
         '''
         Select a stack from a sequence of mov stack files
 
         '''
         self.extension = extension
+        self.outputdict = outputdict
         if type(filenames) is str:
             # check if it is a folder
             if os.path.isdir(filenames):
@@ -754,7 +756,10 @@ class VideoStack(GenericStack):
         self.current_frameidx = 0
     def _load_substack(self,fileidx,frameidx=0):
         inputdict = {'-pix_fmt':self.pix_fmt}
-        outputdict = inputdict
+        if not self.outputdict is None:
+            outputdict = self.outputdict
+        else:
+            outputdict = inputdict
         tidx = (frameidx*self.dims[0])/self.framerate
         t = time.strftime("%H:%M:%S", time.gmtime(tidx))+'{0:.3f}'.format(tidx % 1)[1:]
         self.current_stack = self.reader(self.filenames[fileidx], 
