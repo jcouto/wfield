@@ -685,10 +685,11 @@ class TiffStack(GenericStack):
         self.frames_offset = np.cumsum(offsets)
         if nchannels is None:
             nchannels = 1
-        self.frames_offset = (self.frames_offset/nchannels).astype(int)
+        self.nchannels = nchannels
+        self.frames_offset = (self.frames_offset/self.nchannels).astype(int)
         self.dims = dims[1:]
         if len(self.dims) == 2:
-            self.dims = [nchannels,*self.dims]
+            self.dims = [self.nchannels,*self.dims]
         self.dims[0] = nchannels
         self.dtype = dtype
         self.nframes = self.frames_offset[-1]
@@ -746,22 +747,30 @@ class VideoStack(GenericStack):
         self.frames_offset = np.cumsum(offsets)
         if nchannels is None:
             nchannels = 1
-        self.frames_offset = (self.frames_offset/nchannels).astype(int)
+        self.nchannels = nchannels
+        self.frames_offset = (self.frames_offset/self.nchannels).astype(int)
         self.dims = dims[1:]
-        self.dims = [nchannels,*self.dims]
+        self.dims = [self.nchannels,*self.dims]
         self.dtype = dtype
         self.nframes = self.frames_offset[-1]
         self.shape = tuple([self.nframes,*self.dims])
         self.current_fileidx = -1
         self.current_frameidx = 0
+        
     def _load_substack(self,fileidx,frameidx=0):
         inputdict = {'-pix_fmt':self.pix_fmt}
+        output_dict = {}
         if not self.outputdict is None:
             outputdict = self.outputdict
         else:
-            outputdict = inputdict
+            if not self.pix_fmt in ['yuv420p']:
+                outputdict = inputdict
+        if not -'pix_fmt' in outputdict:
+            outputdict = {'-pix_fmt':'gray'}
+                # can't handle 3 channel color right now.
         tidx = (frameidx*self.dims[0])/self.framerate
         t = time.strftime("%H:%M:%S", time.gmtime(tidx))+'{0:.3f}'.format(tidx % 1)[1:]
+        print(t)
         self.current_stack = self.reader(self.filenames[fileidx], 
                                           inputdict = {'-ss':t},
                                           outputdict=outputdict)
@@ -777,10 +786,14 @@ class VideoStack(GenericStack):
             self._load_substack(fileidx,frameidx)
         elif not frameidx == self.current_frameidx:
             self._load_substack(fileidx,frameidx)        
-        for frame in self.current_stack:
-            self.current_frameidx = frameidx+1
-            return frame.transpose([-1,0,1])
-
+        frames = []
+        self.current_frameidx = frameidx+1
+        for c in range(self.dims[0]): # get all channels
+            for frame in self.current_stack:
+                frames.append(frame.transpose([-1,0,1]).squeeze())
+                break
+        frames = np.stack(frames)
+        return frames
         
 def load_stack(foldername, nchannels=None, imager_preview = False):
     ''' 
@@ -788,14 +801,22 @@ def load_stack(foldername, nchannels=None, imager_preview = False):
     '''
     #    TODO: follow a specific order
     # order = ['binary','tiff','imager','video']
-    # First check whats in the folder
+    # load individual files
+    if not os.path.exists(foldername):
+        raise OSError("File not found: {0}.".format(foldername))
     if os.path.isfile(foldername):
-        if foldername.endswith('.bin') or foldername.endswith('.dat'): 
+        ext =  os.path.splitext(foldername)[-1]
+        if ext in ['.bin','.dat']: 
             return mmap_dat(foldername)
-    # Check binary sequence.
+        elif ext in ['.TIFF','.TIF','.tif','.tiff']:
+            return TiffStack([foldername], nchannels = nchannels)
+        elif ext in ['.avi','.mov','.mj2']:
+            return VideoStack([foldername], nchannels = nchannels)
+    # load concatenated stack on multiple files 
+    # Check binary sequences
     files = natsorted(glob(pjoin(foldername,'*.bin')))
     if len(files):
-        # these don't need channel number because it is written with the filename
+        # these don't need channel number because it is written with the filenam
         if len(files) == 1:
             return mmap_dat(files[0])
         print('Loading binary stack.')
