@@ -765,7 +765,7 @@ class VideoStack(GenericStack):
         else:
             if not self.pix_fmt in ['yuv420p']:
                 outputdict = inputdict
-        if not -'pix_fmt' in outputdict:
+        if not '-pix_fmt' in outputdict:
             outputdict = {'-pix_fmt':'gray'}
                 # can't handle 3 channel color right now.
         tidx = (frameidx*self.dims[0])/self.framerate

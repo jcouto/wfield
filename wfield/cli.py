@@ -543,7 +543,8 @@ def _hemocorrect(localdisk,fs,functional_channel = 0):
     from scipy.interpolate import interp1d
     SVT_405 = interp1d(t[np.mod(functional_channel+1,2)::2],
                        SVT[:,np.mod(functional_channel+1,2)::2],axis=1,
-                       fill_value='extrapolate')(t[0::2])
+                       fill_value='extrapolate')(
+                           t[np.mod(functional_channel,2)::2])
     SVTcorr, rcoeffs, T = hemodynamic_correction(U, SVT_470, SVT_405, fs=fs)  
 
     np.save(pjoin(localdisk,'rcoeffs.npy'),rcoeffs)
