@@ -596,7 +596,8 @@ class ImagerStack(GenericStack):
                     
 class BinaryStack(GenericStack):
     def __init__(self,filenames,
-                 extension = '.bin'): # this will try this extension first and then .dat
+                 extension = '.bin', # this will try this extension first and then .dat
+                 nchannels = None):
                 
         '''
         Select a stack from a binary file or mutliple binary files
