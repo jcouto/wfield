@@ -456,7 +456,8 @@ def _motion(localdisk,
             mode = 'ecc',
             chunksize=256,
             outdisk = None,
-            in_place = False):
+            in_place = False,
+            plot_ext = '.pdf'):
     # TODO: check if a motion corrected file is already here
     # if a single binary file try in-place
     dat_path = glob(pjoin(localdisk,'*.bin'))
@@ -486,7 +487,7 @@ def _motion(localdisk,
     np.save(pjoin(outdisk,'motion_correction_shifts.npy'),shifts)
     np.save(pjoin(outdisk,'motion_correction_rotation.npy'),rshifts)
     from .plots import plot_summary_motion_correction
-    plot_summary_motion_correction(shifts,outdisk)
+    plot_summary_motion_correction(shifts,outdisk, plot_ext=plot_ext)
     del shifts
 
 def _baseline(localdisk, nbaseline_frames, nchannels = None):
@@ -534,7 +535,7 @@ def _decompose(localdisk, k, nchannels = None):
     np.save(pjoin(localdisk,'U.npy'),U)
     np.save(pjoin(localdisk,'SVT.npy'),SVT)
 
-def _hemocorrect(localdisk,fs,functional_channel = 0):
+def _hemocorrect(localdisk,fs,functional_channel = 0, plot_ext='.pdf'):
     U = np.load(pjoin(localdisk,'U.npy'))
     SVT = np.load(pjoin(localdisk,'SVT.npy'))
     
@@ -558,7 +559,8 @@ def _hemocorrect(localdisk,fs,functional_channel = 0):
                                           T,
                                           frame_rate=fs,
                                           duration = 12,
-                                          outputdir = localdisk)            
+                                          outputdir = localdisk,
+                                          plot_ext = plot_ext)
     
 def main():
     CLIParser()
