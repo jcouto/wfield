@@ -18,7 +18,7 @@ from .utils import *
 from .viz import imshow_noborder
 
 def plot_summary_motion_correction(shifts, localdisk = None,
-                                  title = 'Pixel shift (motion correction)'):
+                                  title = 'Pixel shift (motion correction)', plot_ext='.pdf'):
     '''
     Shifts are the saved motion correction pixels shifts. 
     shifts          : A rec array with the shifts per channel.
@@ -51,7 +51,7 @@ def plot_summary_motion_correction(shifts, localdisk = None,
         folder = localdisk
         if not os.path.isdir(folder):
             os.makedirs(folder)
-        fig.savefig(pjoin(folder,'motion_correction.pdf'))
+        fig.savefig(pjoin(folder,f'motion_correction{plot_ext}'))
     return fig
 
 
@@ -62,7 +62,8 @@ def plot_summary_hemodynamics_dual_colors(rcoeffs,
                                           T,
                                           frame_rate=15.,
                                           duration = 6,
-                                          outputdir=None):
+                                          outputdir=None,
+                                          plot_ext='.pdf'):
     '''
     Approximates what was done in the hemodynamics correction.
     '''
@@ -129,5 +130,5 @@ def plot_summary_hemodynamics_dual_colors(rcoeffs,
         folder = outputdir
         if not os.path.isdir(folder):
             os.makedirs(folder)
-        fig.savefig(pjoin(folder,'hemodynamic_correction.pdf'))
+        fig.savefig(pjoin(folder,f'hemodynamic_correction{plot_ext}'))
     return fig
