@@ -760,7 +760,7 @@ class VideoStack(GenericStack):
         
     def _load_substack(self,fileidx,frameidx=0):
         inputdict = {'-pix_fmt':self.pix_fmt}
-        output_dict = {}
+        outputdict = {}
         if not self.outputdict is None:
             outputdict = self.outputdict
         else:
