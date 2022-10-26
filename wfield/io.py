@@ -711,7 +711,8 @@ class VideoStack(GenericStack):
                  extensions = ['.avi','.mov','.mj2'], # this will try this extension first and then .tif, .TIFF and .TIF
                  extension = None,
                  nchannels = None,
-                 outputdict = None): 
+                 outputdict = None,
+                 engine = 'skvideo'): 
         '''
         Select a stack from a sequence of mov stack files
 
@@ -730,8 +731,13 @@ class VideoStack(GenericStack):
         if not len(filenames):
             raise(OSError('Could not find files.'))
         super(VideoStack,self).__init__(filenames,extension)
+        self.engine = engine
+        #if self.engine == 'skvideo': 
         from skvideo.io import FFmpegReader
         self.reader = FFmpegReader
+        #else:
+        #    from cv2 import VideoCapture
+        #    self.reader = VideoCapture
         offsets = [0]
         for fname in self.filenames:
             # Parse all files in the stack
@@ -771,7 +777,8 @@ class VideoStack(GenericStack):
                 # can't handle 3 channel color right now.
         tidx = (frameidx*self.dims[0])/self.framerate
         t = time.strftime("%H:%M:%S", time.gmtime(tidx))+'{0:.3f}'.format(tidx % 1)[1:]
-        print(t)
+        print("VideoStack seek: {0}".format(t))
+        self.nframes_read = 0
         self.current_stack = self.reader(self.filenames[fileidx], 
                                           inputdict = {'-ss':t},
                                           outputdict=outputdict)
@@ -790,9 +797,18 @@ class VideoStack(GenericStack):
         frames = []
         self.current_frameidx = frameidx+1
         for c in range(self.dims[0]): # get all channels
-            for frame in self.current_stack:
-                frames.append(frame.transpose([-1,0,1]).squeeze())
+            for fdat in self.current_stack:
+                self.nframes_read += 1
+                frames.append(fdat.transpose([-1,0,1]).squeeze())
                 break
+        if not len(frames):
+            #raise(ValueError('Could not get frame {0}.'.format(self.current_frameidx)))
+            self._load_substack(fileidx,frameidx) # open again with seek
+            for c in range(self.dims[0]): # get all channels
+                for fdat in self.current_stack:
+                    self.nframes_read += 1
+                    frames.append(fdat.transpose([-1,0,1]).squeeze())
+                    break
         frames = np.stack(frames)
         return frames
         

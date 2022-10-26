@@ -60,8 +60,8 @@ def approximate_svd(dat, frames_average,
     
     idx = np.arange(0,nbinned_frames*nframes_per_bin,nframes_per_bin,
                     dtype='int')
-    if not idx[-1] == len(dat):
-        idx = np.hstack([idx,len(dat)-1])
+    if not idx[-1] == nbinned_frames*nframes_per_bin:
+        idx = np.hstack([idx,nbinned_frames*nframes_per_bin-1])
     binned = np.zeros([len(idx)-1,*dat.shape[1:]],dtype = 'float32')
     for i in tqdm(range(len(idx)-1),desc='Binning raw data'):
         if dat_path is None:
@@ -70,7 +70,7 @@ def approximate_svd(dat, frames_average,
             blk = load_binary_block((dat_path,idx[i],nframes_per_bin),
                                     shape=dims)
         avg = get_trial_baseline(idx[i],frames_average,onsets)
-        binned[i] = np.mean((blk-avg + np.float32(1e-5))
+        binned[i] = np.mean((blk-(avg + np.float32(1e-5)))
                             / (avg + np.float32(1e-5)), axis=0)
     binned = binned.reshape((-1,np.multiply(*dims[-2:])))
 
@@ -81,7 +81,7 @@ def approximate_svd(dat, frames_average,
     u,s,v = svd(cov)
     U = normalize(np.dot(u[:,:k].T, binned),norm='l2',axis=1)
     k = U.shape[0]     # in case the k was smaller (low var)
-    # if trials are defined, then use them to chunck data so that the baseline is correct
+    # if trials are defined, then use them to chunk data so that the baseline is correct
     if onsets is None:
         idx = np.arange(0,len(dat),nframes_per_chunk,dtype='int')
     else:
@@ -97,11 +97,9 @@ def approximate_svd(dat, frames_average,
             blk = load_binary_block((dat_path,idx[i],idx[i+1]-idx[i]),
                                 shape=dims).astype('float32')
         avg = get_trial_baseline(idx[i],frames_average,onsets).astype('float32')
-        blk = (blk-avg+np.float32(1e-5))/(avg+np.float32(1e-5))
+        blk = (blk-(avg+np.float32(1e-5)))/(avg+np.float32(1e-5))
         V[:,idx[i]:idx[i+1],:] = np.dot(
-            U, blk.reshape([-1,np.multiply(*dims[1:])]).T).reshape((k,-1,dat.shape[1]))  
-
-
+            U, blk.reshape([-1,np.multiply(*dims[1:])]).T).reshape((k,-1,dat.shape[1]))
     SVT = V.reshape((k,-1))
     U = U.T.reshape([*dims[-2:],-1])
     return U,SVT
