@@ -243,6 +243,7 @@ Type wfield ncaas <foldername> to open on a specific folder.
 
         '''.format(remotepath,localdisk))
         tfetch = time.time()
+        from .io import parse_imager_mj2_folder
         dat,frames_avg, trialonsets,trialinfo = parse_imager_mj2_folder(remotepath, localdisk)
         del dat
         del frames_avg
@@ -295,6 +296,7 @@ Type wfield ncaas <foldername> to open on a specific folder.
 
         '''.format(remotepath,localdisk))
         tfetch = time.time()
+        from .io import parse_imager_mj2_folder
         dat,frames_avg, trialonsets,trialinfo = parse_imager_mj2_folder(remotepath, localdisk)
         del dat
         del frames_avg
