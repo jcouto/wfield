@@ -167,15 +167,17 @@ from the GUI.
                 self.html = var
                 tt = var.split('\n')
                 values = []
-                extra = '<input class="form-control" type="text" value="'
+                extras = ['<input class="form-control" type="text" value="',
+                         '<input class="form-control disabled" type="text" value="']
                 for i,t in enumerate(tt):
-                    if extra in t:
-                        values.append(t.replace(extra,'').strip(' ').split('"')[0])
-
+                    for extra in extras:
+                        if extra in t:
+                            values.append(t.replace(extra,'').strip(' ').split('"')[0])
                 if len(values)>=4:
                     self.cred_access.setText(values[2])
                     self.cred_secret.setText(values[3])
                     self.ncaasconfig['user_group_name'] = values[-1]
+                    print(self.ncaasconfig)
                     ncaasconfig_json = json.dumps(self.ncaasconfig,
                                                   indent=4,
                                                   sort_keys=True)
@@ -1363,7 +1365,7 @@ class FilesystemView(QTreeView):
         self.setDragDropMode(QAbstractItemView.DragDrop)
         self.setDropIndicatorShown(True)
         #[self.hideColumn(i) for i in range(1,4)]
-        self.setColumnWidth(0,self.width()*.7)
+        self.setColumnWidth(0,int(self.width()*.7))
     def query_root(self):
         folder = QFileDialog().getExistingDirectory(self,"Select directory",os.path.curdir)
         self.setRootIndex(self.fs_model.setRootPath(folder))
