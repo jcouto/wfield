@@ -777,7 +777,7 @@ class VideoStack(GenericStack):
                 # can't handle 3 channel color right now.
         tidx = (frameidx*self.dims[0])/self.framerate
         t = time.strftime("%H:%M:%S", time.gmtime(tidx))+'{0:.3f}'.format(tidx % 1)[1:]
-        print("VideoStack seek: {0}".format(t))
+        # print("VideoStack seek: {0}".format(t))
         self.nframes_read = 0
         self.current_stack = self.reader(self.filenames[fileidx], 
                                           inputdict = {'-ss':t},
