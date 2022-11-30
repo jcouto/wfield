@@ -112,10 +112,14 @@ def nb_play_movie(data,interval=30,shape = None,**kwargs):
     '''
     from ipywidgets import Play,jslink,HBox,IntSlider
     from IPython.display import display
-
+        
     i = _handle_sparse(data[0],shape = shape)
+    slider = [IntSlider(0,min = 0,max = data.shape[0]-1,step = 1,description='Frame')]
+    if len(data.shape) == 4:
+        slider += [IntSlider(0,min = 0,max = data.shape[1]-1,step = 1,description='Channel')]
+        i = i[0]
     im = plt.imshow(i.squeeze(),**kwargs)
-    slider = IntSlider(0,min = 0,max = data.shape[0]-1,step = 1,description='Frame')
+
     play = Play(interval=interval,
                 value=0,
                 min=0,
@@ -123,18 +127,20 @@ def nb_play_movie(data,interval=30,shape = None,**kwargs):
                 step=1,
                 description="Press play",
                 disabled=False)
-    jslink((play, 'value'), (slider, 'value'))
-    display(HBox([play, slider]))
-    def updateImage(change):
+    jslink((play, 'value'), (slider[0], 'value'))
+    display(HBox([play]+slider))
+    def update_image(change):
         i = _handle_sparse(data[change['new']],shape=shape)
+        if len(slider) == 2:
+            i = i[slider[1].value]
         im.set_data(i.squeeze())
         plt.gcf().canvas.draw()
         plt.gcf().canvas.flush_events()
-    slider.observe(updateImage, names='value')
+    slider[0].observe(update_image, names='value')
     return dict(fig = plt.gcf(),
                 ax=plt.gca(),
                 im= im,
-                update = updateImage)
+                update = update_image)
 
 def nb_save_movie(data,filename,interval = 100,dpi = 90,shape=None,**kwargs):
     '''

@@ -181,11 +181,50 @@ def reconstruct(u,svt,dims = None):
             dims = u.shape[:2]
     return u.dot(svt).reshape((*dims,-1)).transpose(-1,0,1).squeeze()
 
+def _apply_function_single_pix(U,SVT,func):
+    return func(np.dot(U,SVT))
+
+def apply_pixelwise_svd(U,SVT,func, nchunks = 1024):
+    '''
+Map a function to every point by reconstructing the SVD 
+
+variance_map = apply_pixelwise_svd(U, SVT, partial(np.nanvar,axis=1), nchunks = 1024)
+mean_map = apply_pixelwise_svd(U, SVT, partial(np.nanmean,axis=1), nchunks = 1024)
+'''
+    dims = U.shape
+
+    U = U.reshape([-1,dims[-1]])
+    npix = U.shape[0]
+
+    idx = np.array_split(np.arange(0,npix),nchunks)
+
+    res = runpar(_apply_function_single_pix,
+                 [U[ind,:] for ind in idx],
+                 SVT=SVT,
+                 func = func)
+    res = np.hstack(res).astype('float32')
+    U = U.reshape(dims)
+    return res.reshape(dims[:2])
+
 
 class SVDStack(object):
-    def __init__(self, U, SVT, dims = None, warped = None, dtype = 'float32'):
-        self.U = U.astype('float32')
-        self.SVT = SVT.astype('float32')
+    def __init__(self, U, SVT, dims = None, warped = None, M = None, dtype = 'float32',nchunks = 1054):
+        '''
+stack = SVDStack(U,SVT)
+
+Treat a decomposed dataset like a numpy array.
+Args:
+        - U: spatial components
+        - SVT: temporal components
+        - dims: dimensions of the dataset [H,W] (for loading sparse matrices)
+        - warped: warped spatial components (e.g. aligned to a reference atlas)
+        - M: transform to warp spatial components
+        - dtype: cast to this datatype
+        - nchunks: number of chunks for pixelwise analysis
+        '''
+        self.U = U.astype(dtype)
+        self.SVT = SVT.astype(dtype)
+        self.nchunks = nchunks
         self.issparse = False
         if issparse(U):
             self.issparse = True
@@ -198,7 +237,7 @@ class SVDStack(object):
             self.Uflat = self.U.reshape(-1,self.U.shape[-1])
         self.U_warped = warped
         self.warped = False
-        self.M = None
+        self.M = M
         self.shape = [SVT.shape[1],*dims]
         self.dtype = dtype
         self.originalU = None
@@ -230,9 +269,22 @@ class SVDStack(object):
                 self.U = self.U_warped
                 self.warped = True
         self.Uflat = self.U.reshape(-1,self.U.shape[-1])
-        return
+
+    def mean(self):
+        '''Pixelwise mean of the stack '''
+        return apply_pixelwise_svd(self.U, self.SVT, partial(np.nanmean,axis=1), nchunks = self.nchunks)
+
+    def var(self):
+        '''Pixelwise variance of the stack '''
+        return apply_pixelwise_svd(self.U, self.SVT, partial(np.nanvar,axis=1), nchunks = self.nchunks)
+
+    def std(self):
+        '''Pixelwise standard deviation of the stack '''
+        return apply_pixelwise_svd(self.U, self.SVT, partial(np.nanstd,axis=1), nchunks = self.nchunks)
+    
     def __len__(self):
         return self.SVT.shape[1]
+    
     def __getitem__(self,*args):
         ndims  = len(args)
         if type(args[0]) is slice:
@@ -240,8 +292,16 @@ class SVDStack(object):
         else:
             idxz = args[0]        
         return reconstruct(self.U,self.SVT[:,idxz],dims = self.shape[1:])
+    
     def get_timecourse(self,xy):
-        # index are in xy, like what np.where(mask) returns
+        ''' Get a timecourse for the specified indices. 
+Index are in xy, like what np.where(mask) returns
+timecourse = get_timecourse([x,y])
+
+or 
+
+timecourse = np.nanmean(get_timecourse([x,y]),axis = 1)
+'''
         x = np.array(np.clip(xy[0],0,self.shape[1]),dtype=int)
         y = np.array(np.clip(xy[1],0,self.shape[2]),dtype=int)
         idx = np.ravel_multi_index((x,y),self.shape[1:])

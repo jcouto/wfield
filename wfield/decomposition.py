@@ -23,7 +23,8 @@ def approximate_svd(dat, frames_average,
                     k=200, 
                     nframes_per_bin = 30,
                     nbinned_frames = 5000,
-                    nframes_per_chunk = 500):
+                    nframes_per_chunk = 500,
+                    divide_by_average = True):
     '''
     Approximate single value decomposition by estimating U from the average movie and using it to compute S.VT.
     This is similar to what described in Steinmetz et al. 2017
@@ -70,8 +71,13 @@ def approximate_svd(dat, frames_average,
             blk = load_binary_block((dat_path,idx[i],nframes_per_bin),
                                     shape=dims)
         avg = get_trial_baseline(idx[i],frames_average,onsets)
-        binned[i] = np.mean((blk-(avg + np.float32(1e-5)))
-                            / (avg + np.float32(1e-5)), axis=0)
+        if divide_by_average:
+            binned[i] = np.mean((blk-(avg + np.float32(1e-5)))
+                                / (avg + np.float32(1e-5)), axis=0)
+        else:
+            binned[i] = np.mean(blk-(avg + np.float32(1e-5)), axis=0)
+            
+
     binned = binned.reshape((-1,np.multiply(*dims[-2:])))
 
     # Get U from the single value decomposition 
@@ -97,7 +103,9 @@ def approximate_svd(dat, frames_average,
             blk = load_binary_block((dat_path,idx[i],idx[i+1]-idx[i]),
                                 shape=dims).astype('float32')
         avg = get_trial_baseline(idx[i],frames_average,onsets).astype('float32')
-        blk = (blk-(avg+np.float32(1e-5)))/(avg+np.float32(1e-5))
+        blk = blk-(avg+np.float32(1e-5))
+        if divide_by_average:
+            blk /= avg+np.float32(1e-5)
         V[:,idx[i]:idx[i+1],:] = np.dot(
             U, blk.reshape([-1,np.multiply(*dims[1:])]).T).reshape((k,-1,dat.shape[1]))
     SVT = V.reshape((k,-1))
@@ -107,7 +115,8 @@ def approximate_svd(dat, frames_average,
 
 def svd_blockwise(dat,frames_average,
                   k = 200, block_k = 20,
-                  blocksize=120, overlap=8, 
+                  blocksize=120, overlap=8,
+                  divide_by_average = True,
                   random_state=42):
     '''
     Computes the blockwise single value decomposition for a matrix that does not fit in memory.
@@ -153,7 +162,8 @@ The chunks have all samples in time but only a fraction of pixels.
         # subtract the average (this should be made the baseline instead)
         arr = np.array(dat[:,:,i[0]:i[1],j[0]:j[1]],dtype='float32')
         arr -= frames_average[:,i[0]:i[1],j[0]:j[1]]
-        arr /= frames_average[:,i[0]:i[1],j[0]:j[1]]
+        if divide_by_average:
+            arr /= frames_average[:,i[0]:i[1],j[0]:j[1]]
         bw,bh = arr.shape[-2:]
         arr = arr.reshape([-1,np.multiply(*arr.shape[-2:])])
         u, s, vt = randomized_svd(arr.T,
@@ -178,9 +188,9 @@ def _complete_svd_from_blocks(block_U,block_SVT,blocks,k,dims,
         n_iter=n_iter,
         power_iteration_normalizer ='QR',
         random_state=random_state)
-    S = s;
+    S = s
     SVT = np.dot(np.diag(S),vt)
-    # Map the blockwise spatial components compontents to the second SVD 
+    # Map the blockwise spatial components components to the second SVD 
     U = np.dot(assemble_blockwise_spatial(block_U,blocks,dims),u)
     return U,SVT,S
 
