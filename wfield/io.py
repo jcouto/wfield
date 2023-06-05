@@ -214,6 +214,9 @@ def _imager_parse_file(fname, version = 2):
     f,ext = os.path.splitext(fname)
     if ext == '.mj2':
         stack = read_mj2_frames(fname)
+    elif ext == '.tif':
+        from tifffile import imread
+        stack = imread(fname)
     else:
         stack = mmap_dat(fname)
     
@@ -391,6 +394,8 @@ class GenericStack():
         '''
         Finds out in which file some frames are.
         '''
+        if frame == -1:
+            frame = len(self)-1
         fileidx = np.where(self.frames_offset <= frame)[0][-1]
         return fileidx,frame - self.frames_offset[fileidx]
     
@@ -530,8 +535,12 @@ class ImagerStack(GenericStack):
                     if len(filenames):
                         self.fileformat = 'mj2'
                         self.rotate_array = False # This is not needed for these files...
-                    else:
-                        raise('Could not find files.')
+                if not len(filenames):
+                    self.extension = '.tif'
+                    self.fileformat = 'tif'                    
+                    filenames = natsorted(glob(pjoin(dirname,'Frames*' + self.extension))) # The new version if the Imager can record tiffs... to make things easier :)
+                else:
+                    raise(OSError('Could not find files.'))
         super(ImagerStack,self).__init__(filenames,extension)
         
         self.index_ch1 = []
@@ -551,6 +560,10 @@ class ImagerStack(GenericStack):
         # get the dims from the first binary file
         if self.fileformat == 'mj2':
             stack = read_mj2_frames(f)
+        elif self.fileformat == 'tif':
+            from tifffile import imread, TiffFile
+            self.imread = imread
+            stack = self.imread(f)
         else:
             stack = mmap_dat(f)
         if self.rotate_array: # fix imager rotation
@@ -572,6 +585,8 @@ class ImagerStack(GenericStack):
     def _load_substack(self,fileidx,channel = None):
         if self.fileformat == 'mj2':
             tmp = read_mj2_frames(self.filenames[fileidx])
+        elif self.fileformat == 'tif':
+            tmp = self.imread(self.filenames[fileidx])
         else:
             tmp = load_dat(self.filenames[fileidx])
         if self.rotate_array: # fix imager rotation
@@ -838,15 +853,15 @@ def load_stack(foldername, nchannels=None, imager_preview = False):
             return mmap_dat(files[0])
         print('Loading binary stack.')
         return BinaryStack(files) 
+    # check imager
+    files = natsorted(glob(pjoin(foldername,'Analog*.dat')))
+    if len(files):
+        return ImagerStack(foldername, imager_preview = imager_preview)
     # check tiff sequence
     for ext in ['.TIFF','.TIF','.tif','.tiff']:
         files = natsorted(glob(pjoin(foldername,'*'+ext)))
         if len(files):
             return TiffStack(files, nchannels = nchannels)
-    # check imager
-    files = natsorted(glob(pjoin(foldername,'Analog*.dat')))
-    if len(files):
-        return ImagerStack(foldername, imager_preview = imager_preview)
     # check for avi and mov
     for ext in ['.avi','.mov','.mj2']:
         files = natsorted(glob(pjoin(foldername,'*'+ext)))
