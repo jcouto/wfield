@@ -18,3 +18,4 @@ pyqtgraph
 pyqtwebengine
 boto3
 pyyaml
+requests

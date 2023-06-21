@@ -53,7 +53,11 @@ def _create_wfield_folder():
             if os.path.isfile(f):
                 copyfile(f,f.replace(refpath,wfield_dir))
     else:
-        import requests
+        try:
+            import requests
+        except Exception as err:
+            print(err)
+            raise(OSError('Could not import the requests package, please install it "pip install requests"'))
         from shutil import copyfileobj
         webpath = 'https://raw.githubusercontent.com/jcouto/wfield/master/references/{0}'
         files = ['dorsal_cortex_ccf_labels.json',
@@ -85,6 +89,8 @@ def estimate_similarity_transform(ref,points):
     cor = np.vstack([match['x'],match['y']]).T
     
     M = estimate_similarity_transform(ref, cor)
+    
+    Joao Couto - wfield, 2020
     '''
     from skimage.transform import SimilarityTransform
     M = SimilarityTransform()
@@ -95,6 +101,8 @@ def im_adapt_hist(im,clip_limit = .1, grid_size=(8,8)):
     ''' Adaptative histogram of image
 
         eqim = im_adapt_hist(im,.1)
+
+    Joao Couto - wfield, 2020
     '''
     clahe = cv2.createCLAHE(clipLimit=clip_limit, tileGridSize=grid_size)
     return clahe.apply(im.squeeze())
@@ -104,6 +112,7 @@ def im_apply_transform(im,M,dims = None):
     Applies an affine transform M to an image.
     nim = im_apply_transform(im,M)
 
+    Joao Couto - wfield, 2020
     '''
     if issparse(im):
         # then reshape before
@@ -127,17 +136,51 @@ def im_apply_transform(im,M,dims = None):
                     preserve_range=True)
 
 def lowpass(X, w = 7.5, fs = 30.):
+    '''
+    Apply a lowpass filter to data.
+        - w is the filter frequency
+        - fs is the sampling rate of the signal.
+
+    Usage:
+    
+    Xfiltered = lowpass(X, w = 7.5, fs = 30.)
+
+    Joao Couto - 2020 
+    '''
     from scipy.signal import butter, filtfilt
     b, a = butter(2,w/(fs/2.), btype='lowpass');
     return filtfilt(b, a, X, padlen = 50)
 
 def highpass(X, w = 3., fs = 30.):
+    '''
+    Apply a highpass filter to data.
+        - w is the filter frequency
+        - fs is the sampling rate of the signal.
+
+    Usage:
+    
+    Xfiltered = highpass(X, w = 3., fs = 30.)
+
+    Joao Couto - wfield, 2020
+    '''
     from scipy.signal import butter, filtfilt
     b, a = butter(2,w/(fs/2.), btype='highpass');
     return filtfilt(b, a, X, padlen = 50)
 
-
 def analog_ttl_to_onsets(dat,time=None, mfilt=3):
+    '''
+    Extract onsets from an analog TTL signal.
+
+    Use this to get the onsets and offsets of a digital signal.
+      - dat a 1d signal with the TTL
+      - time (None) will return in samples if None or sec if a vector of frame times
+      - mfilt (3) 
+ 
+    Usage:
+        onsets,offsets = analog_ttl_to_onsets(dat)
+
+     Joao Couto - wfield, 2020
+    '''
     if time is None:
         time = np.arange(len(dat))
     if mfilt:
@@ -151,6 +194,8 @@ def analog_ttl_to_onsets(dat,time=None, mfilt=3):
 def chunk_indices(nframes, chunksize = 512, min_chunk_size = 16):
     '''
     Gets chunk indices for iterating over an array in evenly sized chunks
+
+    Joao Couto - wfield, 2020
     '''
     chunks = np.arange(0,nframes,chunksize,dtype = int)
     if (nframes - chunks[-1]) < min_chunk_size:
@@ -163,6 +208,12 @@ def chunk_indices(nframes, chunksize = 512, min_chunk_size = 16):
 def make_overlapping_blocks(dims, blocksize = 128, overlap = 16):
     '''
     Creates overlapping block indices to span an image
+    Use this to split an image and iterate over different blocks.
+
+    Usage:
+        blocks = make_overlapping_blocks(dims, blocksize = 128, overlap = 16)
+
+    Joao Couto - wfield, 2020
     '''
     
     w,h=dims
@@ -173,24 +224,44 @@ def make_overlapping_blocks(dims, blocksize = 128, overlap = 16):
     return blocks
 
 def reconstruct(u,svt,dims = None):
+    '''
+    Reconstruct a decomposed signal (e.g. decomposed with SVD for example).
+
+    Can also reconstruct sparse arrays, use dims when reconstructing sparse.
+
+    Usage:
+        res = reconstruct(u,svt,dims = None)
+    
+    Joao Couto - wfield, 2020
+    '''
     if issparse(u):
         if dims is None:
             raise ValueError('Supply dims = [H,W] when using sparse arrays')
     else:
         if dims is None:
             dims = u.shape[:2]
+            
     return u.dot(svt).reshape((*dims,-1)).transpose(-1,0,1).squeeze()
 
 def _apply_function_single_pix(U,SVT,func):
+    '''
+    Apply a function to a single pixel (helper to run in parallel)
+
+    Joao Couto - wfield, 2021
+    '''
     return func(np.dot(U,SVT))
 
 def apply_pixelwise_svd(U,SVT,func, nchunks = 1024):
     '''
-Map a function to every point by reconstructing the SVD 
+    Map a function to every pixel by reconstructing the SVD 
 
-variance_map = apply_pixelwise_svd(U, SVT, partial(np.nanvar,axis=1), nchunks = 1024)
-mean_map = apply_pixelwise_svd(U, SVT, partial(np.nanmean,axis=1), nchunks = 1024)
-'''
+    Usage:
+        variance_map = apply_pixelwise_svd(U, SVT, partial(np.nanvar,axis=1), nchunks = 1024)
+        
+        mean_map = apply_pixelwise_svd(U, SVT, partial(np.nanmean,axis=1), nchunks = 1024)
+
+    Joao Couto - wfield, 2021
+    '''
     dims = U.shape
 
     U = U.reshape([-1,dims[-1]])
@@ -221,6 +292,8 @@ Args:
         - M: transform to warp spatial components
         - dtype: cast to this datatype
         - nchunks: number of chunks for pixelwise analysis
+
+        Joao Couto - wfield, 2020
         '''
         self.U = U.astype(dtype)
         self.SVT = SVT.astype(dtype)
@@ -320,10 +393,13 @@ def get_trial_baseline(idx,frames_average,onsets):
 def point_find_ccf_region(point,ccf_regions,sides = ['left','right'],approx_value=-0.01):
     '''
     Find the area where a point is contained from ccf_regions contours.
-    Example:
+    
+    Usage:
+    
     point = [6.5,3.0]
     region,side,index = point_find_ccf_region(point,refregions)
     
+    Joao Couto - wfield, 2020
     '''
     region = None
     idx = None
@@ -343,12 +419,15 @@ def point_find_ccf_region(point,ccf_regions,sides = ['left','right'],approx_valu
 
 def contour_to_im(x,y,dims,extent=None,n_up_samples = 1000):
     '''
-    im = contour_to_im(x,y,dims,extent=None,n_up_samples = 1000)
-    
     Imprint a contour on an image.
+        see also: contour_to_mask
+
+    Usage:
+     
+        im = contour_to_im(x,y,dims,extent=None,n_up_samples = 1000)
     
-    see also: contour_to_mask
-'''
+    Joao Couto - wfield, 2020
+    '''
     if extent is None:
         extent = [0,dims[0],0,dims[1]]
     
@@ -374,10 +453,12 @@ def contour_to_im(x,y,dims,extent=None,n_up_samples = 1000):
 
 def contour_to_mask(x,y,dims,extent = None,n_up_samples = 2000):
     '''
+    Create a mask from a contour
+    
+    Usage:    
         H = contour_to_mask(x,y,dims,extent = None,n_up_samples = 2000)
     
-        Create a mask from a contour
-        
+    Joao Couto - wfield, 2020        
     '''
 
     H = contour_to_im(x=x, y=y, 
@@ -415,6 +496,8 @@ def runpar(f,X,nprocesses = None,**kwargs):
                  data,              # data to be passed to the function
                  nprocesses = None, # defaults to the number of cores on the machine
                  **kwargs)          # additional arguments passed to the function (dictionary)
+
+    Joao Couto - wfield, 2020
 
     '''
     if nprocesses is None:
