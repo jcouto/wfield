@@ -31,6 +31,9 @@ from multiprocessing import Pool, cpu_count
 from functools import partial
 from scipy.interpolate import interp1d
 from scipy.sparse import load_npz, issparse,csr_matrix
+from scipy.ndimage import binary_fill_holes,binary_erosion
+from skimage.filters import gaussian 
+from skimage.morphology import remove_small_objects
 
 print = partial(print, flush=True)
 
@@ -507,6 +510,34 @@ def runpar(f,X,nprocesses = None,**kwargs):
     pool.join()
     return res
 
+
+def get_std_mask(ch1data, nframes = 1000, filter_sigma = 10,threshold = 60,minsize = 5000):
+    '''
+    Returns a mask based on the standard deviation of a fraction of a movie.
+
+    - ch1data: N,W,H array
+    - nframes: default 1000, number of frames to downsample
+    - filter_sigma: default 10, size of the gaussian filter applied after std
+    - threshold : default 60, threshold in percentile units
+    - minsize: default 5000, minimum size of objects used in the mask
+
+Usage:
+    tt = get_std_mask(dat[:,0],threshold=60)
+
+Joao Couto - wfield 2023
+    '''
+    selidx = np.sort(np.random.choice(np.arange(ch1data.shape[0]),size = nframes, replace=False))
+    stdproj = np.std(ch1data[selidx],axis=0).squeeze()
+
+    tt = gaussian(stdproj, sigma=filter_sigma)
+    tt = tt>np.percentile(tt,threshold)
+    tt = binary_erosion(tt)
+    tt = remove_small_objects(tt,minsize)
+    tt = binary_fill_holes(tt)
+    mask = tt.copy().astype(np.float32)
+    # mask = gaussian(mask,sigma = 30)
+    # mask[tt==1] = 1
+    return mask
 
 def zipdir(path, outputpath):
     import zipfile

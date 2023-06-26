@@ -134,8 +134,9 @@ def nb_play_movie(data,interval=30,shape = None,**kwargs):
         if len(slider) == 2:
             i = i[slider[1].value]
         im.set_data(i.squeeze())
-        plt.gcf().canvas.draw()
-        plt.gcf().canvas.flush_events()
+        #plt.gcf().canvas.draw()
+        #plt.gcf().canvas.flush_events()
+        return plt.gcf()
     slider[0].observe(update_image, names='value')
     return dict(fig = plt.gcf(),
                 ax=plt.gca(),

@@ -53,8 +53,8 @@ elif (int(cv2ver[0]) == 4) and (int(cv2ver[1]) <= 1):
                                     criteria,
                                     inputMask=inputMask)
 def registration_ecc(frame,template,
-                     niter = 100,
-                     eps0 = 1e-3,
+                     niter = 5000,
+                     eps0 = 1e-10,
                      warp_mode = cv2.MOTION_EUCLIDEAN,
                      prepare = True,
                      gaussian_filter = 1,
@@ -93,9 +93,10 @@ def _xy_rot_from_affine(affines):
     return xy,rot
 
 def registration_upsample(frame,template):
+
     h,w = frame.shape
     dst = frame.astype('float32')
-    (xs, ys), sf = cv2.phaseCorrelate(dst,template.astype('float32'))    
+    (xs, ys), sf = cv2.phaseCorrelate(template.astype('float32'),dst)    
     M = np.float32([[1,0,xs],[0,1,ys]])
     dst = cv2.warpAffine(dst,M,(w, h))
     return (xs,ys),(np.clip(dst,0,(2**16-1))).astype('uint16')
@@ -140,7 +141,7 @@ def motion_correct(dat, out = None,
                    refs = None,
                    chunksize=512,
                    nreference = 60,
-                   mode = 'ecc',
+                   mode = '2d',
                    apply_shifts=True):
     '''
     Motion correction by translation.

@@ -24,6 +24,7 @@ import argparse
 import subprocess
 import shlex
 import platform
+from shutil import copy
 from multiprocessing import set_start_method
 
 class CLIParser(object):
@@ -43,6 +44,7 @@ The commands are:
     motion              Registers stack
     decompose           Performs single value decomposition
     correct             Performs hemodynamic correction on dual channel data
+    locanmf             Performs locaNMF decomposition on a pre-processed dataset
 
     imager              
     imager_preprocess   Preprocesses data recorded with the WidefieldImager
@@ -270,10 +272,13 @@ Type wfield ncaas <foldername> to open on a specific folder.
                             help='Number of frames to compute the  baseline')
         parser.add_argument('--fs', action='store',default=30.,type=np.float32,
                             help='Sampling frequency of an individual channel')
-        parser.add_argument('--mode', choices=('ecc','2d'),default='ecc',
+        parser.add_argument('--mode', choices=('ecc','2d'),default='2d',
                             help = 'Algorithm for  motion correction ')
         parser.add_argument('--chunksize', default=256,
                             help = 'Frames per batch ') 
+        parser.add_argument('--std-mask-threshold', action='store',
+                            default=0, type=float,
+                            help='Percentile threshold for the std mask applied before decomposing U.')        
 
 
         args = parser.parse_args(sys.argv[2:])
@@ -313,7 +318,7 @@ Type wfield ncaas <foldername> to open on a specific folder.
         # COMPUTE AVERAGE FOR BASELINE
         _baseline(localdisk,args.nbaseline_frames)
         # DATA REDUCTION
-        _decompose(localdisk, k=args.k)
+        _decompose(localdisk, k=args.k,std_mask_threshold=args.std_mask_threshold)
         # HEMODYNAMIC CORRECTION
         _hemocorrect(localdisk,fs=args.fs)
         tproc = (time.time() - tproc)/60.
@@ -321,6 +326,7 @@ Type wfield ncaas <foldername> to open on a specific folder.
         exit(0)
 
     def preprocess(self):
+
         parser = argparse.ArgumentParser(
             description='Performs preprocessing of widefield data recorded from a binary file',
             usage = '''
@@ -328,9 +334,7 @@ Type wfield ncaas <foldername> to open on a specific folder.
 
      The folder must contain a binary file; the end of the filename must be _NCHANNELS_H_W_DTYPE.dat
      
-           Example name: frames_2_540_640_uint16.dat
-    '''
-)
+           Example name: frames_2_540_640_uint16.dat''')
         parser.add_argument('foldername', action='store',
                             default=None, type=str,
                             help='Folder that has the binary file (FAST DISK).')
@@ -351,10 +355,13 @@ Type wfield ncaas <foldername> to open on a specific folder.
                             help='Number of frames to compute the  baseline')
         parser.add_argument('--fs', action='store',default=30.,type=np.float32,
                             help='Sampling frequency of an individual channel')
-        parser.add_argument('--mode', choices=('ecc','2d'),default='ecc',
+        parser.add_argument('--mode', choices=('ecc','2d'),default='2d',
                             help = 'Algorithm for  motion correction ') 
         parser.add_argument('--chunksize', default=256,
                             help = 'Frames per batch ') 
+        parser.add_argument('--std-mask-threshold', action='store',
+                            default=0, type=float,
+                            help='Percentile threshold for the std mask applied before decomposing U.')        
 
         
         args = parser.parse_args(sys.argv[2:])
@@ -372,6 +379,10 @@ Type wfield ncaas <foldername> to open on a specific folder.
             os.makedirs(localdisk)
             print('Created {0}'.format(localdisk))
 
+        lmarks = glob(pjoin(datadisk,'*landmarks*.json'))
+        if len(lmarks):
+            print('Found a landmarks file, copying to the results folder..')
+            copy(lmarks[0],localdisk)
         tproc = time.time()
         # MOTION CORRECTION
         _motion(datadisk,outdisk = localdisk,
@@ -381,7 +392,7 @@ Type wfield ncaas <foldername> to open on a specific folder.
         # COMPUTE AVERAGE FOR BASELINE
         _baseline(localdisk,args.nbaseline_frames, nchannels = args.nchannels)
         # DATA REDUCTION
-        _decompose(localdisk, k=args.k, nchannels = args.nchannels)
+        _decompose(localdisk, k = args.k, nchannels = args.nchannels, std_mask_threshold = args.std_mask_threshold)
         # HEMODYNAMIC CORRECTION
         # check if it is 2 channel
         dat = load_stack(localdisk, nchannels = args.nchannels)
@@ -400,12 +411,10 @@ Type wfield ncaas <foldername> to open on a specific folder.
                             default=None, type=str,
                             help='Folder with dat file.')
         parser.add_argument('--nchannels', action='store', default=None, type=int)
-        parser.add_argument('--mode', choices=('ecc','2d'),default='ecc',
+        parser.add_argument('--mode', choices=('ecc','2d'),default='2d',
                             help = 'Algorithm for  motion correction ') 
         parser.add_argument('--chunksize', default=256,
                             help = 'Frames per batch ') 
-        parser.add_argument('--mode', choices=('ecc','2d'),default='ecc',
-                            help = 'Algorithm for  motion correction ') 
 
         args = parser.parse_args(sys.argv[2:])
         localdisk = args.foldername
@@ -429,11 +438,14 @@ Type wfield ncaas <foldername> to open on a specific folder.
         parser.add_argument('--nbaseline-frames', action='store',
                             default=30, type=int,
                             help='Number of frames to compute the  baseline')        
+        parser.add_argument('--std-mask-threshold', action='store',
+                            default=0, type=float,
+                            help='Percentile threshold for the std mask applied before decomposing U.')        
         args = parser.parse_args(sys.argv[2:])
         localdisk = args.foldername
         if not args.no_baseline:
             _baseline(localdisk,args.nbaseline_frames, nchannels = args.nchannels)
-        _decompose(localdisk,k=args.k, nchannels = args.nchannels)
+        _decompose(localdisk,k=args.k, nchannels = args.nchannels,std_mask_threshold=args.std_mask_threshold)
 
     def correct(self):
         parser = argparse.ArgumentParser(
@@ -523,7 +535,7 @@ def _baseline(localdisk, nbaseline_frames, nchannels = None):
     del dat
     del frames_average_trials
 
-def _decompose(localdisk, k, nchannels = None):
+def _decompose(localdisk, k, nchannels = None, std_mask_threshold = 0, functional_channel=0, mask_from_atlas = True):
     dat = load_stack(localdisk,nchannels = nchannels)
 
     frames_average = np.load(pjoin(localdisk,'frames_average.npy'))
@@ -533,7 +545,19 @@ def _decompose(localdisk, k, nchannels = None):
 
     else:
         onsets = None
-    U,SVT = approximate_svd(dat, frames_average, onsets = onsets, k = k)
+    mask = None
+    if mask_from_atlas: # get the mask from the landmarks file
+        lmarks = glob(pjoin(localdisk,'*landmarks*.json'))
+        if len(lmarks):
+            from .allen import atlas_from_landmarks_file
+            _, _, mask = atlas_from_landmarks_file(lmarks[0],do_transform=True)
+            print('Using the mask from the landmarks file for decomposition.')
+    if mask is None: # get the mask from the std of the data?
+        if std_mask_threshold > 0: # then compute the stdmask
+            print("Using the standard deviation of the functional channel to compute the mask.")
+            mask  = get_std_mask(dat[:,functional_channel],threshold=std_mask_threshold)
+    
+    U,SVT = approximate_svd(dat, frames_average, onsets = onsets, mask = mask, k = k)
     np.save(pjoin(localdisk,'U.npy'),U)
     np.save(pjoin(localdisk,'SVT.npy'),SVT)
 

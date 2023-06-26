@@ -4,7 +4,7 @@ matplotlib
 pims
 pandas
 tqdm
-opencv-python
+opencv-python-headless
 tifffile
 pyqt5
 pyqtgraph

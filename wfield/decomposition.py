@@ -15,12 +15,14 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from .utils import *
+from .imutils import mask_to_3d
 from .io import load_binary_block
 from numpy.linalg import svd
 
 def approximate_svd(dat, frames_average,
                     onsets = None,
                     k=200, 
+                    mask = None,
                     nframes_per_bin = 30,
                     nbinned_frames = 5000,
                     nframes_per_chunk = 500,
@@ -35,11 +37,12 @@ def approximate_svd(dat, frames_average,
     Compute it after using the SVD components.
 
     Inputs:
-        dat (array)             : (NFRAMES, NCHANNEL, H, W) 
-        k (int)                 : number of components to estimate (200)
-        nframes_per_bin (int)   : number of frames to estimate the initial U components
-        nbinned_frames (int)    : maximum number frames to estimate tje initial U components
-        nframes_per_chunk (int) : window size to load to memory each time.   
+        dat (array)              : (NFRAMES, NCHANNEL, H, W) 
+        k (int)                  : number of components to estimate (200)
+        nframes_per_bin (int)    : number of frames to estimate the initial U components
+        nbinned_frames (int)     : maximum number frames to estimate tje initial U components
+        nframes_per_chunk (int)  : window size to load to memory each time.
+        divide_by_average (bool) : True   
     Returns:
         U   (array)             : 
         SVT (array)             : 
@@ -76,7 +79,10 @@ def approximate_svd(dat, frames_average,
                                 / (avg + np.float32(1e-5)), axis=0)
         else:
             binned[i] = np.mean(blk-(avg + np.float32(1e-5)), axis=0)
-            
+        if not mask is None:
+            b = binned[i]
+            mmask = mask_to_3d(mask,[2,*mask.shape])
+            b[mmask == 0] = 0
 
     binned = binned.reshape((-1,np.multiply(*dims[-2:])))
 
