@@ -19,7 +19,7 @@ def compute_locaNMF(U,V,atlas,brain_mask,
                     minrank = 1, # rank = how many components per brain region.
                     maxrank = 10, #Set maxrank to around 10 for regular dataset.
                     min_pixels = 100, # minimum number of pixels in Allen map for it to be considered a brain region
-                    loc_thresh = 70, # Localization threshold, i.e. percentage of area restricted to be inside the 'Allen boundary'
+                    loc_thresh = 70, # Localization threshold, i.e. percentage of area restricted to be inside the 'atlas boundary'
                     r2_thresh = 0.99, # Fraction of variance in the data to capture with LocaNMF
                     nonnegative_temporal = False, # Do you want nonnegative temporal components? The data itself should also be nonnegative in this case.
                     device = 'cuda'):
@@ -27,7 +27,9 @@ def compute_locaNMF(U,V,atlas,brain_mask,
 This function runs locaNMF from wfield analysis outputs.
 It uses the original package for LocaNMF, written by Ian Kinsella and Shreya Saxena
 Reference: 
-    
+    Saxena S, Kinsella I, Musall S, Kim SH, Meszaros J, et al. (2020) 
+    Localized semi-nonnegative matrix factorization (LocaNMF) of widefield calcium imaging data. 
+    PLOS Computational Biology 16(4): e1007791. https://doi.org/10.1371/journal.pcbi.1007791
 
 Usage:
     
@@ -38,7 +40,8 @@ Usage:
                     loc_thresh = 70, 
                     r2_thresh = 0.99,
                     device = 'cuda')
-
+    
+    Joao Couto - wfield, 2023
     '''
     try:
         from locanmf import LocaNMF
