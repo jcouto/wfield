@@ -268,17 +268,19 @@ class ImageWidget(QWidget):
         self.pl.getViewBox().setAspectLocked(True)
         
         self.im = pg.ImageItem()
-        self.win.setCentralWidget(self.pl)
+        #self.win.setCentralWidget(self.pl)
         self.pl.addItem(self.im)
         
         self.pl.getAxis('bottom').setPen(axiscolor)
         self.pl.getAxis('left').setPen(axiscolor)
         self.pl.setClipToView(True)
         
-    def _add_hist(self):
+    def _add_hist(self,pl = None):
         self.hist = pg.HistogramLUTItem()
         self.hist.setImageItem(self.im)
-        self.pl.addItem(self.hist)
+        if pl is None:
+            pl = self.pl
+        self.win.addItem(self.hist)
             
 class CustomDragPoints(pg.GraphItem):
     def __init__(self):
@@ -420,6 +422,8 @@ class RawDisplayWidget(ImageWidget):
         self.wchan.setMinimum(0)
         self.wchan.setSingleStep(1)
         self.wchanlabel = QLabel('Channel {0:d}:'.format(self.wchan.value()))
+
+        
         w1 = QWidget()
         l1 = QHBoxLayout()
         w1.setLayout(l1)
@@ -436,6 +440,13 @@ class RawDisplayWidget(ImageWidget):
         self.wallen = QCheckBox()
         allenl.addRow(QLabel('Plot areas:'),self.wallen)
         l1.addWidget(allenframe)
+
+        maskbox = QGroupBox(self)
+        maskbox.setTitle('Pixel mask')
+        masklay = QFormLayout(maskbox)
+        self.maskcheck = QCheckBox()
+        masklay.addRow(QLabel('Edit Pixel Mask:'),self.maskcheck)
+        l1.addWidget(maskbox)
         slayout.addRow(w1)
         self.layout.addWidget(widget)
         
@@ -526,8 +537,17 @@ class SVDDisplayWidget(ImageWidget):
         self.allen_show_areas = False
         self.set_image(self.iframe)
         self.win.scene().sigMouseClicked.connect(self.mouseMoved)    
-        self.hist.setLevels(*np.percentile(tmp,[1,99]))
-
+        self.hist.setLevels(-0.12,0.12)
+        self.hist.setHistogramRange(-.3, .3, padding=0)
+        pos = np.array([0., 1., 0.5, 0.25, 0.75])
+        color = np.array([[0,255,255,255],
+                          [255,255,0,255],
+                          [0,0,0,255],
+                          (0, 0, 255, 255),
+                          (255, 0, 0, 255)], dtype=np.ubyte)
+        cmap = pg.ColorMap(pos, color)
+        #lut = cmap.getLookupTable(0.0, 1.0, 256)
+        self.hist.gradient.setColorMap(cmap)
     def _init_ui(self):
         w = QWidget()
         l = QHBoxLayout()
@@ -655,7 +675,7 @@ class SVDDisplayWidget(ImageWidget):
 class SVDViewer(QMainWindow):
     def __init__(self,stack, folder = None, raw = None, reference = 'dorsal_cortex',
                  trial_onsets = None,
-                 start_correlation = False):
+                 start_correlation = True):
         super(SVDViewer,self).__init__()
         self.setWindowTitle('wfield')
         self.folder = folder
@@ -748,7 +768,7 @@ class RawViewer(QMainWindow):
         self.setDockOptions(QMainWindow.AllowTabbedDocks |
                             QMainWindow.AllowNestedDocks |
                             QMainWindow.AnimatedDocks)
-        self.roiwidget = ROIPlotWidget(self.raw)  
+        self.roiwidget = ROIPlotWidget(self.raw) 
         if not self.raw is None:
             self.allenparwidget = AllenMatchTable(landmarks_file = landmarks_file,
                                                   reference = self.referencename,
@@ -756,7 +776,7 @@ class RawViewer(QMainWindow):
             self.rawwidget = RawDisplayWidget(raw,
                                               parent = self,
                                               reference = self.referencename)
-            
+
         # Raw data
         if not raw is None:
             self.rawtab = QDockWidget('Raw data')
