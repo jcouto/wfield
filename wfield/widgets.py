@@ -343,11 +343,11 @@ class CustomDragPoints(pg.GraphItem):
         self.setData(points = self.points)
         ev.accept()
         
-        #ind = self._findind()
-
-        
 class RawDisplayWidget(ImageWidget):
-    def __init__(self, stack,parent=None,pointsize = 10,
+    def __init__(self, stack,
+                 mask = None,
+                 parent=None,
+                 pointsize = 10,
                  reference = 'dorsal_cortex'):
         super(RawDisplayWidget,self).__init__()
         self.parent = parent
@@ -357,6 +357,16 @@ class RawDisplayWidget(ImageWidget):
             self.roiwidget = self.parent.roiwidget
         self.regions_plot = []
         self.iframe = np.clip(100,0,len(self.stack))
+        self.interactive_mode = 'roi'
+        if mask is None:
+            self.mask = np.zeros(stack.shape[-2:])
+        else:
+            self.mask = mask
+        self.im_mask = pg.ImageItem(opacity=0)
+        #self.win.setCentralWidget(self.pl)
+        self.pl.addItem(self.im_mask)
+        self.im_mask.setImage(self.mask)
+        
         self.ichan  = 0
         self.warp_im = False
         tmp = self.stack[:np.clip(100,0,len(self.stack))]
@@ -367,8 +377,9 @@ class RawDisplayWidget(ImageWidget):
         self.set_image(self.iframe)
         self.hist.setLevels(*np.percentile(tmp,[1,99]))
 
-        self.win.scene().sigMouseClicked.connect(self.mouseMoved) # not ready yet    
-        
+        self.win.scene().sigMouseClicked.connect(self.mouseClicked)
+        self.win.scene().sigMouseMoved.connect(self.mouseMoved)    
+
         if hasattr(self.parent,'allenparwidget'):
             self.allenwidget = self.parent.allenparwidget
             self.points = CustomDragPoints()
@@ -422,7 +433,6 @@ class RawDisplayWidget(ImageWidget):
         self.wchan.setMinimum(0)
         self.wchan.setSingleStep(1)
         self.wchanlabel = QLabel('Channel {0:d}:'.format(self.wchan.value()))
-
         
         w1 = QWidget()
         l1 = QHBoxLayout()
@@ -446,6 +456,15 @@ class RawDisplayWidget(ImageWidget):
         masklay = QFormLayout(maskbox)
         self.maskcheck = QCheckBox()
         masklay.addRow(QLabel('Edit Pixel Mask:'),self.maskcheck)
+
+        def umask(val):
+            if val:
+                self.interactive_mode = 'mask'
+                self.im_mask.setOpacity(0.3)
+            else:
+                self.interactive_mode = 'roi'
+                self.im_mask.setOpacity(0)                
+        self.maskcheck.stateChanged.connect(umask)
         l1.addWidget(maskbox)
         slayout.addRow(w1)
         self.layout.addWidget(widget)
@@ -453,6 +472,7 @@ class RawDisplayWidget(ImageWidget):
         def uhist(val):
             self.adaptative_histogram = val
             self.set_image()
+
         def uwarp(val):
             self.warp_im = val
             self.set_image()
@@ -465,6 +485,7 @@ class RawDisplayWidget(ImageWidget):
                 self.allenplot.update()
             else:
                 self.allenplot.remove()
+                
         def uframe(val):
             i = self.wframe.value()
             self.wframelabel.setText('Frame {0:d}:'.format(i))
@@ -481,7 +502,7 @@ class RawDisplayWidget(ImageWidget):
         self.wchan.valueChanged.connect(uchan)
         self.wallen.stateChanged.connect(uallen)
 
-    def set_image(self,i=None,):
+    def set_image(self,i=None):
         if not i is None:
             self.iframe = i
         img = self.stack[np.clip(self.iframe,0,self.stack.shape[0]-1),self.ichan]
@@ -507,18 +528,36 @@ class RawDisplayWidget(ImageWidget):
         self.roiwidget.plots[i].setData(x = time,
                                         y = t+self.roiwidget.offset*i)#,connect=self.trial_mask)
 
-    def mouseMoved(self,pos):
+    def mouseClicked(self,pos):
         modifiers = QApplication.keyboardModifiers()
         pos = self.im.mapFromScene(pos.scenePos())
-        if (bool(modifiers == Qt.ControlModifier) and
-            hasattr(self,'roiwidget')):            
-            updatefunc = partial(self.on_roi_update, i=len(self.roiwidget.rois))
-            self.parent.roiwidget.add_roi((pos.x(),pos.y()),
-                                          roitarget = self.im,
-                                          roiscene=self.pl,
-                                          ROI = True,
-                                          updatefunc = updatefunc)
-        
+        if self.interactive_mode == 'roi':
+            if (bool(modifiers == Qt.ControlModifier) and
+                hasattr(self,'roiwidget')):            
+                updatefunc = partial(self.on_roi_update, i=len(self.roiwidget.rois))
+                self.parent.roiwidget.add_roi((pos.x(),pos.y()),
+                                              roitarget = self.im,
+                                              roiscene=self.pl,
+                                              ROI = True,
+                                              updatefunc = updatefunc)
+    def mouseMoved(self,pos):
+        if self.interactive_mode == 'mask':
+            pos = self.im.mapFromScene(pos)
+            modifiers = QApplication.keyboardModifiers()
+            square_size = int(10)
+            x = int(pos.x())
+            y = int(pos.y())
+            if bool(modifiers == Qt.ControlModifier) :
+                self.mask[y-10:y+10,x-10:x+10] = 0
+            elif bool(modifiers == Qt.ShiftModifier) :
+                self.mask[y-10:y+10,x-10:x+10] = 1
+            self.im_mask.setImage(self.mask)
+    def close(self):
+        if not np.sum(self.mask)==0:
+            if not self.parent is None:
+                if hasattr(self.parent,'folder'):
+                    np.save(pjoin(self.parent.folder, 'manual_mask.npy'),self.mask)
+                    print('Saving mask to {0}'.format(self.parent.folder))
         
 class SVDDisplayWidget(ImageWidget):
     def __init__(self, stack,
@@ -536,7 +575,7 @@ class SVDDisplayWidget(ImageWidget):
         self._add_hist()
         self.allen_show_areas = False
         self.set_image(self.iframe)
-        self.win.scene().sigMouseClicked.connect(self.mouseMoved)    
+        self.win.scene().sigMouseClicked.connect(self.mouseClicked)
         self.hist.setLevels(-0.12,0.12)
         self.hist.setHistogramRange(-.3, .3, padding=0)
         pos = np.array([0., 1., 0.5, 0.25, 0.75])
@@ -548,6 +587,7 @@ class SVDDisplayWidget(ImageWidget):
         cmap = pg.ColorMap(pos, color)
         #lut = cmap.getLookupTable(0.0, 1.0, 256)
         self.hist.gradient.setColorMap(cmap)
+
     def _init_ui(self):
         w = QWidget()
         l = QHBoxLayout()
@@ -640,7 +680,7 @@ class SVDDisplayWidget(ImageWidget):
     def on_allenroi_update(self):
         self.roiwidget.p1.setRange(xRange=self.roiwidget.xidx+self.iframe)
         
-    def mouseMoved(self,pos):
+    def mouseClicked(self,pos):
         modifiers = QApplication.keyboardModifiers()
         pos = self.im.mapFromScene(pos.scenePos())
         if bool(modifiers == Qt.ControlModifier):            
@@ -673,7 +713,7 @@ class SVDDisplayWidget(ImageWidget):
                         self.allenplot.highlight(i,side,color)
 
 class SVDViewer(QMainWindow):
-    def __init__(self,stack, folder = None, raw = None, reference = 'dorsal_cortex',
+    def __init__(self,stack, folder = None, raw = None, mask = None, reference = 'dorsal_cortex',
                  trial_onsets = None,
                  start_correlation = True):
         super(SVDViewer,self).__init__()
@@ -703,9 +743,10 @@ class SVDViewer(QMainWindow):
                                                   reference = self.referencename,
                                                   parent = self) 
             self.rawwidget = RawDisplayWidget(raw,
+                                              mask = mask,
                                               parent = self,
                                               reference = self.referencename)
-            
+        
         self.svdtab = QDockWidget('Reconstructed')
         self.svdtab.setWidget(self.displaywidget)
         self.addDockWidget(Qt.TopDockWidgetArea,self.svdtab)        
@@ -747,8 +788,15 @@ class SVDViewer(QMainWindow):
                          QDockWidget.DockWidgetFloatable)
         dock.setFloating(floating)
 
+
+    def closeEvent(self,ev):
+        if hasattr(self,'rawwidget'):
+            self.rawwidget.close()
+        ev.accept()
+
+        
 class RawViewer(QMainWindow):
-    def __init__(self,raw,
+    def __init__(self,raw,mask = None,
                  folder = None,
                  reference = 'dorsal_cortex',
                  trial_onsets = None):
@@ -773,7 +821,7 @@ class RawViewer(QMainWindow):
             self.allenparwidget = AllenMatchTable(landmarks_file = landmarks_file,
                                                   reference = self.referencename,
                                                   parent = self)
-            self.rawwidget = RawDisplayWidget(raw,
+            self.rawwidget = RawDisplayWidget(raw,mask = mask,
                                               parent = self,
                                               reference = self.referencename)
 
@@ -805,6 +853,11 @@ class RawViewer(QMainWindow):
                          QDockWidget.DockWidgetFloatable)
         dock.setFloating(floating)
 
+    def closeEvent(self,ev):
+        if hasattr(self,'rawwidget'):
+            self.rawwidget.close()
+        ev.accept()
+        
 class AllenMatchWidget(QWidget):
     def __init__(self,raw,
                  folder = None,
@@ -933,9 +986,11 @@ class ROIPlotWidget(QWidget):
     
     def items(self):
         return self.rois
+    
     def update(self):
         for p in self.plot_updates:
             p()
+            
     def closeEvent(self,ev):
         for i,roi in enumerate(self.rois):
             self.rois_scene[i].removeItem(roi)

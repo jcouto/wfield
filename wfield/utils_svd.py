@@ -45,7 +45,7 @@ class svd_pix_correlation():
         # Estimate the cov for a pixel from the covariance of the temporal components
         cov_pix = self.U[xy,:] @ self.cov_svt @ (self.U.T)
         # Normalize by the pixelwise
-        std_pix = (self.var_pix[xy]**.5) * (self.var_pix**.5)
+        std_pix = (self.var_pix[xy]**.5) * (self.var_pix**.5) + 0.001
         cov_pix[xy] = np.nan
         return (cov_pix/std_pix).reshape(self.dims)
 

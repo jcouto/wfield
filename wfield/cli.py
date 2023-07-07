@@ -131,6 +131,7 @@ Type wfield ncaas <foldername> to open on a specific folder.
             # try in a results folder (did it come from ncaas?)
             raise OSError('Could not find: {0} '.format(fname))
 
+
         dat = load_stack(args.foldername, nchannels = args.nchannels)
         #dat_path = glob(pjoin(localdisk,'*.bin'))
         #if len(dat_path):
@@ -144,6 +145,12 @@ Type wfield ncaas <foldername> to open on a specific folder.
             if os.path.isfile(average_path):
                 dat = np.load(average_path)
                 dat = dat.reshape([1,*dat.shape])
+
+        maskpath = pjoin(localdisk,'manual_mask.npy')
+        if os.path.isfile(maskpath):
+            mask = np.load(maskpath).astype(int)
+        else:
+            mask = None
 
         trial_onsets = pjoin(localdisk,'trial_onsets.npy')
         if os.path.isfile(trial_onsets):
@@ -159,6 +166,7 @@ Type wfield ncaas <foldername> to open on a specific folder.
         w = SVDViewer(stack,
                       folder = localdisk,
                       raw = dat,
+                      mask = mask,
                       trial_onsets = trial_onsets,
                       reference = args.allen_reference,
                       start_correlation = args.correlation)
@@ -200,14 +208,29 @@ Type wfield ncaas <foldername> to open on a specific folder.
                 dat = np.load(average_path)
             dat = dat.reshape([1,*dat.shape])
             print('Loading the frames_average instead')
+            average_path = pjoin(localdisk,'frames_average.npy')
+            if os.path.isfile(average_path):
+                dat = np.load(average_path)
+            dat = dat.reshape([1,*dat.shape])
+            print('Loading the frames_average instead')
+
+        maskpath = pjoin(localdisk,'manual_mask.npy')
+        if os.path.isfile(maskpath):
+            mask = np.load(maskpath).astype(int)
+        else:
+            mask = None
+
         trial_onsets = pjoin(localdisk,'trial_onsets.npy')
         if os.path.isfile(trial_onsets):
             trial_onsets = np.load(trial_onsets).astype(int)
         else:
             trial_onsets = None
+
+        
         from .widgets import QApplication,RawViewer
         app = QApplication(sys.argv)
         w = RawViewer(raw = dat,
+                      mask = mask,
                       folder = localdisk,
                       trial_onsets = trial_onsets,
                       reference = args.allen_reference)
@@ -392,7 +415,9 @@ Type wfield ncaas <foldername> to open on a specific folder.
         # COMPUTE AVERAGE FOR BASELINE
         _baseline(localdisk,args.nbaseline_frames, nchannels = args.nchannels)
         # DATA REDUCTION
-        _decompose(localdisk, k = args.k, nchannels = args.nchannels, std_mask_threshold = args.std_mask_threshold)
+        _decompose(localdisk, k = args.k,
+                   nchannels = args.nchannels,
+                   std_mask_threshold = args.std_mask_threshold)
         # HEMODYNAMIC CORRECTION
         # check if it is 2 channel
         dat = load_stack(localdisk, nchannels = args.nchannels)
@@ -445,7 +470,8 @@ Type wfield ncaas <foldername> to open on a specific folder.
         localdisk = args.foldername
         if not args.no_baseline:
             _baseline(localdisk,args.nbaseline_frames, nchannels = args.nchannels)
-        _decompose(localdisk,k=args.k, nchannels = args.nchannels,std_mask_threshold=args.std_mask_threshold)
+        _decompose(localdisk,k=args.k, nchannels = args.nchannels,
+                   std_mask_threshold=args.std_mask_threshold)
 
     def correct(self):
         parser = argparse.ArgumentParser(
@@ -535,7 +561,10 @@ def _baseline(localdisk, nbaseline_frames, nchannels = None):
     del dat
     del frames_average_trials
 
-def _decompose(localdisk, k, nchannels = None, std_mask_threshold = 0, functional_channel=0, mask_from_atlas = True):
+def _decompose(localdisk, k, nchannels = None,
+               std_mask_threshold = 0,
+               functional_channel=0,
+               mask_from_atlas = True):
     dat = load_stack(localdisk,nchannels = nchannels)
 
     frames_average = np.load(pjoin(localdisk,'frames_average.npy'))
@@ -545,18 +574,19 @@ def _decompose(localdisk, k, nchannels = None, std_mask_threshold = 0, functiona
 
     else:
         onsets = None
-    mask = None
+    mask = np.zeros(dat.shape[-2::],dtype=bool)
     if mask_from_atlas: # get the mask from the landmarks file
         lmarks = glob(pjoin(localdisk,'*landmarks*.json'))
         if len(lmarks):
             from .allen import atlas_from_landmarks_file
             _, _, mask = atlas_from_landmarks_file(lmarks[0],do_transform=True)
             print('Using the mask from the landmarks file for decomposition.')
-    if mask is None: # get the mask from the std of the data?
-        if std_mask_threshold > 0: # then compute the stdmask
-            print("Using the standard deviation of the functional channel to compute the mask.")
-            mask  = get_std_mask(dat[:,functional_channel],threshold=std_mask_threshold)
-    
+    if std_mask_threshold > 0: # then compute the stdmask
+        print("Using the standard deviation of the functional channel to compute the mask.")
+        mask  = mask & get_std_mask(dat[:,functional_channel],threshold=std_mask_threshold)
+    if os.path.exists(pjoin(localdisk,'manual_mask.npy')):
+        mask = mask & ~np.load(pjoin(localdisk,'manual_mask.npy'))
+        print('Loading the manual mask')
     U,SVT = approximate_svd(dat, frames_average, onsets = onsets, mask = mask, k = k)
     np.save(pjoin(localdisk,'U.npy'),U)
     np.save(pjoin(localdisk,'SVT.npy'),SVT)
