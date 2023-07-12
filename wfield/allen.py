@@ -237,21 +237,6 @@ Example:
 ########################################################################
 
 
-def apply_affine_to_points(x,y,M):
-    '''
-    Apply an affine transform to a set of contours or (x,y) points.
-
-    x,y = apply_affine_to_points(x, y, tranform)
-
-    '''
-    if M is None:
-        nM = np.identity(3,dtype = np.float32)
-    else:
-        nM = M.params
-    xy = np.vstack([x,y,np.ones_like(y)])
-    res = (nM @ xy).T
-    return res[:,0],res[:,1]
-
 def allen_transform_regions(M,ccf_regions,resolution = 1,bregma_offset = [0.,0.]):
     ''' This transforms regions from the reference to image coordinates.
     Usage:
@@ -315,6 +300,8 @@ def save_allen_landmarks(landmarks,
                          landmarks_match = None,
                          bregma_offset = None,
                          transform = None,
+                         transform_inverse = None,
+                         transform_type = 'similarity',
                          **kwargs):
     '''
     landmarks need to be pandas dataframes.
@@ -332,13 +319,21 @@ def save_allen_landmarks(landmarks,
             bregma_offset = bregma_offset.tolist()
         lmarks['bregma_offset'] = bregma_offset
     if not transform is None:
-        from skimage.transform import SimilarityTransform
-        if isinstance(transform,SimilarityTransform):
+        from skimage.transform import SimilarityTransform,AffineTransform
+        if isinstance(transform,SimilarityTransform) or isinstance(transform,AffineTransform):
             lmarks['transform'] = transform.params.tolist()
         elif isinstance(transform,np.ndarray):
             lmarks['transform'] = transform.tolist()
         else:
             lmarks['transform'] = transform
+    if not transform_inverse is None:
+        from skimage.transform import SimilarityTransform,AffineTransform
+        if isinstance(transform,SimilarityTransform) or isinstance(transform,AffineTransform):
+            lmarks['transform_inverse'] = transform_inverse.params.tolist()
+        elif isinstance(transform,np.ndarray):
+            lmarks['transform_inverse'] = transform.tolist()
+        else:
+            lmarks['transform_inverse'] = transform_inverse
     if 'bregma_offset' in lmarks.keys() and 'resolution' in lmarks.keys():
         lmarks['landmarks_im'] = allen_landmarks_to_image_space(
             landmarks.copy(), 
@@ -351,6 +346,12 @@ def save_allen_landmarks(landmarks,
         json.dump(lmarks,fd, sort_keys = True, indent = 4)
 
 def load_allen_landmarks(filename, reference = 'dorsal_cortex'):
+    '''
+    lmarks = load_allen_landmarks(filename, reference = 'dorsal_cortex'):
+    
+    Loads an allen landmark file (json) and returns the transform objects if present.
+    Joao Couto - wfield 2020
+    '''
     if filename is None:
         filename = pjoin(annotation_dir,reference + '_landmarks.json')
     if not os.path.exists(filename):
@@ -368,9 +369,25 @@ def load_allen_landmarks(filename, reference = 'dorsal_cortex'):
             from pandas import DataFrame
             lmarks[k] = DataFrame(lmarks[k])[['x','y','name','color']]
     if 'transform' in lmarks.keys():
-        from skimage.transform import SimilarityTransform
-        lmarks['transform'] = SimilarityTransform(
-            np.array(lmarks['transform']))
+        if not 'transform_type' in lmarks.keys():
+            lmarks['transform_type'] = 'euclidian'
+        if lmarks['transform_type'] == 'affine':
+            from skimage.transform import AffineTransform
+            lmarks['transform'] = AffineTransform(
+                np.array(lmarks['transform']))
+        else: # use similarity
+            from skimage.transform import SimilarityTransform
+            lmarks['transform'] = SimilarityTransform(
+                np.array(lmarks['transform']))
+        if 'transform_inverse' in lmarks.keys():
+            if lmarks['transform_type'] == 'affine':
+                from skimage.transform import AffineTransform
+                lmarks['transform_inverse'] = AffineTransform(
+                    np.array(lmarks['transform_inverse']))
+            else: # use similarity
+                from skimage.transform import SimilarityTransform
+                lmarks['transform_inverse'] = SimilarityTransform(
+                    np.array(lmarks['transform_inverse']))
     return lmarks
 
     
@@ -381,6 +398,7 @@ Load allen areas to use as reference.
 Example:
     ccf_regions,proj,brain_outline = allen_load_reference('dorsal_cortex')
 
+    Joao Couto - wfield, 2020
     '''
     if annotation_dir == wfield_dir:
         # then it is the reference folder, download if not there
@@ -408,7 +426,7 @@ def allen_save_reference(ccf_regions,
 
     allen_save_reference(ccf_regions, proj, brainoutline,
                          referece_name,
-                         annotation_dir=annotation_dir):
+                         annotation_dir = annotation_dir):
     '''
     
     ccf_regions.to_json(pjoin(
@@ -427,6 +445,8 @@ def allen_regions_to_atlas(ccf_regions,dims,
     ''' 
     Atlas as called in locaNMF; it is the masks of allen areas.
     This function returns also the names of the areas
+
+    Joao Couto - wfield 2020
     '''
     atlas = np.zeros(dims,dtype = np.float32)
     if fillnan:
@@ -444,7 +464,15 @@ def allen_regions_to_atlas(ccf_regions,dims,
             areanames.append([factor*(ireg+1),r['acronym']+'_'+side])
     return atlas,areanames
 
-def atlas_from_landmarks_file(landmarks_file=None, reference='dorsal_cortex', dims = [540,640], do_transform = None):
+def atlas_from_landmarks_file(landmarks_file=None,
+                              reference='dorsal_cortex',
+                              dims = [540,640],
+                              do_transform = None):
+    '''
+    Load the atlas regions, and area names and brain mask
+
+    Joao Couto - wfield 2020
+    '''
     lmarks = load_allen_landmarks(landmarks_file)
     ccf_regions,proj,brain_outline = allen_load_reference('dorsal_cortex')
     # transform the regions into the image

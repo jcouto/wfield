@@ -587,6 +587,11 @@ def _decompose(localdisk, k, nchannels = None,
     if os.path.exists(pjoin(localdisk,'manual_mask.npy')):
         mask = mask & ~np.load(pjoin(localdisk,'manual_mask.npy'))
         print('Loading the manual mask')
+    if np.sum(mask) == 0:
+        mask[:] = 1
+    else:
+        np.save(pjoin(localdisk,'mask.npy'),mask)
+        print('Saved mask file.')
     U,SVT = approximate_svd(dat, frames_average, onsets = onsets, mask = mask, k = k)
     np.save(pjoin(localdisk,'U.npy'),U)
     np.save(pjoin(localdisk,'SVT.npy'),SVT)

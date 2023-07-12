@@ -23,7 +23,7 @@ def approximate_svd(dat, frames_average,
                     onsets = None,
                     k=200, 
                     mask = None,
-                    nframes_per_bin = 30,
+                    nframes_per_bin = 15,
                     nbinned_frames = 5000,
                     nframes_per_chunk = 500,
                     divide_by_average = True):
@@ -40,7 +40,7 @@ def approximate_svd(dat, frames_average,
         dat (array)              : (NFRAMES, NCHANNEL, H, W) 
         k (int)                  : number of components to estimate (200)
         nframes_per_bin (int)    : number of frames to estimate the initial U components
-        nbinned_frames (int)     : maximum number frames to estimate tje initial U components
+        nbinned_frames (int)     : maximum number frames to estimate the initial U components
         nframes_per_chunk (int)  : window size to load to memory each time.
         divide_by_average (bool) : True   
     Returns:

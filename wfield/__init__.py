@@ -22,6 +22,7 @@ from .hemocorrection import hemodynamic_correction
 from .allen import *
 # other
 from .imutils import *
+from .multisession import *
 from .viz import *
 from .utils_svd import *
 from .plots import *

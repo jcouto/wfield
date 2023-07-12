@@ -83,7 +83,7 @@ def _create_wfield_folder():
                     raw = requests.get(webpath.format(f),stream=True)
                     copyfileobj(raw.raw, fid)
                     del raw
-
+                
 def estimate_similarity_transform(ref,points):
     '''
     
@@ -98,10 +98,28 @@ def estimate_similarity_transform(ref,points):
     from skimage.transform import SimilarityTransform
     M = SimilarityTransform()
     M.estimate(ref,points)
-    return M 
+    return M
+
+def apply_affine_to_points(x,y,M):
+    '''
+    Apply an affine transform to a set of contours or (x,y) points.
+
+    x,y = apply_affine_to_points(x, y, tranform)
+
+    Joao Couto - wfield (2020)
+    '''
+    if M is None:
+        nM = np.identity(3,dtype = np.float32)
+    else:
+        nM = M.params
+    xy = np.vstack([x,y,np.ones_like(y)])
+    res = (nM @ xy).T
+    return res[:,0],res[:,1]
+
 
 def im_adapt_hist(im,clip_limit = .1, grid_size=(8,8)):
-    ''' Adaptative histogram of image
+    ''' 
+    Adaptative histogram of image
 
         eqim = im_adapt_hist(im,.1)
 
