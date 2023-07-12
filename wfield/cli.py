@@ -302,6 +302,9 @@ Type wfield ncaas <foldername> to open on a specific folder.
         parser.add_argument('--std-mask-threshold', action='store',
                             default=0, type=float,
                             help='Percentile threshold for the std mask applied before decomposing U.')        
+        parser.add_argument('--match-session', action='store',
+                            default=None, type=str,
+                            help='Folder with wfield results file that is used to match.')
 
 
         args = parser.parse_args(sys.argv[2:])
@@ -341,7 +344,9 @@ Type wfield ncaas <foldername> to open on a specific folder.
         # COMPUTE AVERAGE FOR BASELINE
         _baseline(localdisk,args.nbaseline_frames)
         # DATA REDUCTION
-        _decompose(localdisk, k=args.k,std_mask_threshold=args.std_mask_threshold)
+        _decompose(localdisk, k = args.k,
+                   std_mask_threshold = args.std_mask_threshold,
+                   match_session = args.match_session)
         # HEMODYNAMIC CORRECTION
         _hemocorrect(localdisk,fs=args.fs)
         tproc = (time.time() - tproc)/60.
@@ -385,6 +390,9 @@ Type wfield ncaas <foldername> to open on a specific folder.
         parser.add_argument('--std-mask-threshold', action='store',
                             default=0, type=float,
                             help='Percentile threshold for the std mask applied before decomposing U.')        
+        parser.add_argument('--match-session', action='store',
+                            default=None, type=str,
+                            help='Folder with wfield results file that is used to match.')
 
         
         args = parser.parse_args(sys.argv[2:])
@@ -417,7 +425,8 @@ Type wfield ncaas <foldername> to open on a specific folder.
         # DATA REDUCTION
         _decompose(localdisk, k = args.k,
                    nchannels = args.nchannels,
-                   std_mask_threshold = args.std_mask_threshold)
+                   std_mask_threshold = args.std_mask_threshold,
+                   match_session = args.match_session)
         # HEMODYNAMIC CORRECTION
         # check if it is 2 channel
         dat = load_stack(localdisk, nchannels = args.nchannels)
@@ -465,13 +474,20 @@ Type wfield ncaas <foldername> to open on a specific folder.
                             help='Number of frames to compute the  baseline')        
         parser.add_argument('--std-mask-threshold', action='store',
                             default=0, type=float,
-                            help='Percentile threshold for the std mask applied before decomposing U.')        
+                            help='Percentile threshold for the std mask applied before decomposing U.')
+        parser.add_argument('--match-session', action='store',
+                            default=None, type=str,
+                            help='Folder with wfield results file that is used to match.')
+
         args = parser.parse_args(sys.argv[2:])
         localdisk = args.foldername
         if not args.no_baseline:
             _baseline(localdisk,args.nbaseline_frames, nchannels = args.nchannels)
-        _decompose(localdisk,k=args.k, nchannels = args.nchannels,
-                   std_mask_threshold=args.std_mask_threshold)
+        _decompose(localdisk,
+                   k=args.k,
+                   nchannels = args.nchannels,
+                   std_mask_threshold = args.std_mask_threshold,
+                   match_session = args.match_session)
 
     def correct(self):
         parser = argparse.ArgumentParser(
@@ -564,17 +580,31 @@ def _baseline(localdisk, nbaseline_frames, nchannels = None):
 def _decompose(localdisk, k, nchannels = None,
                std_mask_threshold = 0,
                functional_channel=0,
-               mask_from_atlas = True):
+               mask_from_atlas = True,
+               match_session = None):
     dat = load_stack(localdisk,nchannels = nchannels)
 
     frames_average = np.load(pjoin(localdisk,'frames_average.npy'))
+    if not match_session is None:
+        print('Getting the transformation and mask from another session: ' + match_session)
+        if not os.path.exists(match_session):
+            raise(OSError(match_session + ' not found.'))
+        from .multisession import prepare_multisession_match_files
+        transform, nlmarks, nmask = prepare_multisession_match_files(localdisk, match_session)
+        std_mask_threshold = 0
+        mask_from_atlas = False
+        
     if len(frames_average)>3:
         trial_onsets = np.load(pjoin(localdisk,'trial_onsets.npy'))
         onsets = trial_onsets[:,1].astype(int)
 
     else:
         onsets = None
-    mask = np.zeros(dat.shape[-2::],dtype=bool)
+        
+    if os.path.exists(pjoin(localdisk,'mask.npy')):
+        mask  = np.load(pjoin(localdisk,'mask.npy'))
+    else:
+        mask = np.zeros(dat.shape[-2::],dtype=bool)
     if mask_from_atlas: # get the mask from the landmarks file
         lmarks = glob(pjoin(localdisk,'*landmarks*.json'))
         if len(lmarks):
