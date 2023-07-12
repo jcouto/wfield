@@ -140,12 +140,13 @@ def im_argmax_hsv(mov,blur = 0,vperc=98,sperc=90,return_hsv=False):
     im_argmax_hsv(mov,blur = 0,vperc=99,sperc=90)
     
     Creates a color image colorcoding the frame with largest amplitude for each pixel 
+
     '''
     if not blur == 0:
         mov = runpar(im_gaussian,mov,sigma=blur)
     H = np.argmax(mov,axis = 0)/np.float32(len(mov))
-    maxim = np.max(mov,axis=0)
-    meanim = np.mean(mov,axis=0)
+    maxim = np.nanmax(mov,axis=0)
+    meanim = np.nanmean(mov,axis=0)
     V = maxim.copy()
     V /= np.percentile(maxim,vperc)
     S = maxim-meanim

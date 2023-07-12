@@ -22,7 +22,7 @@ def compute_locaNMF(U,V,atlas,brain_mask,
                     loc_thresh = 70, # Localization threshold, i.e. percentage of area restricted to be inside the 'atlas boundary'
                     r2_thresh = 0.99, # Fraction of variance in the data to capture with LocaNMF
                     nonnegative_temporal = False, # Do you want nonnegative temporal components? The data itself should also be nonnegative in this case.
-                    device = 'cuda'):
+                    device = 'auto'):
     '''
 This function runs locaNMF from wfield analysis outputs.
 It uses the original package for LocaNMF, written by Ian Kinsella and Shreya Saxena
@@ -50,6 +50,13 @@ Usage:
         raise(OSError("This analysis requires the locaNMF package."))
     
     import torch
+    if device == 'auto':
+        if torch.cuda.is_available():
+            device = 'cuda'
+        else:
+            print('torch could not find a cuda capable GPU, using the CPU (slower).')
+            device = 'cpu'
+            
     rank_range = (minrank, maxrank, 1)
     if nonnegative_temporal:
         r = V.T
@@ -83,7 +90,7 @@ Usage:
                                             region_metadata,
                                             region_videos,
                                             maxiter_rank = maxrank-minrank+1,
-                                            maxiter_lambda = 20, 
+                                            maxiter_lambda = 300, 
                                             maxiter_hals = 20,
                                             lambda_step = 1.35,
                                             lambda_init = 1e-6, 
@@ -106,3 +113,4 @@ Usage:
         C = np.matmul(q,locanmf_comps.temporal.data.cpu().numpy().T).T
 
     return A_reshape,C,region_metadata.labels.data[locanmf_comps.regions.data].cpu().numpy()
+

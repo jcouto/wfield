@@ -34,14 +34,14 @@ with open("requirements.txt","r") as f:
     
 setup(
     name = 'wfield',
-    version = '0.3.7',
+    version = '0.4.0',
     author = 'Joao Couto',
     author_email = 'jpcouto@gmail.com',
     description = (description),
     long_description = longdescription,
     long_description_content_type='text/markdown',
     license = 'GPL',
-    install_requires = requirements,
+    #install_requires = requirements,
     url = "https://github.com/jcouto/wfield",
     packages = ['wfield'],
     entry_points = {
