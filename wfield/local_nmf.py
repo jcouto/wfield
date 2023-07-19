@@ -22,7 +22,9 @@ def compute_locaNMF(U,V,atlas,brain_mask,
                     loc_thresh = 70, # Localization threshold, i.e. percentage of area restricted to be inside the 'atlas boundary'
                     r2_thresh = 0.99, # Fraction of variance in the data to capture with LocaNMF
                     nonnegative_temporal = False, # Do you want nonnegative temporal components? The data itself should also be nonnegative in this case.
-                    device = 'auto'):
+                    maxiter_lambda = 300,
+                    device = 'auto',
+                    verbose = [True, False, False]):
     '''
 This function runs locaNMF from wfield analysis outputs.
 It uses the original package for LocaNMF, written by Ian Kinsella and Shreya Saxena
@@ -90,7 +92,7 @@ Usage:
                                             region_metadata,
                                             region_videos,
                                             maxiter_rank = maxrank-minrank+1,
-                                            maxiter_lambda = 300, 
+                                            maxiter_lambda = maxiter_lambda, 
                                             maxiter_hals = 20,
                                             lambda_step = 1.35,
                                             lambda_init = 1e-6, 
@@ -98,7 +100,7 @@ Usage:
                                             r2_thresh = r2_thresh,
                                             rank_range = rank_range,
                                             nnt = nonnegative_temporal,
-                                            verbose = [True, False, False],
+                                            verbose = verbose,
                                             sample_prop = (1,1),
                                             device = device)
     if device=='cuda': torch.cuda.synchronize()
@@ -112,5 +114,10 @@ Usage:
     else:
         C = np.matmul(q,locanmf_comps.temporal.data.cpu().numpy().T).T
 
-    return A_reshape,C,region_metadata.labels.data[locanmf_comps.regions.data].cpu().numpy()
+    regions = region_metadata.labels.data[locanmf_comps.regions.data].cpu().numpy()
+
+    if device=='cuda':
+        torch.cuda.empty_cache()
+    
+    return A_reshape,C,regions
 

@@ -93,7 +93,7 @@ def estimate_similarity_transform(ref,points):
     
     M = estimate_similarity_transform(ref, cor)
     
-    Joao Couto - wfield, 2020
+    Joao Couto - wfield (2020)
     '''
     from skimage.transform import SimilarityTransform
     M = SimilarityTransform()
@@ -262,7 +262,7 @@ def reconstruct(u,svt,dims = None):
         if dims is None:
             dims = u.shape[:2]
             
-    return u.dot(svt).reshape((*dims,-1)).transpose(-1,0,1).squeeze()
+    return u@svt.reshape((*dims,-1)).transpose(-1,0,1).squeeze()
 
 def _apply_function_single_pix(U,SVT,func):
     '''
@@ -270,7 +270,7 @@ def _apply_function_single_pix(U,SVT,func):
 
     Joao Couto - wfield, 2021
     '''
-    return func(np.dot(U,SVT))
+    return func(U@SVT)
 
 def apply_pixelwise_svd(U,SVT,func, nchunks = 1024):
     '''
@@ -399,7 +399,7 @@ timecourse = np.nanmean(get_timecourse([x,y]),axis = 1)
         x = np.array(np.clip(xy[0],0,self.shape[1]),dtype=int)
         y = np.array(np.clip(xy[1],0,self.shape[2]),dtype=int)
         idx = np.ravel_multi_index((x,y),self.shape[1:])
-        t = self.Uflat[idx,:].dot(self.SVT)
+        t = self.Uflat[idx,:]@self.SVT
         return t
 
 def get_trial_baseline(idx,frames_average,onsets):

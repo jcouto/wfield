@@ -618,7 +618,7 @@ def _decompose(localdisk, k, nchannels = None,
         mask = mask & ~np.load(pjoin(localdisk,'manual_mask.npy'))
         print('Loading the manual mask')
     if np.sum(mask) == 0:
-        mask[:] = 1
+        mask = None
     else:
         np.save(pjoin(localdisk,'mask.npy'),mask)
         print('Saved mask file.')
