@@ -723,7 +723,7 @@ class TiffStack(GenericStack):
 
 class VideoStack(GenericStack):
     def __init__(self,filenames,
-                 extensions = ['.avi','.mov','.mj2'], # this will try this extension first and then .tif, .TIFF and .TIF
+                 extensions = ['.avi','.mov','.mj2','.mp4'], # this will try this extension first and then .tif, .TIFF and .TIF
                  extension = None,
                  nchannels = None,
                  outputdict = None,
@@ -842,7 +842,7 @@ def load_stack(foldername, nchannels=None, imager_preview = False):
             return mmap_dat(foldername)
         elif ext in ['.TIFF','.TIF','.tif','.tiff']:
             return TiffStack([foldername], nchannels = nchannels)
-        elif ext in ['.avi','.mov','.mj2']:
+        elif ext in ['.avi','.mov','.mj2','.mp4']:
             return VideoStack([foldername], nchannels = nchannels)
     # load concatenated stack on multiple files 
     # Check binary sequences
