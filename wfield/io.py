@@ -747,7 +747,8 @@ class VideoStack(GenericStack):
             raise(OSError('Could not find files.'))
         super(VideoStack,self).__init__(filenames,extension)
         self.engine = engine
-        #if self.engine == 'skvideo': 
+        #if self.engine == 'skvideo':
+        assert self.engine == 'skvideo', ValueError("Only skvideo is supported as engine.")
         from skvideo.io import FFmpegReader
         self.reader = FFmpegReader
         #else:
@@ -782,20 +783,28 @@ class VideoStack(GenericStack):
     def _load_substack(self,fileidx,frameidx=0):
         inputdict = {'-pix_fmt':self.pix_fmt}
         outputdict = {}
+        tidx = (frameidx*self.dims[0])/self.framerate
+        t = time.strftime("%H:%M:%S", time.gmtime(tidx))+'{0:.3f}'.format(
+            tidx % 1)[1:]
         if not self.outputdict is None:
             outputdict = self.outputdict
         else:
+            outputdict['-r'] = str(int(self.framerate)) # the output and input rates need to be matched
+            inputdict = {'-r':str(int(self.framerate))}
             if not self.pix_fmt in ['yuv420p']:
                 outputdict = inputdict
-        if not '-pix_fmt' in outputdict:
-            outputdict = {'-pix_fmt':'gray'}
-                # can't handle 3 channel color right now.
-        tidx = (frameidx*self.dims[0])/self.framerate
-        t = time.strftime("%H:%M:%S", time.gmtime(tidx))+'{0:.3f}'.format(tidx % 1)[1:]
+                inputdict['-ss'] = t # this should be accurate for raw and mjpeg formats
+            else:
+                warnings.warn("Seeking compressed files can not be done accurately so using we are using output seeking which is slow. Read using the decord package for random access. See: https://trac.ffmpeg.org/wiki/Seeking - but not working for some encoding formats.")
+                outputdict['-ss'] = t
+        if not '-pix_fmt' in outputdict.keys():
+            # can't handle 3 channel color right now.
+            outputdict['-pix_fmt'] = 'gray'
+
         # print("VideoStack seek: {0}".format(t))
         self.nframes_read = 0
         self.current_stack = self.reader(self.filenames[fileidx], 
-                                          inputdict = {'-ss':t},
+                                          inputdict = inputdict,
                                           outputdict=outputdict)
         self.current_frameidx = frameidx
         self.current_fileidx = fileidx

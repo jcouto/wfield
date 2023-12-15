@@ -16,6 +16,7 @@
 import os
 import sys
 import time
+import warnings
 try:
     import cv2 # OpenCV needs to be imported before numpy for some seg faulted reason...
 except:
