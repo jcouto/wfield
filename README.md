@@ -53,7 +53,7 @@ To install start by getting [Anaconda](https://www.anaconda.com/distribution/#do
 
 2. Use anaconda to install all dependencies: ``conda env create -f env.yml`` the file env.yml is inside the ``wfield`` directory.
 
-3. Enter the environment ``conda activate wfield`` and install wfield using the command ``python setup.py install`` followed by ``python setup.py references``
+3. Enter the environment ``conda activate wfield`` and install wfield using the command ``python setup.py install`` 
 
 4. You will need to run `conda activate wfield` to activate the environment before running the software every time you start a terminal.
 
