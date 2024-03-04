@@ -116,7 +116,11 @@ def nb_play_movie(data,interval=30,shape = None,**kwargs):
     i = _handle_sparse(data[0],shape = shape)
     slider = [IntSlider(0,min = 0,max = data.shape[0]-1,step = 1,description='Frame')]
     if len(data.shape) == 4:
-        slider += [IntSlider(0,min = 0,max = data.shape[1]-1,step = 1,description='Channel')]
+        slider += [IntSlider(0,
+                             min = 0,
+                             max = data.shape[1]-1,
+                             step = 1,
+                             description = 'Channel')]
         i = i[0]
     im = plt.imshow(i.squeeze(),**kwargs)
 

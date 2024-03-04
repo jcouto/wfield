@@ -410,12 +410,12 @@ class GenericStack():
         if not fileidx == self.current_fileidx:
             #print('Loading {0}'.format(fileidx))
             self._load_substack(fileidx)
-        return self.current_stack[frameidx]
+        return self.current_stack[frameidx].squeeze()
 
     def __len__(self):
         return self.shape[0]
     
-    def __getitem__(self, *args, squeeze = False):
+    def __getitem__(self, *args):
         index  = args[0]
         idx1 = None
         idx2 = None
@@ -435,15 +435,10 @@ class GenericStack():
         for i,ind in enumerate(idx1):
             img[i] = self._get_frame(ind)
         if not idx2 is None:
-            if squeeze:
-                return img[:,idx2].squeeze()
-            else:
-                return img[:,idx2]
-        if squeeze:
-            return img.squeeze()
+            return img[:,idx2].squeeze()
         else:
-            return img
-
+            return img[:].squeeze()
+            
     def export_binary(self, foldername,
                       basename = 'frames',
                       chunksize = 512,
@@ -472,7 +467,7 @@ class GenericStack():
                         shape=tuple(shape))
         for c in tqdm(chunks, desc='Exporting binary'):
             if channel is None:
-                out[c[0] - start_frame:c[1] - start_frame] = self[c[0]:c[1]]
+                out[c[0] - start_frame:c[1] - start_frame] = self[c[0]:c[1]].reshape([-1,*shape[1:]])
             else:
                 out[c[0] - start_frame:c[1] - start_frame,0] = self[c[0]:c[1],channel]
         out.flush()
@@ -561,8 +556,8 @@ class ImagerStack(GenericStack):
         if self.fileformat == 'mj2':
             stack = read_mj2_frames(f)
         elif self.fileformat == 'tif':
-            from tifffile import imread, TiffFile
-            self.imread = imread
+            from tifffile import memmap
+            self.imread = memmap
             stack = self.imread(f)
         else:
             stack = mmap_dat(f)
@@ -682,19 +677,18 @@ class TiffStack(GenericStack):
         if not len(filenames):
             raise(OSError('Could not find files.'))
         super(TiffStack,self).__init__(filenames,extension)
-        from tifffile import imread, TiffFile
-        self.imread = imread
-        self.TiffFile = TiffFile
+        from tifffile import imread, TiffFile, memmap
+        self.imread = memmap
+        #self.TiffFile = TiffFile
         offsets = [0]
         for f in tqdm(self.filenames, desc='Parsing tiffs'):
             # Parse all files in the stack
-            tmp =  TiffFile(f)
+            tmp =  memmap(f)
             # get the size from the pages (works with OEM files)
-            dims = [len(tmp.pages),*tmp.pages[0].shape]
-            #dims = [*tmp.series[0].shape]
+            dims = [len(tmp),*tmp.shape[1:]]
             if len(dims) == 2: # then these are single page tiffs
                 dims = [1,*dims]
-            dtype = tmp.pages[0].dtype
+            dtype = np.dtype(tmp.dtype.type)
             offsets.append(dims[0])
             del tmp
         # offset for each file
@@ -710,15 +704,10 @@ class TiffStack(GenericStack):
         self.dtype = dtype
         self.nframes = self.frames_offset[-1]
         self.shape = tuple([self.nframes,*self.dims])
-        
-    def _imread(self, filename):
-        arr = None
-        with self.TiffFile(filename) as tf:
-            arr = np.stack([p.asarray() for p in tf.pages])
-        return arr
-    
+            
     def _load_substack(self,fileidx,channel = None):
-        self.current_stack = self._imread(self.filenames[fileidx]).reshape([-1,*self.dims])
+        self.current_stack = self.imread(self.filenames[fileidx]
+                                         ).reshape([-1,*self.dims])
         self.current_fileidx = fileidx
 
 class VideoStack(GenericStack):

@@ -397,23 +397,32 @@ Type wfield ncaas <foldername> to open on a specific folder.
         
         args = parser.parse_args(sys.argv[2:])
         datadisk = os.path.abspath(args.foldername) # this should be an SSD or a fast drive
+        if os.path.isfile(datadisk):
+            datafolder = os.path.dirname(datadisk)
+        else:
+            datafolder = datadisk
         
         localdisk = args.output # this should be an SSD or a fast drive
         if localdisk is None:
             print('Specify a fast local disk with the  -o option.')
             exit(1)
         if localdisk == 'wfield_results':
-            localdisk = pjoin(datadisk,localdisk)
+            localdisk = pjoin(datafolder,localdisk)
         else:
-            localdisk = os.path.abspath(localdisk)
+            localdisk = os.path.abspath(datafolder)
         if not os.path.isdir(localdisk):
             os.makedirs(localdisk)
             print('Created {0}'.format(localdisk))
 
-        lmarks = glob(pjoin(datadisk,'*landmarks*.json'))
+        lmarks = glob(pjoin(datafolder,'*landmarks*.json'))
         if len(lmarks):
             print('Found a landmarks file, copying to the results folder..')
             copy(lmarks[0],localdisk)
+        maskfile = glob(pjoin(datafolder,'manual_mask.npy'))
+        if len(maskfile):
+            print('Found a mask file, copying to the results folder..')
+            copy(maskfile[0],localdisk)
+
         tproc = time.time()
         # MOTION CORRECTION
         _motion(datadisk,outdisk = localdisk,
@@ -609,13 +618,14 @@ def _decompose(localdisk, k, nchannels = None,
         lmarks = glob(pjoin(localdisk,'*landmarks*.json'))
         if len(lmarks):
             from .allen import atlas_from_landmarks_file
-            _, _, mask = atlas_from_landmarks_file(lmarks[0],do_transform=True)
+            _, _, mask = atlas_from_landmarks_file(lmarks[0],dims = mask.shape, do_transform=True)
             print('Using the mask from the landmarks file for decomposition.')
     if std_mask_threshold > 0: # then compute the stdmask
         print("Using the standard deviation of the functional channel to compute the mask.")
         mask  = mask & get_std_mask(dat[:,functional_channel],threshold=std_mask_threshold)
     if os.path.exists(pjoin(localdisk,'manual_mask.npy')):
-        mask = mask & ~np.load(pjoin(localdisk,'manual_mask.npy'))
+        manual = np.load(pjoin(localdisk,'manual_mask.npy')) # the manual mask is to remove parts of the image
+        mask = (mask) & (manual==0)  # the manual mask is added to the std_mask_threshold
         print('Loading the manual mask')
     if np.sum(mask) == 0:
         mask = None

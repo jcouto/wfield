@@ -261,9 +261,8 @@ def reconstruct(u,svt,dims = None):
             raise ValueError('Supply dims = [H,W] when using sparse arrays')
     else:
         if dims is None:
-            dims = u.shape[:2]
-            
-    return u@svt.reshape((*dims,-1)).transpose(-1,0,1).squeeze()
+            dims = u.shape[:2]  
+    return (u@svt).reshape((*dims,-1)).transpose(-1,0,1).squeeze()
 
 def _apply_function_single_pix(U,SVT,func):
     '''
@@ -301,7 +300,9 @@ def apply_pixelwise_svd(U,SVT,func, nchunks = 1024):
 
 
 class SVDStack(object):
-    def __init__(self, U, SVT, dims = None, warped = None, M = None, dtype = 'float32',nchunks = 1054):
+    def __init__(self, U, SVT, dims = None,
+                 warped = None,
+                 M = None, dtype = 'float32',nchunks = 1054):
         '''
 stack = SVDStack(U,SVT)
 
@@ -385,8 +386,8 @@ Args:
         if type(args[0]) is slice:
             idxz = range(*args[0].indices(self.shape[0]))
         else:
-            idxz = args[0]        
-        return reconstruct(self.U,self.SVT[:,idxz],dims = self.shape[1:])
+            idxz = args[0]      
+        return reconstruct(self.Uflat,self.SVT[:,idxz],dims = self.shape[1:])
     
     def get_timecourse(self,xy):
         ''' Get a timecourse for the specified indices. 
