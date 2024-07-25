@@ -555,10 +555,15 @@ class ImagerStack(GenericStack):
         # get the dims from the first binary file
         if self.fileformat == 'mj2':
             stack = read_mj2_frames(f)
-        elif self.fileformat == 'tif':
-            from tifffile import memmap
+        elif self.fileformat in ['tif','tiff','TIFF','TIF']:
+            from tifffile import memmap, imread
             self.imread = memmap
-            stack = self.imread(f)
+            try:
+                stack = self.imread(self.filenames[0])
+            except ValueError as err:
+                if 'not memory-mappable' in err.args[0]:
+                    self.imread = imread
+                    print('Files are not memory mappable, using slower imread.')
         else:
             stack = mmap_dat(f)
         if self.rotate_array: # fix imager rotation
@@ -679,11 +684,17 @@ class TiffStack(GenericStack):
         super(TiffStack,self).__init__(filenames,extension)
         from tifffile import imread, TiffFile, memmap
         self.imread = memmap
+        try:
+            stack = self.imread(self.filenames[0])
+        except ValueError as err:
+            if 'not memory-mappable' in err.args[0]:
+                self.imread = imread
+                print('Files are not memory mappable, using slower imread.')
         #self.TiffFile = TiffFile
         offsets = [0]
         for f in tqdm(self.filenames, desc='Parsing tiffs'):
             # Parse all files in the stack
-            tmp =  memmap(f)
+            tmp =  self.imread(f)
             # get the size from the pages (works with OEM files)
             dims = [len(tmp),*tmp.shape[1:]]
             if len(dims) == 2: # then these are single page tiffs
