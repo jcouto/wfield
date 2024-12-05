@@ -81,7 +81,7 @@ def approximate_svd(dat, frames_average,
             binned[i] = np.mean(blk-(avg + np.float32(1e-5)), axis=0)
         if not mask is None:
             b = binned[i]
-            mmask = mask_to_3d(mask,[2,*mask.shape])
+            mmask = mask_to_3d(mask,[dat.shape[1],*mask.shape])
             b[mmask == 0] = 0
 
     binned = binned.reshape((-1,np.multiply(*dims[-2:])))
