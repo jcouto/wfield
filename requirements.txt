@@ -19,3 +19,4 @@ pyqtwebengine
 boto3
 pyyaml
 requests
+joblib

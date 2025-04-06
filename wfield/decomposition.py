@@ -75,10 +75,10 @@ def approximate_svd(dat, frames_average,
                                     shape=dims)
         avg = get_trial_baseline(idx[i],frames_average,onsets)
         if divide_by_average:
-            binned[i] = np.mean((blk-(avg + np.float32(1e-5)))
-                                / (avg + np.float32(1e-5)), axis=0)
+            binned[i] = np.mean((blk-(avg + np.float32(1e-10)))
+                                / (avg + np.float32(1e-10)), axis=0)
         else:
-            binned[i] = np.mean(blk-(avg + np.float32(1e-5)), axis=0)
+            binned[i] = np.mean(blk-(avg + np.float32(1e-10)), axis=0)
         if not mask is None:
             b = binned[i]
             mmask = mask_to_3d(mask,[dat.shape[1],*mask.shape])
@@ -109,9 +109,9 @@ def approximate_svd(dat, frames_average,
             blk = load_binary_block((dat_path,idx[i],idx[i+1]-idx[i]),
                                 shape=dims).astype('float32')
         avg = get_trial_baseline(idx[i],frames_average,onsets).astype('float32')
-        blk = blk-(avg+np.float32(1e-5))
+        blk = blk-(avg+np.float32(1e-10))
         if divide_by_average:
-            blk /= avg+np.float32(1e-5)
+            blk /= avg+np.float32(1e-10)
         V[:,idx[i]:idx[i+1],:] = np.dot(
             U, blk.reshape([-1,np.multiply(*dims[1:])]).T).reshape((k,-1,dat.shape[1]))
     SVT = V.reshape((k,-1))

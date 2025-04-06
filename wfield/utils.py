@@ -28,7 +28,9 @@ from glob import glob
 from os.path import join as pjoin
 from datetime import datetime
 from skimage.transform import warp
-from multiprocessing import Pool, cpu_count
+
+from joblib import Parallel, delayed
+    
 from functools import partial
 from scipy.interpolate import interp1d
 from scipy.sparse import load_npz, issparse,csr_matrix
@@ -508,26 +510,23 @@ def contour_to_mask(x,y,dims,extent = None,n_up_samples = 2000):
     return H.astype(bool)
 
 
-def parinit():
-    import os
-    os.environ['MKL_NUM_THREADS'] = "1"
-    os.environ['OMP_NUM_THREADS'] = "1"
-
-def runpar(f,X,nprocesses = None,**kwargs):
+def runpar(f,X,nprocesses = None,desc = None,**kwargs):
     ''' 
     res = runpar(function,          # function to execute
                  data,              # data to be passed to the function
-                 nprocesses = None, # defaults to the number of cores on the machine
+                 nprocesses = None, # defaults to the number of cores on the machine (default caps at 8)
                  **kwargs)          # additional arguments passed to the function (dictionary)
 
     Joao Couto - wfield, 2020
 
     '''
     if nprocesses is None:
-        nprocesses = cpu_count()
-    with Pool(initializer = parinit, processes=nprocesses) as pool:
-        res = pool.map(partial(f,**kwargs),X)
-    pool.join()
+        nprocesses = 8
+    if desc is None:
+        res = Parallel(n_jobs = nprocesses)(delayed(f)(x,**kwargs) for x in X)
+    else:
+        from tqdm import tqdm
+        res = Parallel(n_jobs = nprocesses)(delayed(f)(x,**kwargs) for x in tqdm(X,desc = desc))
     return res
 
 
