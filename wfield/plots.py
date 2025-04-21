@@ -70,12 +70,12 @@ def plot_summary_hemodynamics_dual_colors(rcoeffs,
 
     from skimage.filters import gaussian
     pidx = np.unravel_index(np.argmax(gaussian(rcoeffs,5)),
-                           rcoeffs.shape) + np.array([0,-50])
-
+                           rcoeffs.shape) + np.array([10,10])
+    # changed from [0,-50 ]to work when the max is at zero
     k,nframes = SVT_470.shape
     u = U[pidx[0]-2:pidx[0]+2,
           pidx[1]-2:pidx[1]+2,:].reshape([-1,k])
-    mcoeff = np.mean(rcoeffs[pidx[0]-2:pidx[0]+2,
+    mcoeff = np.nanmean(rcoeffs[pidx[0]-2:pidx[0]+2,
           pidx[1]-2:pidx[1]+2].reshape([-1]))
     # gets 60 seconds of data
     nframes = int(np.clip(duration*frame_rate,0,SVT_470.shape[1]))
@@ -89,10 +89,10 @@ def plot_summary_hemodynamics_dual_colors(rcoeffs,
     SVTa = (SVTa.T - np.nanmean(SVTa,axis=1)).T.astype('float32')
     SVTb = (SVTb.T - np.nanmean(SVTb,axis=1)).T.astype('float32')
     SVTb_scaled = np.dot(T,SVTb)
-    Ya = np.mean(u@SVTa[:,np.arange(1,nframes)],axis=0)
-    Yb = np.mean(u@SVTb[:,np.arange(1,nframes)],axis=0)
-    Ybscaled = np.mean(u@SVTb_scaled[:,np.arange(1,nframes)],axis=0)
-    Ycorr =  np.mean(u@(SVTa[:,np.arange(1,nframes)]
+    Ya = np.nanmean(u@SVTa[:,np.arange(1,nframes)],axis=0)
+    Yb = np.nanmean(u@SVTb[:,np.arange(1,nframes)],axis=0)
+    Ybscaled = np.nanmean(u@SVTb_scaled[:,np.arange(1,nframes)],axis=0)
+    Ycorr =  np.nanmean(u@(SVTa[:,np.arange(1,nframes)]
                         - SVTb_scaled[:,np.arange(1,nframes)]),axis=0)
     
     import pylab as plt
@@ -106,17 +106,17 @@ def plot_summary_hemodynamics_dual_colors(rcoeffs,
     plt.axhline(y=pidx[0], color="w", linestyle="--",lw=1)
     plt.axvline(x=pidx[1], color="w", linestyle="--",lw=1)
 
-    mi = np.min([np.nanmin(Ya),np.nanmin(Ybscaled)])*1.2
-    ma = np.max([np.nanmax(Ya),np.nanmax(Ybscaled)])*1.2
+    mi = np.nanmin([np.nanmin(Ya),np.nanmin(Ybscaled)])*1.2
+    ma = np.nanmax([np.nanmax(Ya),np.nanmax(Ybscaled)])*1.2
 
     fig.add_axes([.4,0,.5,.5])
     plt.plot(Ya[:],color='#0066cc',label = 'blue')
     plt.plot(Yb[:],color='#cc00ff',label = 'violet')
     plt.plot(Ybscaled[:],lw = .5,color='k',label = 'scaled violet')
     plt.legend(loc='upper right')
-
     plt.ylim([mi,ma])
     plt.axis('off')
+
     fig.add_axes([.4,.5,.5,.5])
     plt.plot(Ycorr[:],'k',label = 'corrected')
     plt.legend(loc='upper right')
