@@ -52,6 +52,7 @@ elif (int(cv2ver[0]) == 4) and (int(cv2ver[1]) <= 1):
                                     M, warp_mode,
                                     criteria,
                                     inputMask=inputMask)
+
 def registration_ecc(frame,template,
                      niter = 5000,
                      eps0 = 1e-10,
@@ -65,17 +66,23 @@ def registration_ecc(frame,template,
         hann = cv2.createHanningWindow((w,h),cv2.CV_32FC1)
         hann = (hann*255).astype('uint8')
     dst = frame.astype('float32')
-    M = np.eye(2, 3, dtype=np.float32)
+    if warp_mode in [cv2.MOTION_HOMOGRAPHY]: # added support for perspective transforms
+        M = np.eye(3, 3, dtype=np.float32)
+    else:
+        M = np.eye(2, 3, dtype=np.float32)
     criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT,
                 niter,  eps0)
     (res, M) = findTransformECC(template,dst,
                                 M, warp_mode,
                                 criteria,
                                 inputMask=hann, gaussFiltSize=gaussian_filter)
-    dst = cv2.warpAffine(frame, M, (w,h),
-                         flags=cv2.INTER_LINEAR + cv2.WARP_INVERSE_MAP);
+    if M.shape[0] == 3:
+        dst = cv2.warpPerspective(frame, M, (w,h),
+                                 flags=cv2.INTER_LINEAR + cv2.WARP_INVERSE_MAP);
+    else:
+        dst = cv2.warpAffine(frame, M, (w,h),
+                             flags=cv2.INTER_LINEAR + cv2.WARP_INVERSE_MAP);
     return M, np.clip(dst,0,(2**16-1)).astype('uint16')
-
 
 def _xy_rot_from_affine(affines):
     '''

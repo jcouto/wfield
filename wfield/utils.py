@@ -360,9 +360,8 @@ Args:
                         self.U_warped[0,:,:] = 1e-10
                         self.U_warped[-1,:,:] = 1e-10
                         self.U_warped[:,-1,:] = 1e-10
-                        self.U_warped = np.stack(runpar(im_apply_transform,
-                                                        self.U_warped.transpose([2,0,1]),
-                                                        M = self.M)).transpose([1,2,0]).astype(np.float32)
+                        self.U_warped = np.stack([im_apply_transform(u, M = self.M) for u in
+                                                  self.U_warped.transpose([2,0,1])]).transpose([1,2,0]).astype(np.float32)
             if not self.U_warped is None:
                 self.U = self.U_warped
                 self.warped = True

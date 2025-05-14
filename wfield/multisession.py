@@ -17,24 +17,35 @@
 from .utils import *
 from .registration import registration_ecc
 
-def get_transform(template, frame):
+
+def get_transform(template, frame, warp_mode = cv2.MOTION_AFFINE):
     '''
     Gets the transform between the frames and the template.
-    M,transform, transform_inv = get_transform(template, frame)
+    M,transform, transform_inv = get_transform(template, frame, warp_mode = cv2.MOTION_AFFINE)
+    
+    warp mode: cv2.MOTION_AFFINE,cv2.MOTION_HOMOGRAPHY
     
         - M is the affine transform matrix (opencv format)
-        - transform is a transform funtion (input a frame and it returns the transformed frame)
+        - transform is a transform funtion (input a frame and it returns the transformed frame) 
+    
         - tranform_inv is the inverted
         
     Joao Couto - wfield (2023)
     '''
     M,res = registration_ecc(frame.astype('float32'),template.astype('float32'),
-                                          warp_mode = cv2.MOTION_AFFINE)
+                                          warp_mode = warp_mode)
     h,w = res.shape
-    transform = partial(cv2.warpAffine, M = M, dsize = (w,h),
-                             flags=cv2.INTER_LINEAR + cv2.WARP_INVERSE_MAP)
-    transform_inv = partial(cv2.warpAffine, M = M, dsize = (w,h),
-                             flags=cv2.INTER_LINEAR)
+    if M.shape[0] == 3:
+        transform = partial(cv2.warpPerspective, M = M, dsize = (w,h),
+                                 flags=cv2.INTER_LINEAR + cv2.WARP_INVERSE_MAP)
+        transform_inv = partial(cv2.warpPerspective, M = M, dsize = (w,h),
+                                 flags=cv2.INTER_LINEAR)
+    
+    else:
+        transform = partial(cv2.warpAffine, M = M, dsize = (w,h),
+                                 flags=cv2.INTER_LINEAR + cv2.WARP_INVERSE_MAP)
+        transform_inv = partial(cv2.warpAffine, M = M, dsize = (w,h),
+                                 flags=cv2.INTER_LINEAR)
     
     
     return  M,transform,transform_inv
