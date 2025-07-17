@@ -748,7 +748,7 @@ class VideoStack(GenericStack):
         super(VideoStack,self).__init__(filenames,extension)
         self.engine = engine
         #if self.engine == 'skvideo':
-        assert self.engine == 'skvideo', ValueError("Only skvideo is supported as engine.")
+        assert self.engine == 'skvideo', ValueError("Only skvideo is supported as engine because opencv does not read uint16...")
         from skvideo.io import FFmpegReader
         self.reader = FFmpegReader
         #else:
@@ -760,7 +760,7 @@ class VideoStack(GenericStack):
             with FFmpegReader(fname) as f:
                 dims = f.getShape()[:-1]
                 if f.pix_fmt == 'gray16le':
-                    dtype = 'uint16' 
+                    dtype = 'uint16'
                 else:
                     dtype = 'uint8'
                 self.pix_fmt = f.pix_fmt 
@@ -781,25 +781,30 @@ class VideoStack(GenericStack):
         self.current_frameidx = 0
         
     def _load_substack(self,fileidx,frameidx=0):
-        inputdict = {'-pix_fmt':self.pix_fmt}
+        inputdict = {} #{'-pix_fmt':self.pix_fmt}
         outputdict = {}
+        
         tidx = (frameidx*self.dims[0])/self.framerate
         t = time.strftime("%H:%M:%S", time.gmtime(tidx))+'{0:.3f}'.format(
             tidx % 1)[1:]
+        inputdict['-ss'] = t # this should be accurate for raw and mjpeg formats
+
         if not self.outputdict is None:
+            print(f'The old outputdict {self.outputdict}')
             outputdict = self.outputdict
         else:
             outputdict['-r'] = str(int(self.framerate)) # the output and input rates need to be matched
-            inputdict = {'-r':str(int(self.framerate))}
-            if not self.pix_fmt in ['yuv420p']:
-                outputdict = inputdict
-                inputdict['-ss'] = t # this should be accurate for raw and mjpeg formats
-            else:
+            inputdict['-r'] = str(int(self.framerate))
+            #if not self.pix_fmt in ['yuv420p']:
+            #    outputdict = inputdict
+            if self.pix_fmt in ['yuv420p']:
                 warnings.warn("Seeking compressed files can not be done accurately so using we are using output seeking which is slow. Read using the decord package for random access. See: https://trac.ffmpeg.org/wiki/Seeking - but not working for some encoding formats.")
                 outputdict['-ss'] = t
         if not '-pix_fmt' in outputdict.keys():
             # can't handle 3 channel color right now.
-            outputdict['-pix_fmt'] = 'gray'
+            outputdict['-pix_fmt'] = self.pix_fmt
+            if self.pix_fmt in ['yuv420p']:
+                outputdict['-pix_fmt'] = 'gray'
 
         # print("VideoStack seek: {0}".format(t))
         self.nframes_read = 0

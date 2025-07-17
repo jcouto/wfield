@@ -9,7 +9,7 @@ tifffile
 pyqt5
 pyqtgraph
 pillow
-scikit-video
+scikit-video @ https://github.com/scikit-video/scikit-video.git
 scikit-image
 scikit-learn
 pyserial
