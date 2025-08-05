@@ -131,11 +131,11 @@ def im_adapt_hist(im,clip_limit = .1, grid_size=(8,8)):
     clahe = cv2.createCLAHE(clipLimit=clip_limit, tileGridSize=grid_size)
     return clahe.apply(im.squeeze())
 
-def im_apply_transform(im,M,dims = None):
+def im_apply_transform(im,M,dims = None, order = 1 ):
     '''
     Applies an affine transform M to an image.
     nim = im_apply_transform(im,M)
-
+    order 1 is bilinear interpolation 
     Joao Couto - wfield, 2020
     '''
     if issparse(im):
@@ -145,15 +145,20 @@ def im_apply_transform(im,M,dims = None):
         shape = im.shape
         tmp  = np.asarray(im.todense()).reshape(dims)
         tmp = warp(tmp,M,
-                   order = 1,
+                   order = order,
                    mode='constant',
                    cval = 0,
                    clip = True,
                    preserve_range = True)
         return csr_matrix(tmp.reshape(shape))
-    else:    
+    else:
+
+        if im.dtype == bool:
+           im = im.astype(np.uint8) 
+           order = 0 
+
         return warp(im,M,
-                    order = 1,
+                    order = order,
                     mode='constant',
                     cval = 0,
                     clip=True,
