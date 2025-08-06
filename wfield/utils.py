@@ -407,8 +407,14 @@ timecourse = np.nanmean(get_timecourse([x,y]),axis = 1)
         x = np.array(np.clip(xy[0],0,self.shape[1]),dtype=int)
         y = np.array(np.clip(xy[1],0,self.shape[2]),dtype=int)
         idx = np.ravel_multi_index((x,y),self.shape[1:])
-        t = self.Uflat[idx,:]@self.SVT
-        return t
+
+        from joblib import delayed,Parallel
+        def _compute_timecourse(u,svt):
+            return np.nanmean(u@svt,axis = 0)   
+
+        res = Parallel(n_jobs=12)(delayed(_compute_timecourse)(self.Uflat[idx,:],self.SVT[:,a:b]) 
+                                for a,b in tqdm(chunk_indices(self.SVT.shape[1],chunksize=4000)))
+        return np.hstack(res)
 
 def get_trial_baseline(idx,frames_average,onsets):
     if len(frames_average.shape) <= 3:
