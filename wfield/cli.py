@@ -314,6 +314,7 @@ Type wfield ncaas <foldername> to open on a specific folder.
         if localdisk is None:
             print('Specify a fast local disk with the  -o option.')
             exit(1)
+
         if not os.path.isdir(localdisk):
             os.makedirs(localdisk)
             print('Created {0}'.format(localdisk))
@@ -409,7 +410,7 @@ Type wfield ncaas <foldername> to open on a specific folder.
         if localdisk == 'wfield_results':
             localdisk = pjoin(datafolder,localdisk)
         else:
-            localdisk = os.path.abspath(datafolder)
+            localdisk = os.path.abspath(localdisk)
         if not os.path.isdir(localdisk):
             os.makedirs(localdisk)
             print('Created {0}'.format(localdisk))
