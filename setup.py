@@ -34,7 +34,7 @@ with open("requirements.txt","r") as f:
     
 setup(
     name = 'wfield',
-    version = '0.5.1',
+    version = '0.6.0',
     author = 'Joao Couto',
     author_email = 'jpcouto@gmail.com',
     description = (description),
