@@ -1016,8 +1016,8 @@ This happens when you re-submit. You need to resubmit from uploaded data.''')
                 QApplication.processEvents()
                 for it, fname in enumerate(localpath):
                     if os.path.isfile(fname):
-                        self.pbar.setValue(0)
-                        self.pbar.setMaximum(100)
+                        self.pbar.setValue(int(0))
+                        self.pbar.setMaximum(int(100))
                         self.aws_view.aws_transfer_queue[i]['last_status'] = 'in_transfer'
                         self.aws_view.aws_transfer_queue[i]['last_change_status'] = datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
                         self.refresh_queuelist()
@@ -1058,7 +1058,7 @@ This happens when you re-submit. You need to resubmit from uploaded data.''')
                         cnt = 0
                         while (upload.isrunning):
                             QApplication.processEvents()
-                            self.pbar.setValue(np.ceil(upload.count*99/upload.fsize))
+                            self.pbar.setValue(int(np.ceil(upload.count*99/upload.fsize)))
                             time.sleep(0.033)
                             cnt+= 1
                             if np.mod(cnt,3) == 0:
@@ -1083,7 +1083,7 @@ This happens when you re-submit. You need to resubmit from uploaded data.''')
                     self.to_log('Done transfering {name}'.format(**t))
                 t['awsdestination'] = awsdestination
                 self.submitb.setStyleSheet("color: black")
-                self.pbar.setValue(0)
+                self.pbar.setValue(int(0))
                 self.aws_view.aws_transfer_queue[i]['last_status'] = 'uploaded'
                 self.aws_view.aws_transfer_queue[i]['last_change_status'] = datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
                 t['last_status'] = 'uploaded'
