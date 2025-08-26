@@ -271,7 +271,7 @@ class TextEditor(QDockWidget):
         ckbox.setChecked(watch_file)
         ckbox.stateChanged.connect(watch)
         lay.addWidget(w)
-        self.resize(self.width()*1.2, self.height())
+        self.resize(int(self.width()*1.2), int(self.height()))
     def refresh_original(self):
         if not self.s3 is None:
             #bucket = self.s3.Bucket(self.bucketname)
@@ -621,7 +621,7 @@ class NCAASwrapper(QMainWindow):
         self.submitb.clicked.connect(self.process_aws_transfer)
         #import ipdb
         #ipdb.set_trace()
-        self.resize(QDesktopWidget().availableGeometry().size() * 0.85);        
+        self.resize([int(i) for i in QDesktopWidget().availableGeometry().size() * 0.85]);        
         self.show()
         self.fetchresultstimer = QTimer()
         self.fetchresultstimer.timeout.connect(self.fetch_results)
