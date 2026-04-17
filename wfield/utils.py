@@ -22,7 +22,7 @@ try:
 except:
     print('Some functionality might be broken: install opencv-python or opencv-python-headless')
 import numpy as np
-from tqdm import tqdm
+from tqdm.auto import tqdm
 from natsort import natsorted
 from glob import glob
 from os.path import join as pjoin
@@ -535,7 +535,6 @@ def runpar(f,X,nprocesses = None,desc = None,**kwargs):
     if desc is None:
         res = Parallel(n_jobs = nprocesses)(delayed(f)(x,**kwargs) for x in X)
     else:
-        from tqdm import tqdm
         res = Parallel(n_jobs = nprocesses)(delayed(f)(x,**kwargs) for x in tqdm(X,desc = desc))
     return res
 
