@@ -350,7 +350,7 @@ def _register_multichannel_stack(frames,templates,mode='2d',
                                  niter = 100,
                                  eps0 = 1e-3,
                                  warp_mode = cv2.MOTION_EUCLIDEAN,
-                                 conv_kernel): # mode 2d
+                                 conv_kernel = None): # mode 2d
 
     nframes, nchannels, h, w = frames.shape     
     if mode == 'ecc':
