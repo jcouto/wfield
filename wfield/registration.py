@@ -291,7 +291,7 @@ def registration_ecc(frame,template,
                      warp_mode = cv2.MOTION_EUCLIDEAN,
                      prepare = True,
                      gaussian_filter = 1,
-                     conv_kernel = None
+                     conv_kernel = None,
                      hann = None,
                      **kwargs):
     h,w = template.shape
