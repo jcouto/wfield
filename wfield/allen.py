@@ -168,7 +168,7 @@ Creates a top view and extracts contours from each area in an annotation volume
         left_center = cm-np.array(reference)
         d = c.copy()
         d[:,1] = -1*(c[:,1])+w
-        right_center = [1,-1]*cm+w-np.array(reference)
+        right_center = np.array([d[:,0].mean()-reference[0], d[:,1].mean()-reference[1]])
 
         ccf_regions.append(dict(acronym=areas[i]['acronym'],
                                 name=areas[i]['name'],
