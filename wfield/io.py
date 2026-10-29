@@ -167,20 +167,26 @@ def compute_trial_baseline_from_binary(trial_onset,
     return dd.mean(axis=0)
 
 def frames_average_for_trials(dat,onsets,nbaseline_frames):
+    '''
+    Average of the first nbaseline_frames of each trial.
+
+    dat can be (NFRAMES, NCHANNEL, H, W) or (NFRAMES, H, W).
+    Returns (NTRIALS, *dat.shape[1:]).
+    '''
     from .utils import runpar
-    if hasattr(dat,'filename'):
-        dims = dims = dat.shape[1:]
-        dat_path = dat.filename
+    dims = tuple(dat.shape[1:])
+    if isinstance(dat, np.memmap) and getattr(dat, 'filename', None) is not None:
         frames_average = runpar(compute_trial_baseline_from_binary,onsets,
-                                filename = dat_path,
-                                shape=dims,
+                                filename = dat.filename,
+                                shape = dims if len(dims) == 3 else (1, *dims),
                                 nbaseline_frames=nbaseline_frames,
                                 dtype = dat.dtype)
     else:
-        frame_averages = []
+        frames_average = []
         for on in tqdm(onsets):
-            frame_averages.append(dat[on:on+nbaseline_frames].mean(axis=0))
-    return np.stack(frames_average)
+            blk = np.asarray(dat[on:on+nbaseline_frames]).reshape((-1, *dims))
+            frames_average.append(blk.mean(axis=0))
+    return np.stack(frames_average).reshape((-1, *dims))
 
 
 #######################################################################

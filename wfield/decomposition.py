@@ -37,7 +37,11 @@ def approximate_svd(dat, frames_average,
     Compute it after using the SVD components.
 
     Inputs:
-        dat (array)              : (NFRAMES, NCHANNEL, H, W) 
+        dat (array)              : (NFRAMES, NCHANNEL, H, W) or (NFRAMES, H, W)
+                                   Any array-like that can be sliced along the first axis
+                                   (read-only arrays, memmaps, stacks); it is never modified.
+        frames_average (array)   : (NCHANNEL, H, W) or (NTRIALS, NCHANNEL, H, W);
+                                   (H, W) or (NTRIALS, H, W) for single channel data.
         k (int)                  : number of components to estimate (200)
         nframes_per_bin (int)    : number of frames to estimate the initial U components
         nbinned_frames (int)     : maximum number frames to estimate the initial U components
@@ -49,42 +53,58 @@ def approximate_svd(dat, frames_average,
     '''
     from sklearn.preprocessing import normalize
 
-    if hasattr(dat,'filename'):
+    nframes = dat.shape[0]
+    dims = tuple(dat.shape[1:])
+    if len(dims) == 2:  # (NFRAMES, H, W): treat as a single channel
+        dims = (1, *dims)
+    elif len(dims) != 3:
+        raise ValueError('dat must be (NFRAMES, NCHANNEL, H, W) or (NFRAMES, H, W), got {0}'.format(dat.shape))
+    nchannels = dims[0]
+    npixels = int(np.prod(dims[1:]))
+
+    frames_average = np.asarray(frames_average, dtype='float32')
+    if len(dat.shape) == 3:  # add the channel axis to the average(s)
+        if frames_average.ndim == 2 or (frames_average.ndim == 3 and frames_average.shape[0] == 1):
+            frames_average = frames_average.reshape(dims)
+        elif frames_average.ndim == 3:  # one average per trial
+            frames_average = frames_average[:, np.newaxis]
+
+    # only read straight from disk for numpy memmaps; anything else is sliced
+    if isinstance(dat, np.memmap) and getattr(dat, 'filename', None) is not None:
         dat_path = dat.filename
     else:
         dat_path = None
-    dims = dat.shape[1:]
+
+    def _load_block(onset, nframes_block):
+        if dat_path is None:
+            blk = dat[onset:onset + nframes_block]
+        else:
+            blk = load_binary_block((dat_path, onset, nframes_block),
+                                    shape=dims, dtype=dat.dtype)
+        # always copy, so the input is never modified (works for read-only data)
+        return np.array(blk, dtype='float32').reshape((-1, *dims))
 
     # the number of bins needs to be larger than k because of the number of components.
     if nbinned_frames < k:
-        nframes_per_bin = np.clip(int(np.floor(len(dat)/(k))),1,nframes_per_bin)
+        nframes_per_bin = np.clip(int(np.floor(nframes/(k))),1,nframes_per_bin)
 
     nbinned_frames = np.min([nbinned_frames,
-                             int(np.floor(len(dat)/nframes_per_bin))])
-    
+                             int(np.floor(nframes/nframes_per_bin))])
+
     idx = np.arange(0,nbinned_frames*nframes_per_bin,nframes_per_bin,
                     dtype='int')
-    if not idx[-1] == nbinned_frames*nframes_per_bin:
-        idx = np.hstack([idx,nbinned_frames*nframes_per_bin-1])
-    binned = np.zeros([len(idx)-1,*dat.shape[1:]],dtype = 'float32')
-    for i in tqdm(range(len(idx)-1),desc='Binning raw data'):
-        if dat_path is None:
-            blk = dat[idx[i]:idx[i+1]] # work when data are loaded to memory
-        else:
-            blk = load_binary_block((dat_path,idx[i],nframes_per_bin),
-                                    shape=dims)
+    binned = np.zeros([len(idx),*dims],dtype = 'float32')
+    for i in tqdm(range(len(idx)),desc='Binning raw data'):
+        blk = _load_block(idx[i], nframes_per_bin)
         avg = get_trial_baseline(idx[i],frames_average,onsets)
+        blk -= avg + np.float32(1e-10)
         if divide_by_average:
-            binned[i] = np.mean((blk-(avg + np.float32(1e-10)))
-                                / (avg + np.float32(1e-10)), axis=0)
-        else:
-            binned[i] = np.mean(blk-(avg + np.float32(1e-10)), axis=0)
+            blk /= avg + np.float32(1e-10)
+        binned[i] = np.mean(blk, axis=0)
         if not mask is None:
-            b = binned[i]
-            mmask = mask_to_3d(mask,[dat.shape[1],*mask.shape])
-            b[mmask == 0] = 0
+            binned[i][mask_to_3d(mask, dims) == 0] = 0
 
-    binned = binned.reshape((-1,np.multiply(*dims[-2:])))
+    binned = binned.reshape((-1,npixels))
 
     # Get U from the single value decomposition 
     cov = np.dot(binned,binned.T)/binned.shape[1]
@@ -95,28 +115,26 @@ def approximate_svd(dat, frames_average,
     k = U.shape[0]     # in case the k was smaller (low var)
     # if trials are defined, then use them to chunk data so that the baseline is correct
     if onsets is None:
-        idx = np.arange(0,len(dat),nframes_per_chunk,dtype='int')
+        idx = np.arange(0,nframes,nframes_per_chunk,dtype='int')
     else:
-        idx = onsets
-    if not idx[-1] == len(dat):
-        idx = np.hstack([idx,len(dat)-1])
-    V = np.zeros((k,*dat.shape[:2]),dtype='float32')
+        idx = np.asarray(onsets,dtype='int')
+    if not idx[-1] == nframes:
+        idx = np.hstack([idx,nframes])
+    V = np.zeros((k,nframes,nchannels),dtype='float32')
     # Compute SVT
     for i in tqdm(range(len(idx)-1),desc='Computing SVT from the raw data'):
-        if dat_path is None:
-            blk = dat[idx[i]:idx[i+1]] # work when data are loaded to memory
-        else:
-            blk = load_binary_block((dat_path,idx[i],idx[i+1]-idx[i]),
-                                shape=dims).astype('float32')
-        avg = get_trial_baseline(idx[i],frames_average,onsets).astype('float32')
-        blk = blk-(avg+np.float32(1e-10))
+        blk = _load_block(idx[i], idx[i+1]-idx[i])
+        avg = get_trial_baseline(idx[i],frames_average,onsets)
+        blk -= avg + np.float32(1e-10)
         if divide_by_average:
-            blk /= avg+np.float32(1e-10)
+            blk /= avg + np.float32(1e-10)
         V[:,idx[i]:idx[i+1],:] = np.dot(
-            U, blk.reshape([-1,np.multiply(*dims[1:])]).T).reshape((k,-1,dat.shape[1]))
+            U, blk.reshape([-1,npixels]).T).reshape((k,-1,nchannels))
     SVT = V.reshape((k,-1))
     U = U.T.reshape([*dims[-2:],-1])
     return U,SVT
+
+
 
 
 def svd_blockwise(dat,frames_average,

@@ -426,7 +426,7 @@ def motion_correct(dat, out = None,
         nreference = int(nreference)
         chunk = np.array(dat[nreference:nreference*2])
         refs = chunk[0].astype('float32')
-        print(refs.shape)
+
         # align to the ref of each channel and use the mean
         _,refs = _register_multichannel_stack(chunk,refs,mode=mode,conv_kernel = conv_kernel)
         refs = np.mean(refs,axis=0).astype('float32')
